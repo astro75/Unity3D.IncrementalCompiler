@@ -7,6 +7,7 @@ using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Mono.CompilerServices.SymbolWriter;
 using NLog;
 
@@ -73,9 +74,56 @@ namespace IncrementalCompiler
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
                     .WithAllowUnsafe(options.Options.Contains("-unsafe")));
 
+            ModifyCompilation(parseOption);
+
             Emit(result);
 
             return result;
+        }
+
+        private void ModifyCompilation(CSharpParseOptions parseOption)
+        {
+            var newTrees = new List<SyntaxTree>();
+            foreach (var tree in _compilation.SyntaxTrees)
+            {
+                var model = _compilation.GetSemanticModel(tree);
+                var root = tree.GetRoot();
+                foreach (var cls in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+                {
+                    var attrs = model.GetDeclaredSymbol(cls).GetAttributes();
+                    foreach (var attributeData in attrs)
+                    {
+                        _logger.Info("attr " + attributeData);
+
+                        var attrClass = attributeData.AttributeClass;
+                        if (attrClass != null)
+                        {
+                            var nt = CSharpSyntaxTree.Create(
+                                SyntaxFactory.CompilationUnit()
+                                    .WithUsings(SyntaxFactory.List(root.DescendantNodes().OfType<UsingDirectiveSyntax>()))
+                                    .AddMembers(cls.WithIdentifier(SyntaxFactory.Identifier(cls.Identifier.ValueText + attrClass.Name))),
+                                path: tree.FilePath.Replace(".cs", ".generated.cs"),
+                                options: parseOption);
+                            newTrees.Add(nt);
+                        }
+                    }
+                }
+            }
+            _compilation = _compilation.AddSyntaxTrees(newTrees);
+            foreach (var syntaxTree in newTrees)
+            {
+                var path = Path.Combine("Generated", MakeRelative(syntaxTree.FilePath, Directory.GetCurrentDirectory()));
+                _logger.Info("path " + path);
+                Directory.CreateDirectory(Path.GetDirectoryName(path));
+                File.WriteAllText(path, syntaxTree.GetText().ToString());
+            }
+        }
+
+        public static string MakeRelative(string filePath, string referencePath)
+        {
+            var fileUri = new Uri(filePath);
+            var referenceUri = new Uri(referencePath);
+            return referenceUri.MakeRelativeUri(fileUri).ToString();
         }
 
         private CompileResult BuildIncremental(CompileOptions options)
