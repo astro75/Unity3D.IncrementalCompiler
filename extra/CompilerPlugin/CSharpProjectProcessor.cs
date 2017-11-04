@@ -24,8 +24,6 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
                 continue;
             }
 
-            Debug.LogError("CSharpProjectPostprocessor");
-
             var projectFilesGeneratorType = assembly.GetType("SyntaxTree.VisualStudio.Unity.Bridge.ProjectFilesGenerator");
             if (projectFilesGeneratorType == null)
             {
@@ -61,7 +59,6 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
     // In case VSTU is not installed
     private static void OnGeneratedCSProjectFiles()
     {
-        Debug.LogError("OnGeneratedCSProjectFiles");
         if (AppDomain.CurrentDomain.GetAssemblies().Any(a => a.FullName.StartsWith("SyntaxTree.VisualStudio.Unity.Bridge")))
         {
             return;

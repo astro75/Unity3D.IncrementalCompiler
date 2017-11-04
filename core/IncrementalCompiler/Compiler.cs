@@ -13,6 +13,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Mono.CompilerServices.SymbolWriter;
 using NLog;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
+using static System.String;
 
 namespace IncrementalCompiler
 {
@@ -95,7 +96,7 @@ namespace IncrementalCompiler
                 var model = _compilation.GetSemanticModel(tree);
                 var root = tree.GetCompilationUnitRoot();
                 var newMembers = ImmutableList<MemberDeclarationSyntax>.Empty;
-                foreach (var cds in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+                foreach (var cds in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
                 {
                     var attrs = model.GetDeclaredSymbol(cds).GetAttributes();
                     foreach (var attr in attrs)
@@ -114,7 +115,8 @@ namespace IncrementalCompiler
                             .WithUsings(root.Usings)
                             .WithMembers(SF.List(newMembers))
                             .NormalizeWhitespace(),
-                        path: Path.Combine(GENERATED, currentDir.MakeRelativeUri(new Uri(tree.FilePath)).ToString().Replace('/', '\\')),
+                        path: Path.Combine(GENERATED, currentDir.MakeRelativeUri(
+                            new Uri(tree.FilePath)).ToString().Replace('/', Path.DirectorySeparatorChar)),
                         options: parseOption);
                     newTrees.Add(nt);
                 }
@@ -129,27 +131,112 @@ namespace IncrementalCompiler
             File.WriteAllLines(Path.Combine(GENERATED, $"Generated-files-{assemblyName}.txt"), newTrees.Select(tree => tree.FilePath));
         }
 
-        private MemberDeclarationSyntax GenerateCaseClass(SemanticModel model, ClassDeclarationSyntax cds)
+        private MemberDeclarationSyntax GenerateCaseClass(SemanticModel model, TypeDeclarationSyntax cds)
         {
             var fields = cds.Members.OfType<FieldDeclarationSyntax>().SelectMany(field =>
             {
                 var decl = field.Declaration;
                 var type = decl.Type;
-                return decl.Variables.Select(varDecl => (type, varDecl));
-            });
+                return decl.Variables.Select(varDecl => (type, varDecl.Identifier));
+            }).ToArray();
             var constructor = SF.ConstructorDeclaration(cds.Identifier)
+                .WithModifiers(SF.TokenList(SF.Token(SyntaxKind.PublicKeyword)))
                 .WithParameterList(SF.ParameterList(
                     SF.SeparatedList(fields.Select(f =>
-                        SF.Parameter(f.Item2.Identifier).WithType(f.Item1)))))
+                        SF.Parameter(f.Identifier).WithType(f.type)))))
                 .WithBody(SF.Block(fields.Select(f => SF.ExpressionStatement(SF.AssignmentExpression(
                     SyntaxKind.SimpleAssignmentExpression,
                     SF.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SF.ThisExpression(),
-                        SF.IdentifierName(f.Item2.Identifier)), SF.IdentifierName(f.Item2.Identifier))))));
-            return SF.ClassDeclaration(cds.Identifier)
-                .WithModifiers(cds.Modifiers.Add(SyntaxKind.PartialKeyword))
-                .WithTypeParameterList(cds.TypeParameterList)
-                .WithMembers(SF.List(new[] { (MemberDeclarationSyntax)constructor }));
+                        SF.IdentifierName(f.Identifier)), SF.IdentifierName(f.Identifier))))));
+            var paramsStr = Join(", ", fields.Select(f => f.Identifier.ValueText).Select(n => n + ": \" + " + n + " + \""));
+            var toString = ParseClassMembers(
+                $"public override string ToString() => \"{cds.Identifier.ValueText}(\" + \"{paramsStr})\";");
+
+            /*
+            public override int GetHashCode() {
+                unchecked {
+                    var hashCode = int1;
+                    hashCode = (hashCode * 397) ^ int2;
+                    hashCode = (hashCode * 397) ^ (str1 != null ? str1.GetHashCode() : 0);
+                    hashCode = (hashCode * 397) ^ (str2 != null ? str2.GetHashCode() : 0);
+                    hashCode = (hashCode * 397) ^ (int) uint1;
+                    hashCode = (hashCode * 397) ^ structWithHash.GetHashCode();
+                    hashCode = (hashCode * 397) ^ structNoHash.GetHashCode();
+                    hashCode = (hashCode * 397) ^ float1.GetHashCode();
+                    hashCode = (hashCode * 397) ^ double1.GetHashCode();
+                    hashCode = (hashCode * 397) ^ long1.GetHashCode();
+                    hashCode = (hashCode * 397) ^ bool1.GetHashCode();
+                    return hashCode;
+                }
+            }
+            */
+
+            var hashLines = Join("\n", fields.Select(f =>
+            {
+                var type = model.GetTypeInfo(f.type).Type;
+                var isValueType = type.IsValueType;
+                var name = f.Identifier.ValueText;
+                string valueTypeHash(SpecialType sType)
+                {
+                    switch (sType)
+                    {
+                        case SpecialType.System_Byte:
+                        case SpecialType.System_SByte:
+                        case SpecialType.System_Int16:
+                        case SpecialType.System_Int32: return name;
+                        case SpecialType.System_UInt32:
+                        //TODO: `long` type enums should not cast
+                        case SpecialType.System_Enum: return "(int) " + name;
+                        default: return name + ".GetHashCode()";
+                    }
+                }
+                return "hashCode = (hashCode * 397) ^ " + (isValueType ? valueTypeHash(type.SpecialType) : $"({name} == null ? 0 : {name}.GetHashCode())") + ";";
+            }));
+            var getHashCode = ParseClassMembers(
+            $@"public override int GetHashCode() {{
+                unchecked {{
+                    var hashCode = 0;
+                    {hashLines}
+                    return hashCode;
+                }}
+            }}");
+            return CreateType(cds.Kind(), cds.Identifier, cds.Modifiers.Add(SyntaxKind.PartialKeyword), cds.TypeParameterList,
+                SF.SingletonList<MemberDeclarationSyntax>(constructor).AddRange(toString.Concat(getHashCode)));
         }
+
+        public TypeDeclarationSyntax CreateType(
+            SyntaxKind kind, SyntaxToken identifier, SyntaxTokenList modifiers, TypeParameterListSyntax typeParams,
+            SyntaxList<MemberDeclarationSyntax> members)
+        {
+            switch (kind)
+            {
+                case SyntaxKind.ClassDeclaration:
+                    return SF.ClassDeclaration(identifier)
+                        .WithModifiers(modifiers)
+                        .WithTypeParameterList(typeParams)
+                        .WithMembers(members);
+                case SyntaxKind.StructDeclaration:
+                    return SF.StructDeclaration(identifier)
+                        .WithModifiers(modifiers)
+                        .WithTypeParameterList(typeParams)
+                        .WithMembers(members);
+                case SyntaxKind.InterfaceDeclaration:
+                    return SF.InterfaceDeclaration(identifier)
+                        .WithModifiers(modifiers)
+                        .WithTypeParameterList(typeParams)
+                        .WithMembers(members);
+                default:
+                    throw new ArgumentOutOfRangeException(kind.ToString());
+            }
+        }
+
+        public static SyntaxList<MemberDeclarationSyntax> ParseClassMembers(string syntax)
+        {
+            var cls = (ClassDeclarationSyntax)CSharpSyntaxTree.ParseText($"class C {{ {syntax} }}").GetCompilationUnitRoot().Members[0];
+            return cls.Members;
+        }
+
+        public static string Quote(string s) => $"\"{s}\"";
 
         private CompileResult BuildIncremental(CompileOptions options)
         {
