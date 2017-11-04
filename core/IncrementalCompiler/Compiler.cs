@@ -104,7 +104,7 @@ namespace IncrementalCompiler
                         var attrClassName = attr.AttributeClass.ToDisplayString();
                         if (attrClassName == typeof(CaseAttribute).FullName)
                         {
-                            newMembers = newMembers.Add(GenerateCaseClass(model, cds));
+                            newMembers = newMembers.Add(AddAncestors(cds, GenerateCaseClass(model, cds)));
                         }
                     }
                 }
@@ -176,7 +176,7 @@ namespace IncrementalCompiler
                 var type = model.GetTypeInfo(f.type).Type;
                 var isValueType = type.IsValueType;
                 var name = f.Identifier.ValueText;
-                string valueTypeHash(SpecialType sType)
+                string ValueTypeHash(SpecialType sType)
                 {
                     switch (sType)
                     {
@@ -190,7 +190,7 @@ namespace IncrementalCompiler
                         default: return name + ".GetHashCode()";
                     }
                 }
-                return "hashCode = (hashCode * 397) ^ " + (isValueType ? valueTypeHash(type.SpecialType) : $"({name} == null ? 0 : {name}.GetHashCode())") + ";";
+                return "hashCode = (hashCode * 397) ^ " + (isValueType ? ValueTypeHash(type.SpecialType) : $"({name} == null ? 0 : {name}.GetHashCode())") + ";";
             }));
             var getHashCode = ParseClassMembers(
             $@"public override int GetHashCode() {{
@@ -200,8 +200,83 @@ namespace IncrementalCompiler
                     return hashCode;
                 }}
             }}");
+
+            /*
+            // class
+            private bool Equals(ClassTest other) {
+                return int1 == other.int1
+                    && int2 == other.int2
+                    && string.Equals(str1, other.str1)
+                    && string.Equals(str2, other.str2)
+                    && uint1 == other.uint1
+                    && structWithHash.Equals(other.structWithHash)
+                    && structNoHash.Equals(other.structNoHash)
+                    && float1.Equals(other.float1)
+                    && double1.Equals(other.double1)
+                    && long1 == other.long1
+                    && bool1 == other.bool1
+                    && char1 == other.char1
+                    && byte1 == other.byte1
+                    && sbyte1 == other.sbyte1
+                    && short1 == other.short1
+                    && enum1 == other.enum1
+                    && byteEnum == other.byteEnum
+                    && longEnum == other.longEnum;
+            }
+
+            public override bool Equals(object obj) {
+                if (ReferenceEquals(null, obj)) return false;
+                if (ReferenceEquals(this, obj)) return true;
+                return obj is ClassTest && Equals((ClassTest) obj);
+            }
+
+            // struct
+            public bool Equals(StructTest other) {
+                return int1 == other.int1
+                    && int2 == other.int2
+                    && string.Equals(str1, other.str1)
+                    && string.Equals(str2, other.str2)
+                    && Equals(classRef, other.classRef);
+            }
+
+            public override bool Equals(object obj) {
+                if (ReferenceEquals(null, obj)) return false;
+                return obj is StructTest && Equals((StructTest) obj);
+            }
+            */
+
+            var isStruct = cds.Kind() == SyntaxKind.StructKeyword;
+
+            var typeName = cds.Identifier.ValueText;
+            var comparisons = fields.Select(f =>
+            {
+                var type = model.GetTypeInfo(f.type).Type;
+                var name = f.Identifier.ValueText;
+                var otherName = "other." + name;
+                switch (type.SpecialType)
+                {
+                    case SpecialType.System_Byte:
+                    case SpecialType.System_SByte:
+                    case SpecialType.System_Int16:
+                    case SpecialType.System_UInt16:
+                    case SpecialType.System_Int32:
+                    case SpecialType.System_UInt32:
+                    case SpecialType.System_Int64:
+                    case SpecialType.System_UInt64:
+                    case SpecialType.System_Enum: return $"{name} == {otherName}";
+                    case SpecialType.System_String: return $"string.Equals({name}, {otherName})";
+                    default: return $"{name}.Equals({otherName})";
+                }
+            });
+            var equals = ParseClassMembers(
+                $"{(isStruct ? "public" : "private")} bool Equals({typeName} other) => {Join(" && ", comparisons)};" +
+                $"public override bool Equals(object obj) {{" +
+                $"  if (ReferenceEquals(null, obj)) return false;" +
+                (isStruct ? "if (ReferenceEquals(this, obj)) return true;" : "") +
+                $"  return obj is {typeName} && Equals(({typeName}) obj);" +
+                $"}}");
             return CreateType(cds.Kind(), cds.Identifier, cds.Modifiers.Add(SyntaxKind.PartialKeyword), cds.TypeParameterList,
-                SF.SingletonList<MemberDeclarationSyntax>(constructor).AddRange(toString.Concat(getHashCode)));
+                SF.SingletonList<MemberDeclarationSyntax>(constructor).AddRange(toString.Concat(getHashCode).Concat(equals)));
         }
 
         public TypeDeclarationSyntax CreateType(
@@ -228,6 +303,37 @@ namespace IncrementalCompiler
                 default:
                     throw new ArgumentOutOfRangeException(kind.ToString());
             }
+        }
+
+        // stolen from CodeGeneration.Roslyn
+        public static MemberDeclarationSyntax AddAncestors(MemberDeclarationSyntax memberNode, MemberDeclarationSyntax generatedType)
+        {
+            // Figure out ancestry for the generated type, including nesting types and namespaces.
+            foreach (var ancestor in memberNode.Ancestors())
+            {
+                switch (ancestor)
+                {
+                    case NamespaceDeclarationSyntax a:
+                        generatedType = a
+                            .WithMembers(SF.SingletonList(generatedType))
+                            .WithLeadingTrivia(SF.TriviaList())
+                            .WithTrailingTrivia(SF.TriviaList());
+                        break;
+                    case ClassDeclarationSyntax a:
+                        generatedType = a
+                            .WithMembers(SF.SingletonList(generatedType))
+                            .WithLeadingTrivia(SF.TriviaList())
+                            .WithTrailingTrivia(SF.TriviaList());
+                        break;
+                    case StructDeclarationSyntax a:
+                        generatedType = a
+                            .WithMembers(SF.SingletonList(generatedType))
+                            .WithLeadingTrivia(SF.TriviaList())
+                            .WithTrailingTrivia(SF.TriviaList());
+                        break;
+                }
+            }
+            return generatedType;
         }
 
         public static SyntaxList<MemberDeclarationSyntax> ParseClassMembers(string syntax)
