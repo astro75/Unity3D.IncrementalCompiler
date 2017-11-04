@@ -96,8 +96,8 @@
     <Reference Include="System.Threading.Thread, Version=4.0.1.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a, processorArchitecture=MSIL">
       <HintPath>..\..\packages\System.Threading.Thread.4.3.0\lib\net46\System.Threading.Thread.dll</HintPath>
     </Reference>
-    <Reference Include="System.ValueTuple, Version=4.0.1.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
-      <HintPath>..\..\packages\System.ValueTuple.4.3.0\lib\netstandard1.0\System.ValueTuple.dll</HintPath>
+    <Reference Include="System.ValueTuple, Version=4.0.2.0, Culture=neutral, PublicKeyToken=cc7b13ffcd2ddd51, processorArchitecture=MSIL">
+      <HintPath>..\..\packages\System.ValueTuple.4.4.0\lib\netstandard1.0\System.ValueTuple.dll</HintPath>
     </Reference>
     <Reference Include="System.Xml.Linq" />
     <Reference Include="System.Data.DataSetExtensions" />
@@ -126,7 +126,9 @@
     <Compile Include="CompilerServiceClient.cs" />
     <Compile Include="CompilerServiceHelper.cs" />
     <Compile Include="CompilerServiceServer.cs" />
+    <Compile Include="Extensions.cs" />
     <Compile Include="FileTimeList.cs" />
+    <Compile Include="GlobalSuppressions.cs" />
     <Compile Include="PlatformHelper.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Program.Dev.cs" />
@@ -145,6 +147,10 @@
     <Analyzer Include="..\..\packages\StyleCop.Analyzers.1.0.0\analyzers\dotnet\cs\StyleCop.Analyzers.dll" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\GenerationAttributes\GenerationAttributes.csproj">
+      <Project>{0e0e523d-9842-4d2e-a304-59ef5c6cfffd}</Project>
+      <Name>GenerationAttributes</Name>
+    </ProjectReference>
     <ProjectReference Include="..\RoslynMdbWriter\RoslynMdbWriter.csproj">
       <Project>{286226f3-564d-480a-b6c2-2d207cbfb064}</Project>
       <Name>RoslynMdbWriter</Name>

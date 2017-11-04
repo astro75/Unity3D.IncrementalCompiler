@@ -1,20 +1,24 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Mono.CompilerServices.SymbolWriter;
 using NLog;
+using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
 {
     public class Compiler
     {
+        private const string GENERATED = "Generated";
         private Logger _logger = LogManager.GetLogger("Compiler");
         private CSharpCompilation _compilation;
         private CompileOptions _options;
@@ -27,6 +31,7 @@ namespace IncrementalCompiler
 
         public CompileResult Build(CompileOptions options)
         {
+            return BuildFull(options);
             if (_compilation == null ||
                 _options.WorkDirectory != options.WorkDirectory ||
                 _options.AssemblyName != options.AssemblyName ||
@@ -74,56 +79,76 @@ namespace IncrementalCompiler
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
                     .WithAllowUnsafe(options.Options.Contains("-unsafe")));
 
-            ModifyCompilation(parseOption);
+            ModifyCompilation(parseOption, Path.GetFileNameWithoutExtension(options.AssemblyName));
 
             Emit(result);
 
             return result;
         }
 
-        private void ModifyCompilation(CSharpParseOptions parseOption)
+        private void ModifyCompilation(CSharpParseOptions parseOption, string assemblyName)
         {
+            var currentDir = new Uri(Directory.GetCurrentDirectory());
             var newTrees = new List<SyntaxTree>();
             foreach (var tree in _compilation.SyntaxTrees)
             {
                 var model = _compilation.GetSemanticModel(tree);
-                var root = tree.GetRoot();
-                foreach (var cls in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
+                var root = tree.GetCompilationUnitRoot();
+                var newMembers = ImmutableList<MemberDeclarationSyntax>.Empty;
+                foreach (var cds in root.DescendantNodes().OfType<ClassDeclarationSyntax>())
                 {
-                    var attrs = model.GetDeclaredSymbol(cls).GetAttributes();
-                    foreach (var attributeData in attrs)
+                    var attrs = model.GetDeclaredSymbol(cds).GetAttributes();
+                    foreach (var attr in attrs)
                     {
-                        _logger.Info("attr " + attributeData);
-
-                        var attrClass = attributeData.AttributeClass;
-                        if (attrClass != null)
+                        var attrClassName = attr.AttributeClass.ToDisplayString();
+                        if (attrClassName == typeof(CaseAttribute).FullName)
                         {
-                            var nt = CSharpSyntaxTree.Create(
-                                SyntaxFactory.CompilationUnit()
-                                    .WithUsings(SyntaxFactory.List(root.DescendantNodes().OfType<UsingDirectiveSyntax>()))
-                                    .AddMembers(cls.WithIdentifier(SyntaxFactory.Identifier(cls.Identifier.ValueText + attrClass.Name))),
-                                path: tree.FilePath.Replace(".cs", ".generated.cs"),
-                                options: parseOption);
-                            newTrees.Add(nt);
+                            newMembers = newMembers.Add(GenerateCaseClass(model, cds));
                         }
                     }
+                }
+                if (newMembers.Any())
+                {
+                    var nt = CSharpSyntaxTree.Create(
+                        SF.CompilationUnit()
+                            .WithUsings(root.Usings)
+                            .WithMembers(SF.List(newMembers))
+                            .NormalizeWhitespace(),
+                        path: Path.Combine(GENERATED, currentDir.MakeRelativeUri(new Uri(tree.FilePath)).ToString().Replace('/', '\\')),
+                        options: parseOption);
+                    newTrees.Add(nt);
                 }
             }
             _compilation = _compilation.AddSyntaxTrees(newTrees);
             foreach (var syntaxTree in newTrees)
             {
-                var path = Path.Combine("Generated", MakeRelative(syntaxTree.FilePath, Directory.GetCurrentDirectory()));
-                _logger.Info("path " + path);
+                var path = syntaxTree.FilePath;
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
                 File.WriteAllText(path, syntaxTree.GetText().ToString());
             }
+            File.WriteAllLines(Path.Combine(GENERATED, $"Generated-files-{assemblyName}.txt"), newTrees.Select(tree => tree.FilePath));
         }
 
-        public static string MakeRelative(string filePath, string referencePath)
+        private MemberDeclarationSyntax GenerateCaseClass(SemanticModel model, ClassDeclarationSyntax cds)
         {
-            var fileUri = new Uri(filePath);
-            var referenceUri = new Uri(referencePath);
-            return referenceUri.MakeRelativeUri(fileUri).ToString();
+            var fields = cds.Members.OfType<FieldDeclarationSyntax>().SelectMany(field =>
+            {
+                var decl = field.Declaration;
+                var type = decl.Type;
+                return decl.Variables.Select(varDecl => (type, varDecl));
+            });
+            var constructor = SF.ConstructorDeclaration(cds.Identifier)
+                .WithParameterList(SF.ParameterList(
+                    SF.SeparatedList(fields.Select(f =>
+                        SF.Parameter(f.Item2.Identifier).WithType(f.Item1)))))
+                .WithBody(SF.Block(fields.Select(f => SF.ExpressionStatement(SF.AssignmentExpression(
+                    SyntaxKind.SimpleAssignmentExpression,
+                    SF.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SF.ThisExpression(),
+                        SF.IdentifierName(f.Item2.Identifier)), SF.IdentifierName(f.Item2.Identifier))))));
+            return SF.ClassDeclaration(cds.Identifier)
+                .WithModifiers(cds.Modifiers.Add(SyntaxKind.PartialKeyword))
+                .WithTypeParameterList(cds.TypeParameterList)
+                .WithMembers(SF.List(new[] { (MemberDeclarationSyntax)constructor }));
         }
 
         private CompileResult BuildIncremental(CompileOptions options)
