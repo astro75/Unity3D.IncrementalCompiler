@@ -60,36 +60,25 @@ namespace Assets.Scripts {
     partial interface InterfaceTest {}
 
     [Matcher]
-    abstract partial class ADTBase { }
-
-    static class ADTBaseMatcher {
-        public static void voidMatch(this ADTBase self, Action<One> a0, Action<Two> a1) {
-            var val0 = self as One;
-            if (val0 != null) {
-                a0(val0);
-                return;
-            }
-
-            var val1 = self as Two;
-            if (val1 != null) {
-                a1(val1);
-                return;
-            }
-        }
-
-        public static A match<A>(this ADTBase self, Func<One, A> f0, Func<Two, A> f1) {
-            var val0 = self as One;
-            if (val0 != null)
-                return f0(val0);
-            var val1 = self as Two;
-            if (val1 != null)
-                return f1(val1);
-            throw new ArgumentOutOfRangeException("self", self, "Should never reach this");
+    abstract partial class ADTBase {
+        static void sample() {
+            var val = (ADTBase) new One(1);
+            val.match(
+                one => one.val,
+                two => 2
+            );
         }
     }
 
-    sealed class One : ADTBase { }
-    sealed class Two : ADTBase { }
+    [Case]
+    sealed partial class One : ADTBase {
+        public readonly int val;
+    }
+
+    [Case]
+    sealed partial class Two : ADTBase {
+        public readonly string val;
+    }
 
     [Matcher]
     abstract partial class ADTBaseGeneric<A> { }
