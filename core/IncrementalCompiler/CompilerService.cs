@@ -9,7 +9,7 @@ namespace IncrementalCompiler
     public interface ICompilerService
     {
         [OperationContract]
-        CompileResult Build(string projectPath, CompileOptions options);
+        CompileResult Build(string projectPath, CompileOptions options, bool devMode);
     }
 
     [ServiceBehavior(InstanceContextMode = InstanceContextMode.Single, IncludeExceptionDetailInFaults = true)]
@@ -19,7 +19,7 @@ namespace IncrementalCompiler
         private string _projectPath;
         private Dictionary<string, Compiler> _compilerMap;
 
-        public CompileResult Build(string projectPath, CompileOptions options)
+        public CompileResult Build(string projectPath, CompileOptions options, bool devMode)
         {
             _logger.Info("Build(projectPath={0}, output={1})", projectPath, options.Output);
 
@@ -40,6 +40,8 @@ namespace IncrementalCompiler
                 _compilerMap.Add(options.Output, compiler);
                 _logger.Info("Add new project. (Project={0})", _projectPath);
             }
+
+            if (devMode) return compiler.Build(options);
 
             try
             {

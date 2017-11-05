@@ -32,7 +32,6 @@ namespace IncrementalCompiler
 
         public CompileResult Build(CompileOptions options)
         {
-            return BuildFull(options);
             if (_compilation == null ||
                 _options.WorkDirectory != options.WorkDirectory ||
                 _options.AssemblyName != options.AssemblyName ||
@@ -96,15 +95,20 @@ namespace IncrementalCompiler
                 var model = _compilation.GetSemanticModel(tree);
                 var root = tree.GetCompilationUnitRoot();
                 var newMembers = ImmutableList<MemberDeclarationSyntax>.Empty;
-                foreach (var cds in root.DescendantNodes().OfType<TypeDeclarationSyntax>())
+                var typesInFile = root.DescendantNodes().OfType<TypeDeclarationSyntax>().ToImmutableArray();
+                foreach (var tds in typesInFile)
                 {
-                    var attrs = model.GetDeclaredSymbol(cds).GetAttributes();
+                    var attrs = model.GetDeclaredSymbol(tds).GetAttributes();
                     foreach (var attr in attrs)
                     {
                         var attrClassName = attr.AttributeClass.ToDisplayString();
                         if (attrClassName == typeof(CaseAttribute).FullName)
                         {
-                            newMembers = newMembers.Add(AddAncestors(cds, GenerateCaseClass(model, cds)));
+                            newMembers = newMembers.Add(AddAncestors(tds, GenerateCaseClass(model, tds)));
+                        }
+                        if (attrClassName == typeof(MatcherAttribute).FullName)
+                        {
+                            newMembers = newMembers.Add(AddAncestors(tds, GenerateMatcher(model, (ClassDeclarationSyntax)tds, typesInFile)));
                         }
                     }
                 }
@@ -129,6 +133,58 @@ namespace IncrementalCompiler
                 File.WriteAllText(path, syntaxTree.GetText().ToString());
             }
             File.WriteAllLines(Path.Combine(GENERATED, $"Generated-files-{assemblyName}.txt"), newTrees.Select(tree => tree.FilePath));
+        }
+
+        private MemberDeclarationSyntax GenerateMatcher(SemanticModel model, ClassDeclarationSyntax cds, ImmutableArray<TypeDeclarationSyntax> typesInFile)
+        {
+            // TODO: ban extendig this class in different files
+            // TODO: generics ?
+
+            var baseTypeSymbol = model.GetDeclaredSymbol(cds);
+
+            var childTypes = typesInFile.Where(t => model.GetDeclaredSymbol(t).BaseType?.Equals(baseTypeSymbol) ?? false);
+
+            /*
+            public void match(Action<One> t1, Action<Two> t2) {
+                var val1 = this as One;
+                if (val1 != null) {
+                    t1(val1);
+                    return;
+                }
+                var val2 = this as Two;
+                if (val2 != null) {
+                    t2(val2);
+                    return;
+                }
+            }
+            */
+
+            var childNames = childTypes.Select(t => t.Identifier.ValueText + t.TypeParameterList).ToArray();
+
+            string VoidMatch()
+            {
+                var parameters = Join(", ", childNames.Select((name, idx) => $"Action<{name}> a{idx}"));
+                var body = Join("\n", childNames.Select((name, idx) =>
+                  $"var val{idx} = this as {name};" +
+                  $"if (val{idx} != null) {{ a{idx}(val{idx}); return; }}"));
+
+                return $"public void voidMatch({parameters}) {{{body}}}";
+            }
+
+            string Match()
+            {
+                var parameters = Join(", ", childNames.Select((name, idx) => $"Func<{name}, A> f{idx}"));
+                var body = Join("\n", childNames.Select((name, idx) =>
+                    $"var val{idx} = this as {name};" +
+                    $"if (val{idx} != null) return f{idx}(val{idx});"));
+
+                return $"public A match<A>({parameters}) {{" +
+                       $"{body}" +
+                       $"throw new ArgumentOutOfRangeException(\"this\", this, \"Should never reach this\");" +
+                       $"}}";
+            }
+
+            return CreatePartial(cds, ParseClassMembers(VoidMatch() + Match()), null);
         }
 
         private MemberDeclarationSyntax GenerateCaseClass(SemanticModel model, TypeDeclarationSyntax cds)
@@ -285,15 +341,19 @@ namespace IncrementalCompiler
 
             // : IEquatable<TypeName>
             var baseList = SF.BaseList(SF.SingletonSeparatedList<BaseTypeSyntax>(SF.SimpleBaseType(SF.ParseTypeName($"System.IEquatable<{typeName}>"))));
+            var newMembers = new[] { constructor }.Concat(toString).Concat(getHashCode).Concat(equals);
 
-            return CreateType(
-                cds.Kind(),
-                cds.Identifier,
-                cds.Modifiers.Add(SyntaxKind.PartialKeyword),
-                cds.TypeParameterList,
-                SF.SingletonList<MemberDeclarationSyntax>(constructor).AddRange(toString.Concat(getHashCode).Concat(equals)),
-                baseList);
+            return CreatePartial(cds, newMembers, baseList);
         }
+
+        private TypeDeclarationSyntax CreatePartial(TypeDeclarationSyntax originalType, IEnumerable<MemberDeclarationSyntax> newMembers, BaseListSyntax baseList)
+            => CreateType(
+                originalType.Kind(),
+                originalType.Identifier,
+                originalType.Modifiers.Add(SyntaxKind.PartialKeyword),
+                originalType.TypeParameterList,
+                SF.List(newMembers),
+                baseList);
 
         public TypeDeclarationSyntax CreateType(
             SyntaxKind kind, SyntaxToken identifier, SyntaxTokenList modifiers, TypeParameterListSyntax typeParams,
