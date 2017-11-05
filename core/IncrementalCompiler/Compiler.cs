@@ -245,7 +245,7 @@ namespace IncrementalCompiler
             }
             */
 
-            var isStruct = cds.Kind() == SyntaxKind.StructKeyword;
+            var isStruct = cds.Kind() == SyntaxKind.StructDeclaration;
 
             var typeName = cds.Identifier.ValueText;
             var comparisons = fields.Select(f =>
@@ -268,20 +268,33 @@ namespace IncrementalCompiler
                     default: return $"{name}.Equals({otherName})";
                 }
             });
+            var equalsExpr = isStruct ? "left.Equals(right)" : "Equals(left, right)";
             var equals = ParseClassMembers(
-                $"{(isStruct ? "public" : "private")} bool Equals({typeName} other) => {Join(" && ", comparisons)};" +
+                $"public bool Equals({typeName} other) => {Join(" && ", comparisons)};" +
                 $"public override bool Equals(object obj) {{" +
                 $"  if (ReferenceEquals(null, obj)) return false;" +
-                (isStruct ? "if (ReferenceEquals(this, obj)) return true;" : "") +
+                (!isStruct ? "if (ReferenceEquals(this, obj)) return true;" : "") +
                 $"  return obj is {typeName} && Equals(({typeName}) obj);" +
-                $"}}");
-            return CreateType(cds.Kind(), cds.Identifier, cds.Modifiers.Add(SyntaxKind.PartialKeyword), cds.TypeParameterList,
-                SF.SingletonList<MemberDeclarationSyntax>(constructor).AddRange(toString.Concat(getHashCode).Concat(equals)));
+                $"}}" +
+                $"public static bool operator ==({typeName} left, {typeName} right) => {equalsExpr};" +
+                $"public static bool operator !=({typeName} left, {typeName} right) => !{equalsExpr};");
+
+            // : IEquatable<TypeName>
+            var baseList = SF.BaseList(SF.SingletonSeparatedList<BaseTypeSyntax>(SF.SimpleBaseType(SF.QualifiedName(SF.IdentifierName("System"),
+                SF.GenericName(SF.Identifier("IEquatable"), SF.TypeArgumentList(SF.SingletonSeparatedList<TypeSyntax>(SF.IdentifierName(cds.Identifier))))))));
+
+            return CreateType(
+                cds.Kind(),
+                cds.Identifier,
+                cds.Modifiers.Add(SyntaxKind.PartialKeyword),
+                cds.TypeParameterList,
+                SF.SingletonList<MemberDeclarationSyntax>(constructor).AddRange(toString.Concat(getHashCode).Concat(equals)),
+                baseList);
         }
 
         public TypeDeclarationSyntax CreateType(
             SyntaxKind kind, SyntaxToken identifier, SyntaxTokenList modifiers, TypeParameterListSyntax typeParams,
-            SyntaxList<MemberDeclarationSyntax> members)
+            SyntaxList<MemberDeclarationSyntax> members, BaseListSyntax baseList)
         {
             switch (kind)
             {
@@ -289,17 +302,20 @@ namespace IncrementalCompiler
                     return SF.ClassDeclaration(identifier)
                         .WithModifiers(modifiers)
                         .WithTypeParameterList(typeParams)
-                        .WithMembers(members);
+                        .WithMembers(members)
+                        .WithBaseList(baseList);
                 case SyntaxKind.StructDeclaration:
                     return SF.StructDeclaration(identifier)
                         .WithModifiers(modifiers)
                         .WithTypeParameterList(typeParams)
-                        .WithMembers(members);
+                        .WithMembers(members)
+                        .WithBaseList(baseList);
                 case SyntaxKind.InterfaceDeclaration:
                     return SF.InterfaceDeclaration(identifier)
                         .WithModifiers(modifiers)
                         .WithTypeParameterList(typeParams)
-                        .WithMembers(members);
+                        .WithMembers(members)
+                        .WithBaseList(baseList);
                 default:
                     throw new ArgumentOutOfRangeException(kind.ToString());
             }
