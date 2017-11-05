@@ -113,6 +113,8 @@ namespace IncrementalCompiler
 
             // Run
 
+            var useCompilationServer = false;
+
             Process serverProcess = null;
             while (true)
             {
@@ -121,7 +123,7 @@ namespace IncrementalCompiler
                     var w = new Stopwatch();
                     w.Start();
                     logger.Info("Request to server");
-                    var result = CompilerServiceClient.Request(parentProcessId, currentPath, options);
+                    var result = CompilerServiceClient.Request(parentProcessId, currentPath, options, useCompilationServer);
                     w.Stop();
                     logger.Info("Done: Succeeded={0}. Duration={1}sec.", result.Succeeded, w.Elapsed.TotalSeconds);
                     Console.WriteLine("Compile {0}. (Duration={1}sec)", result.Succeeded ? "succeeded" : "failed",

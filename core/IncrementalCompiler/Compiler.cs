@@ -243,11 +243,15 @@ namespace IncrementalCompiler
                 if (ReferenceEquals(null, obj)) return false;
                 return obj is StructTest && Equals((StructTest) obj);
             }
+
+            TODO: generic fields
+            EqualityComparer<B>.Default.GetHashCode(valClass);
+            EqualityComparer<B>.Default.Equals(valClass, other.valClass);
             */
 
             var isStruct = cds.Kind() == SyntaxKind.StructDeclaration;
 
-            var typeName = cds.Identifier.ValueText;
+            var typeName = cds.Identifier.ValueText + cds.TypeParameterList;
             var comparisons = fields.Select(f =>
             {
                 var type = model.GetTypeInfo(f.type).Type;
@@ -280,8 +284,7 @@ namespace IncrementalCompiler
                 $"public static bool operator !=({typeName} left, {typeName} right) => !{equalsExpr};");
 
             // : IEquatable<TypeName>
-            var baseList = SF.BaseList(SF.SingletonSeparatedList<BaseTypeSyntax>(SF.SimpleBaseType(SF.QualifiedName(SF.IdentifierName("System"),
-                SF.GenericName(SF.Identifier("IEquatable"), SF.TypeArgumentList(SF.SingletonSeparatedList<TypeSyntax>(SF.IdentifierName(cds.Identifier))))))));
+            var baseList = SF.BaseList(SF.SingletonSeparatedList<BaseTypeSyntax>(SF.SimpleBaseType(SF.ParseTypeName($"System.IEquatable<{typeName}>"))));
 
             return CreateType(
                 cds.Kind(),
