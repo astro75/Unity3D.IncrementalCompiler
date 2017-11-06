@@ -18,6 +18,7 @@ namespace IncrementalCompiler
         public static CSharpCompilation Run(
             CSharpCompilation compilation, CSharpParseOptions parseOption, string assemblyName)
         {
+            Directory.CreateDirectory(GENERATED_FOLDER);
             var currentDir = new Uri(Directory.GetCurrentDirectory());
             var newTrees = new List<SyntaxTree>();
             foreach (var tree in compilation.SyntaxTrees)

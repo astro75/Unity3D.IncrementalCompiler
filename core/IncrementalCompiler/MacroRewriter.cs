@@ -21,8 +21,8 @@ namespace IncrementalCompiler
 
         public override SyntaxNode VisitMemberAccessExpression(MemberAccessExpressionSyntax node)
         {
-            var symbolInfo = _model.GetSymbolInfo(node);
-            if (_memberAccessMacros.TryGetValue(symbolInfo.Symbol, out var fn))
+            var symbol = _model.GetSymbolInfo(node).Symbol;
+            if (symbol != null && _memberAccessMacros.TryGetValue(symbol, out var fn))
             {
                 ChangesMade = true;
                 return fn(_model, node);
