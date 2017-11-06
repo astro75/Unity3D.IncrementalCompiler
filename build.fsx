@@ -40,15 +40,18 @@ Target "Package" (fun _ ->
     for target in ["Unity4"; "Unity5"] do
         let targetDir = binDir @@ target
         let editorDir = targetDir @@ "Assets" @@ "Editor"
+        let pluginsDir = targetDir @@ "Assets" @@ "Plugins"
         let compilerDir = targetDir @@ "Compiler"
         // create dirs
         CreateDir targetDir
         CreateDir editorDir
         CreateDir compilerDir
+        CreateDir pluginsDir
         // copy output files
         "./core/IncrementalCompiler/bin/Release/IncrementalCompiler.packed.fixed.exe" |> CopyFile (compilerDir @@ "IncrementalCompiler.exe")
         "./core/IncrementalCompiler/IncrementalCompiler.xml" |> CopyFile compilerDir
         "./core/UnityPackage/Assets/Editor/CompilerSettings.cs" |> CopyFile editorDir
+        "./GenerationAttributes/bin/Release/GenerationAttrs.dll" |> CopyFile pluginsDir
         "./extra/CompilerPlugin." + target + "/bin/Release/Unity.PureCSharpTests.dll" |> CopyFile (editorDir @@ "CompilerPlugin.dll")
         "./extra/UniversalCompiler/bin/Release/UniversalCompiler.exe" |> CopyFile compilerDir
         "./extra/UniversalCompiler/UniversalCompiler.xml" |> CopyFile compilerDir

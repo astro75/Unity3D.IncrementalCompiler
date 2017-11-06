@@ -19,7 +19,7 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RoslynMdbWriter", "core\Ros
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "RoslynCompilerFix", "core\RoslynCompilerFix\RoslynCompilerFix.csproj", "{75048769-3DF1-40B6-9F3C-8D5C91501FBC}"
 EndProject
-Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CodceGeneration", "CodceGeneration", "{1C392DEF-0E87-4202-9946-4A087D7AD1ED}"
+Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CodeGeneration", "CodeGeneration", "{1C392DEF-0E87-4202-9946-4A087D7AD1ED}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GenerationAttributes", "GenerationAttributes\GenerationAttributes.csproj", "{0E0E523D-9842-4D2E-A304-59EF5C6CFFFD}"
 EndProject
