@@ -1,19 +1,13 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Collections.Immutable;
+﻿using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
-using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Mono.CompilerServices.SymbolWriter;
 using NLog;
-using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
-using static System.String;
 
 namespace IncrementalCompiler
 {
@@ -50,15 +44,16 @@ namespace IncrementalCompiler
         {
             var result = new CompileResult();
 
+            var totalSW = Stopwatch.StartNew();
             var sw = Stopwatch.StartNew();
 
             void logTime(string label) {
                 var elapsed = sw.Elapsed;
                 _logger.Info($"Time elapsed {elapsed} on {label}");
-                sw.Start();
+                sw.Restart();
             }
 
-            logTime("BuildFull");
+            _logger.Info("BuildFull");
             _options = options;
 
             _referenceFileList = new FileTimeList();
@@ -71,10 +66,14 @@ namespace IncrementalCompiler
                file => file,
                file => CreateReference(file));
 
+            logTime("Loaded references");
+
             var parseOption = new CSharpParseOptions(LanguageVersion.CSharp6, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines);
             _sourceMap = options.Files.ToDictionary(
                 file => file,
                 file => ParseSource(file, parseOption));
+
+            logTime("Loaded sources");
 
             var specificDiagnosticOptions = options.NoWarnings.ToDictionary(x => x, _ => ReportDiagnostic.Suppress);
             _compilation = CSharpCompilation.Create(
@@ -95,6 +94,8 @@ namespace IncrementalCompiler
             Emit(result);
 
             logTime("Emitted dll");
+
+            _logger.Info($"Total elapsed {totalSW.Elapsed}");
 
             return result;
         }

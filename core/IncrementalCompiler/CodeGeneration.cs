@@ -11,7 +11,7 @@ using static System.String;
 
 namespace IncrementalCompiler
 {
-    static class CodeGeneration
+    public static class CodeGeneration
     {
         private const string GENERATED_FOLDER = "Generated";
 

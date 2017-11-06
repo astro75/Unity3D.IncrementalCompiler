@@ -8,7 +8,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 
 namespace IncrementalCompiler
 {
-    static class MacroProcessor
+    public static class MacroProcessor
     {
         public static CSharpCompilation Run(CSharpCompilation compilation)
         {
