@@ -2,6 +2,7 @@
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
 {
@@ -32,10 +33,10 @@ namespace IncrementalCompiler
             => decl.WithModifiers(decl.Modifiers.Remove(kind));
 
         public static SyntaxTokenList Remove(this SyntaxTokenList tokens, SyntaxKind kind)
-            => tokens.Remove(SyntaxFactory.Token(kind));
+            => tokens.Remove(SF.Token(kind));
 
         public static SyntaxTokenList Add(this SyntaxTokenList modifiers, SyntaxKind kind)
-            => modifiers.Any(m => m.IsKind(kind)) ? modifiers : modifiers.Add(SyntaxFactory.Token(kind));
+            => modifiers.Any(m => m.IsKind(kind)) ? modifiers : modifiers.Add(SF.Token(kind));
 
         public static SyntaxTokenList Modifiers(this MemberDeclarationSyntax member)
         {
@@ -48,7 +49,7 @@ namespace IncrementalCompiler
                 case MethodDeclarationSyntax s:
                     return s.Modifiers;
             }
-            return SyntaxFactory.TokenList();
+            return SF.TokenList();
         }
 
         public static MemberDeclarationSyntax WithModifiers(this MemberDeclarationSyntax member, SyntaxTokenList modifiers)
@@ -64,5 +65,8 @@ namespace IncrementalCompiler
             }
             return member;
         }
+
+        public static LiteralExpressionSyntax StringLiteral(this string value)
+            => SF.LiteralExpression(SyntaxKind.StringLiteralExpression, SF.Literal(value));
     }
 }

@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using GenerationAttributes;
 using UnityEngine;
 using UnityEngine.UI;
 
@@ -8,6 +9,8 @@ public class Test01 : MonoBehaviour
     void Start()
     {
         Debug.Log("Test01.Start");
+        Debug.Log("Class name " + Macros.className);
+        Debug.Log("Class and method name " + Macros.classAndMethodName);
         GetComponent<Text>().text = "01";
 
         var temp = GetComponent<Text>().text;

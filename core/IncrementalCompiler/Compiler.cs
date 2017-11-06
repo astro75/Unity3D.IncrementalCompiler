@@ -79,20 +79,69 @@ namespace IncrementalCompiler
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
                     .WithAllowUnsafe(options.Options.Contains("-unsafe")));
 
-            ModifyCompilation(parseOption, Path.GetFileNameWithoutExtension(options.AssemblyName));
+            _logger.Info("Compialtion created");
+            _compilation = RunCodeGenerator(_compilation, parseOption, Path.GetFileNameWithoutExtension(options.AssemblyName));
+            _logger.Info("Code generated");
+            _compilation = RunMacros(_compilation);
+            _logger.Info("Macros completed");
 
             Emit(result);
+
+            _logger.Info("Emitted");
 
             return result;
         }
 
-        private void ModifyCompilation(CSharpParseOptions parseOption, string assemblyName)
+        private CSharpCompilation RunMacros(CSharpCompilation compilation) {
+            var macros = compilation.GetTypeByMetadataName(typeof(Macros).FullName);
+            var builder = ImmutableDictionary.CreateBuilder<ISymbol, MacroRewriter.MemberAccess>();
+
+            ISymbol macroSymbol(string name) => macros.GetMembers(name).First();
+
+            builder.Add(
+                macroSymbol(nameof(Macros.className)),
+                (model, syntax) =>
+                {
+                    var enclosingSymbol = model.GetEnclosingSymbol(syntax.SpanStart);
+                    return enclosingSymbol.ContainingType.ToDisplayString().StringLiteral();
+                });
+
+            builder.Add(
+                macroSymbol(nameof(Macros.classAndMethodName)),
+                (model, syntax) =>
+                {
+                    var enclosingSymbol = model.GetEnclosingSymbol(syntax.SpanStart);
+                    return enclosingSymbol.ToDisplayString().StringLiteral();
+                });
+
+            var modifiedTrees = new List<(SyntaxTree, CompilationUnitSyntax)>();
+            foreach (var tree in compilation.SyntaxTrees)
+            {
+                var root = tree.GetCompilationUnitRoot();
+                var model = compilation.GetSemanticModel(tree);
+                var rewriter = new MacroRewriter(model, builder.ToImmutable());
+                var newRoot = (CompilationUnitSyntax)rewriter.VisitCompilationUnit(root);
+                if (rewriter.ChangesMade)
+                {
+                    modifiedTrees.Add((tree, newRoot));
+                }
+            }
+            foreach (var (tree, syntax) in modifiedTrees)
+            {
+                compilation = compilation.ReplaceSyntaxTree(
+                    tree, tree.WithRootAndOptions(syntax, tree.Options));
+            }
+            return compilation;
+        }
+
+        private static CSharpCompilation RunCodeGenerator(
+            CSharpCompilation compilation, CSharpParseOptions parseOption, string assemblyName)
         {
             var currentDir = new Uri(Directory.GetCurrentDirectory());
             var newTrees = new List<SyntaxTree>();
-            foreach (var tree in _compilation.SyntaxTrees)
+            foreach (var tree in compilation.SyntaxTrees)
             {
-                var model = _compilation.GetSemanticModel(tree);
+                var model = compilation.GetSemanticModel(tree);
                 var root = tree.GetCompilationUnitRoot();
                 var newMembers = ImmutableList<MemberDeclarationSyntax>.Empty;
                 var typesInFile = root.DescendantNodes().OfType<TypeDeclarationSyntax>().ToImmutableArray();
@@ -125,7 +174,7 @@ namespace IncrementalCompiler
                     newTrees.Add(nt);
                 }
             }
-            _compilation = _compilation.AddSyntaxTrees(newTrees);
+            compilation = compilation.AddSyntaxTrees(newTrees);
             foreach (var syntaxTree in newTrees)
             {
                 var path = syntaxTree.FilePath;
@@ -133,9 +182,11 @@ namespace IncrementalCompiler
                 File.WriteAllText(path, syntaxTree.GetText().ToString());
             }
             File.WriteAllLines(Path.Combine(GENERATED, $"Generated-files-{assemblyName}.txt"), newTrees.Select(tree => tree.FilePath));
+            return compilation;
         }
 
-        private MemberDeclarationSyntax GenerateMatcher(SemanticModel model, ClassDeclarationSyntax cds, ImmutableArray<TypeDeclarationSyntax> typesInFile)
+        private static MemberDeclarationSyntax GenerateMatcher(
+            SemanticModel model, ClassDeclarationSyntax cds, ImmutableArray<TypeDeclarationSyntax> typesInFile)
         {
             // TODO: ban extendig this class in different files
             // TODO: generics ?
@@ -187,7 +238,7 @@ namespace IncrementalCompiler
             return CreatePartial(cds, ParseClassMembers(VoidMatch() + Match()), null);
         }
 
-        private MemberDeclarationSyntax GenerateCaseClass(SemanticModel model, TypeDeclarationSyntax cds)
+        private static MemberDeclarationSyntax GenerateCaseClass(SemanticModel model, TypeDeclarationSyntax cds)
         {
             var fields = cds.Members.OfType<FieldDeclarationSyntax>().SelectMany(field =>
             {
@@ -346,7 +397,7 @@ namespace IncrementalCompiler
             return CreatePartial(cds, newMembers, baseList);
         }
 
-        private TypeDeclarationSyntax CreatePartial(TypeDeclarationSyntax originalType, IEnumerable<MemberDeclarationSyntax> newMembers, BaseListSyntax baseList)
+        private static TypeDeclarationSyntax CreatePartial(TypeDeclarationSyntax originalType, IEnumerable<MemberDeclarationSyntax> newMembers, BaseListSyntax baseList)
             => CreateType(
                 originalType.Kind(),
                 originalType.Identifier,
@@ -355,7 +406,7 @@ namespace IncrementalCompiler
                 SF.List(newMembers),
                 baseList);
 
-        public TypeDeclarationSyntax CreateType(
+        public static TypeDeclarationSyntax CreateType(
             SyntaxKind kind, SyntaxToken identifier, SyntaxTokenList modifiers, TypeParameterListSyntax typeParams,
             SyntaxList<MemberDeclarationSyntax> members, BaseListSyntax baseList)
         {

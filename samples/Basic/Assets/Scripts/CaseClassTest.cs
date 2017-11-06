@@ -5,6 +5,10 @@ using GenerationAttributes;
 namespace Assets.Scripts {
     struct DummyStruct {
         public readonly int int1, int2;
+
+        public string test() {
+            return Macros.className;
+        }
     }
 
     class Class { }
