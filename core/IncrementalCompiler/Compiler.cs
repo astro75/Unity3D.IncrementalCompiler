@@ -84,7 +84,6 @@ namespace IncrementalCompiler
                     .WithSpecificDiagnosticOptions(specificDiagnosticOptions)
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
                     .WithAllowUnsafe(options.Options.Contains("-unsafe")));
-
             logTime("Compialtion created");
             _compilation = CodeGeneration.Run(_compilation, parseOption, Path.GetFileNameWithoutExtension(options.AssemblyName));
             logTime("Code generated");

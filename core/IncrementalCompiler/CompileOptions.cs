@@ -73,13 +73,10 @@ namespace IncrementalCompiler
                             break;
 
                         case "nowarn":
-                            foreach (var id in value.Split(new char[] { ',', ';', ' ' },
+                            foreach (var id in value.Split(new[] { ',', ';', ' ' },
                                                            StringSplitOptions.RemoveEmptyEntries))
                             {
-                                int num;
-                                NoWarnings.Add(int.TryParse(id, out num)
-                                    ? string.Format("CS{0:0000}", num)
-                                    : id);
+                                NoWarnings.Add(int.TryParse(id, out var num) ? $"CS{num:0000}" : id);
                             }
                             break;
 
