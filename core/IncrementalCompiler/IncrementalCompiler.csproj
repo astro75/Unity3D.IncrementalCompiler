@@ -136,6 +136,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
+    <Compile Include="CodeGeneration.cs" />
     <Compile Include="CompileOptions.cs" />
     <Compile Include="Compiler.cs" />
     <Compile Include="CompileResult.cs" />
@@ -145,7 +146,8 @@
     <Compile Include="CompilerServiceServer.cs" />
     <Compile Include="Extensions.cs" />
     <Compile Include="FileTimeList.cs" />
-    <Compile Include="GlobalSuppressions.cs" />
+    <Compile Include="MacroProcessor.cs" />
+    <Compile Include="MacroRewriter.cs" />
     <Compile Include="PlatformHelper.cs" />
     <Compile Include="Program.cs" />
     <Compile Include="Program.Dev.cs" />
