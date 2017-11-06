@@ -16,14 +16,14 @@ namespace IncrementalCompiler
         private const string GENERATED_FOLDER = "Generated";
 
         public static CSharpCompilation Run(
-            CSharpCompilation compilation, CSharpParseOptions parseOption, string assemblyName)
+            CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, CSharpParseOptions parseOption, string assemblyName)
         {
             Directory.CreateDirectory(GENERATED_FOLDER);
             var currentDir = new Uri(Directory.GetCurrentDirectory());
-            var newTrees = new List<SyntaxTree>();
-            foreach (var tree in compilation.SyntaxTrees)
+            var oldCompilation = compilation;
+            var newTrees = trees.AsParallel().SelectMany(tree =>
             {
-                var model = compilation.GetSemanticModel(tree);
+                var model = oldCompilation.GetSemanticModel(tree);
                 var root = tree.GetCompilationUnitRoot();
                 var newMembers = ImmutableList<MemberDeclarationSyntax>.Empty;
                 var typesInFile = root.DescendantNodes().OfType<TypeDeclarationSyntax>().ToImmutableArray();
@@ -39,7 +39,8 @@ namespace IncrementalCompiler
                         }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
                         {
-                            newMembers = newMembers.Add(AddAncestors(tds, GenerateMatcher(model, (ClassDeclarationSyntax)tds, typesInFile)));
+                            newMembers = newMembers.Add(AddAncestors(tds,
+                                GenerateMatcher(model, (ClassDeclarationSyntax) tds, typesInFile)));
                         }
                     }
                 }
@@ -53,9 +54,11 @@ namespace IncrementalCompiler
                         path: Path.Combine(GENERATED_FOLDER, currentDir.MakeRelativeUri(
                             new Uri(tree.FilePath)).ToString().Replace('/', Path.DirectorySeparatorChar)),
                         options: parseOption);
-                    newTrees.Add(nt);
+                    return new[] {nt};
                 }
-            }
+                return Enumerable.Empty<SyntaxTree>();
+            }).ToArray();
+            
             compilation = compilation.AddSyntaxTrees(newTrees);
             foreach (var syntaxTree in newTrees)
             {

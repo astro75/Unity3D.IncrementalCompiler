@@ -1,5 +1,4 @@
-﻿using System.Collections.Generic;
-using System.Collections.Immutable;
+﻿using System.Collections.Immutable;
 using System.Linq;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
@@ -10,7 +9,7 @@ namespace IncrementalCompiler
 {
     public static class MacroProcessor
     {
-        public static CSharpCompilation Run(CSharpCompilation compilation)
+        public static CSharpCompilation Run(CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees)
         {
             var macros = compilation.GetTypeByMetadataName(typeof(Macros).FullName);
             var builder = ImmutableDictionary.CreateBuilder<ISymbol, MacroRewriter.MemberAccess>();
@@ -33,19 +32,17 @@ namespace IncrementalCompiler
                     return enclosingSymbol.ToDisplayString().StringLiteral();
                 });
 
-            var modifiedTrees = new List<(SyntaxTree, CompilationUnitSyntax)>();
-            foreach (var tree in compilation.SyntaxTrees)
+            var treeEdits = trees.AsParallel().SelectMany(tree =>
             {
                 var root = tree.GetCompilationUnitRoot();
                 var model = compilation.GetSemanticModel(tree);
                 var rewriter = new MacroRewriter(model, builder.ToImmutable());
                 var newRoot = (CompilationUnitSyntax)rewriter.VisitCompilationUnit(root);
-                if (rewriter.ChangesMade)
-                {
-                    modifiedTrees.Add((tree, newRoot));
-                }
-            }
-            foreach (var (tree, syntax) in modifiedTrees)
+                return rewriter.ChangesMade
+                    ? new[] {(tree, newRoot)}
+                    : Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
+            });
+            foreach (var (tree, syntax) in treeEdits)
             {
                 compilation = compilation.ReplaceSyntaxTree(
                     tree, tree.WithRootAndOptions(syntax, tree.Options));

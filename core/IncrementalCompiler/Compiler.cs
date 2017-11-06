@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -11,7 +12,7 @@ using NLog;
 
 namespace IncrementalCompiler
 {
-    public class Compiler
+    public sealed class Compiler : IDisposable
     {
         private Logger _logger = LogManager.GetLogger("Compiler");
         private CSharpCompilation _compilation;
@@ -85,9 +86,9 @@ namespace IncrementalCompiler
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
                     .WithAllowUnsafe(options.Options.Contains("-unsafe")));
             logTime("Compialtion created");
-            _compilation = CodeGeneration.Run(_compilation, parseOption, Path.GetFileNameWithoutExtension(options.AssemblyName));
+            _compilation = CodeGeneration.Run(_compilation, _compilation.SyntaxTrees, parseOption, Path.GetFileNameWithoutExtension(options.AssemblyName));
             logTime("Code generated");
-            _compilation = MacroProcessor.Run(_compilation);
+            _compilation = MacroProcessor.Run(_compilation, _compilation.SyntaxTrees);
             logTime("Macros completed");
 
             Emit(result);
@@ -228,6 +229,7 @@ namespace IncrementalCompiler
 
         private void Emit(CompileResult result)
         {
+            _outputDllStream?.Dispose();
             _outputDllStream = new MemoryStream();
             _outputDebugSymbolStream = _options.DebugSymbolFile != DebugSymbolFileType.None ? new MemoryStream() : null;
 
@@ -281,6 +283,7 @@ namespace IncrementalCompiler
                 File.Delete(pdbFile);
 
                 // read converted mdb file to cache contents
+                _outputDebugSymbolStream?.Dispose();
                 _outputDebugSymbolStream = new MemoryStream(File.ReadAllBytes(mdbFile));
             }
         }
@@ -311,5 +314,14 @@ namespace IncrementalCompiler
             process.WaitForExit();
             return process.ExitCode;
         }
+
+        #region IDisposable
+
+        public void Dispose() {
+            _outputDllStream?.Dispose();
+            _outputDebugSymbolStream?.Dispose();
+        }
+
+        #endregion
     }
 }
