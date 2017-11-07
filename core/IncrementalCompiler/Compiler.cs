@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
@@ -7,6 +8,7 @@ using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Text;
 using Mono.CompilerServices.SymbolWriter;
 using NLog;
 
@@ -23,6 +25,7 @@ namespace IncrementalCompiler
         private Dictionary<string, SyntaxTree> _sourceMap;
         private MemoryStream _outputDllStream;
         private MemoryStream _outputDebugSymbolStream;
+        private string assemblyNameNoExtension;
 
         public CompileResult Build(CompileOptions options)
         {
@@ -54,6 +57,8 @@ namespace IncrementalCompiler
                 sw.Restart();
             }
 
+            assemblyNameNoExtension = Path.GetFileNameWithoutExtension(options.AssemblyName);
+
             _logger.Info("BuildFull");
             _options = options;
 
@@ -70,9 +75,8 @@ namespace IncrementalCompiler
             logTime("Loaded references");
 
             var parseOption = new CSharpParseOptions(LanguageVersion.CSharp6, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines);
-            _sourceMap = options.Files.ToDictionary(
-                file => file,
-                file => ParseSource(file, parseOption));
+            _sourceMap = options.Files.AsParallel().Select(
+                fileName => (fileName, tree: ParseSource(fileName, parseOption))).ToDictionary(t => t.fileName, t => t.tree);
 
             logTime("Loaded sources");
 
@@ -86,9 +90,9 @@ namespace IncrementalCompiler
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
                     .WithAllowUnsafe(options.Options.Contains("-unsafe")));
             logTime("Compialtion created");
-            _compilation = CodeGeneration.Run(_compilation, _compilation.SyntaxTrees, parseOption, Path.GetFileNameWithoutExtension(options.AssemblyName));
+            _compilation = CodeGeneration.Run(_compilation, _compilation.SyntaxTrees, parseOption, assemblyNameNoExtension);
             logTime("Code generated");
-            _compilation = MacroProcessor.Run(_compilation, _compilation.SyntaxTrees);
+            _compilation = MacroProcessor.Run(_compilation, _compilation.SyntaxTrees, _sourceMap);
             logTime("Macros completed");
 
             Emit(result);
@@ -121,8 +125,7 @@ namespace IncrementalCompiler
             {
                 _logger.Info("* {0}", file);
                 var reference = CreateReference(file);
-                _compilation = _compilation.RemoveReferences(_referenceMap[file])
-                                           .AddReferences(reference);
+                _compilation = _compilation.ReplaceReference(_referenceMap[file], reference);
                 _referenceMap[file] = reference;
             }
             foreach (var file in referenceChanges.Removed)
@@ -136,27 +139,54 @@ namespace IncrementalCompiler
 
             var sourceChanges = _sourceFileList.Update(options.Files);
             var parseOption = new CSharpParseOptions(LanguageVersion.CSharp6, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines);
-            foreach (var file in sourceChanges.Added)
-            {
+
+            var allTrees = _compilation.SyntaxTrees;
+
+            var newTrees = sourceChanges.Added.AsParallel().Select(file => {
+                var tree = ParseSource(file, parseOption);
+                return (file, tree);
+            }).ToArray();
+
+            foreach (var (file, tree) in newTrees) {
                 _logger.Info("+ {0}", file);
-                var syntaxTree = ParseSource(file, parseOption);
-                _compilation = _compilation.AddSyntaxTrees(syntaxTree);
-                _sourceMap.Add(file, syntaxTree);
+                _sourceMap.Add(file, tree);
             }
-            foreach (var file in sourceChanges.Changed)
-            {
+
+            _compilation = _compilation.AddSyntaxTrees(newTrees.Select(t => t.tree));
+
+            var changes = sourceChanges.Changed.AsParallel().Select(file => {
+                var tree = ParseSource(file, parseOption);
+                return (file, tree);
+            }).ToArray();
+
+            foreach (var (file, tree) in changes) {
                 _logger.Info("* {0}", file);
-                var syntaxTree = ParseSource(file, parseOption);
-                _compilation = _compilation.RemoveSyntaxTrees(_sourceMap[file])
-                                           .AddSyntaxTrees(syntaxTree);
-                _sourceMap[file] = syntaxTree;
+                _compilation = _compilation.ReplaceSyntaxTree(_sourceMap[file], tree);
+                _sourceMap[file] = tree;
             }
-            foreach (var file in sourceChanges.Removed)
+
+            var removedTrees = sourceChanges.Removed.Select(file =>
             {
                 _logger.Info("- {0}", file);
-                _compilation = _compilation.RemoveSyntaxTrees(_sourceMap[file]);
+                var tree = _sourceMap[file];
                 _sourceMap.Remove(file);
-            }
+                return tree;
+            }).ToArray();
+
+            var set = sourceChanges.Removed.Concat(sourceChanges.Changed)
+                .Select(file => Path.Combine(CodeGeneration.GENERATED_FOLDER, file)).ToImmutableHashSet();
+
+            var generatedFilesRemove = allTrees.Where(tree => set.Contains(tree.FilePath));
+
+            _compilation = _compilation.RemoveSyntaxTrees(removedTrees.Concat(generatedFilesRemove));
+
+            var allAddedTrees = newTrees.Concat(changes).Select(t => t.tree).ToImmutableArray();
+
+            _compilation = CodeGeneration.Run(_compilation, allAddedTrees, parseOption, assemblyNameNoExtension);
+
+            //TODO: macros on new generated files
+
+            _compilation = MacroProcessor.Run(_compilation, allAddedTrees, _sourceMap);
 
             // emit or reuse prebuilt output
 
@@ -224,7 +254,7 @@ namespace IncrementalCompiler
         {
             var fileFullPath = Path.Combine(_options.WorkDirectory, file);
             var text = File.ReadAllText(fileFullPath);
-            return CSharpSyntaxTree.ParseText(text, parseOption, fileFullPath, Encoding.UTF8);
+            return CSharpSyntaxTree.ParseText(text, parseOption, file, Encoding.UTF8);
         }
 
         private void Emit(CompileResult result)

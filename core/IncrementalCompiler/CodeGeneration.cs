@@ -13,10 +13,9 @@ namespace IncrementalCompiler
 {
     public static class CodeGeneration
     {
-        private const string GENERATED_FOLDER = "Generated";
+        public const string GENERATED_FOLDER = "Generated";
 
-        public static CSharpCompilation Run(
-            CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, CSharpParseOptions parseOption, string assemblyName)
+        public static CSharpCompilation Run(CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, CSharpParseOptions parseOption, string assemblyName)
         {
             Directory.CreateDirectory(GENERATED_FOLDER);
             var currentDir = new Uri(Directory.GetCurrentDirectory());
@@ -51,8 +50,7 @@ namespace IncrementalCompiler
                             .WithUsings(root.Usings)
                             .WithMembers(SyntaxFactory.List(newMembers))
                             .NormalizeWhitespace(),
-                        path: Path.Combine(GENERATED_FOLDER, currentDir.MakeRelativeUri(
-                            new Uri(tree.FilePath)).ToString().Replace('/', Path.DirectorySeparatorChar)),
+                        path: Path.Combine(GENERATED_FOLDER, tree.FilePath),
                         options: parseOption);
                     return new[] {nt};
                 }
@@ -66,7 +64,9 @@ namespace IncrementalCompiler
                 Directory.CreateDirectory(Path.GetDirectoryName(path));
                 File.WriteAllText(path, syntaxTree.GetText().ToString());
             }
-            File.WriteAllLines(Path.Combine(GENERATED_FOLDER, $"Generated-files-{assemblyName}.txt"), newTrees.Select(tree => tree.FilePath));
+            File.WriteAllLines(
+                Path.Combine(GENERATED_FOLDER, $"Generated-files-{assemblyName}.txt"),
+                compilation.SyntaxTrees.Select(tree => tree.FilePath).Where(path => path.StartsWith(GENERATED_FOLDER, StringComparison.Ordinal)));
             return compilation;
         }
 

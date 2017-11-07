@@ -113,7 +113,7 @@ namespace IncrementalCompiler
 
             // Run
 
-            var useCompilationServer = false;
+            var useCompilationServer = true;
             // it does not work on mac for some reason
             useCompilationServer &= PlatformHelper.CurrentPlatform == Platform.Windows;
 
