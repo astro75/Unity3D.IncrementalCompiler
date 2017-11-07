@@ -45,9 +45,7 @@ namespace Mono.CompilerServices.SymbolWriter
                 options,
                 debugEntryPoint,
                 sourceLinkStream,
-                null,
-                testData,
-                cancellationToken);
+                cancellationToken:cancellationToken);
         }
     }
 }

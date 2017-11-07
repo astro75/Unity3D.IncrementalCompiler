@@ -18,7 +18,6 @@ namespace IncrementalCompiler
         public static CSharpCompilation Run(CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, CSharpParseOptions parseOption, string assemblyName)
         {
             Directory.CreateDirectory(GENERATED_FOLDER);
-            var currentDir = new Uri(Directory.GetCurrentDirectory());
             var oldCompilation = compilation;
             var newTrees = trees.AsParallel().SelectMany(tree =>
             {
@@ -66,7 +65,10 @@ namespace IncrementalCompiler
             }
             File.WriteAllLines(
                 Path.Combine(GENERATED_FOLDER, $"Generated-files-{assemblyName}.txt"),
-                compilation.SyntaxTrees.Select(tree => tree.FilePath).Where(path => path.StartsWith(GENERATED_FOLDER, StringComparison.Ordinal)));
+                compilation.SyntaxTrees
+                    .Select(tree => tree.FilePath)
+                    .Where(path => path.StartsWith(GENERATED_FOLDER, StringComparison.Ordinal))
+                    .Select(path => path.Replace("/", "\\")));
             return compilation;
         }
 
