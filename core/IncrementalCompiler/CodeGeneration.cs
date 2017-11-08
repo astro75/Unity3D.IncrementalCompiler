@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
+using System.Text;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -15,7 +16,7 @@ namespace IncrementalCompiler
     {
         public const string GENERATED_FOLDER = "Generated";
 
-        public static CSharpCompilation Run(CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, CSharpParseOptions parseOption, string assemblyName)
+        public static CSharpCompilation Run(CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, CSharpParseOptions parseOptions, string assemblyName)
         {
             Directory.CreateDirectory(GENERATED_FOLDER);
             var oldCompilation = compilation;
@@ -50,7 +51,8 @@ namespace IncrementalCompiler
                             .WithMembers(SyntaxFactory.List(newMembers))
                             .NormalizeWhitespace(),
                         path: Path.Combine(GENERATED_FOLDER, tree.FilePath),
-                        options: parseOption);
+                        options: parseOptions,
+                        encoding: Encoding.UTF8);
                     return new[] {nt};
                 }
                 return Enumerable.Empty<SyntaxTree>();

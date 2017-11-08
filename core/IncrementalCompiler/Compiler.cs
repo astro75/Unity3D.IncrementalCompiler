@@ -26,9 +26,12 @@ namespace IncrementalCompiler
         private MemoryStream _outputDllStream;
         private MemoryStream _outputDebugSymbolStream;
         private string assemblyNameNoExtension;
+        private CSharpParseOptions parseOptions;
+
 
         public CompileResult Build(CompileOptions options)
         {
+            parseOptions = new CSharpParseOptions(LanguageVersion.CSharp6, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines);
             if (_compilation == null ||
                 _options.WorkDirectory != options.WorkDirectory ||
                 _options.AssemblyName != options.AssemblyName ||
@@ -75,9 +78,8 @@ namespace IncrementalCompiler
 
             logTime("Loaded references");
 
-            var parseOption = new CSharpParseOptions(LanguageVersion.CSharp6, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines);
             _sourceMap = options.Files.AsParallel().Select(
-                fileName => (fileName, tree: ParseSource(fileName, parseOption))).ToDictionary(t => t.fileName, t => t.tree);
+                fileName => (fileName, tree: ParseSource(fileName, parseOptions))).ToDictionary(t => t.fileName, t => t.tree);
 
             logTime("Loaded sources");
 
@@ -91,7 +93,7 @@ namespace IncrementalCompiler
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
                     .WithAllowUnsafe(options.Options.Contains("-unsafe")));
             logTime("Compialtion created");
-            _compilation = CodeGeneration.Run(_compilation, _compilation.SyntaxTrees, parseOption, assemblyNameNoExtension);
+            _compilation = CodeGeneration.Run(_compilation, _compilation.SyntaxTrees, parseOptions, assemblyNameNoExtension);
             logTime("Code generated");
             _compilation = MacroProcessor.Run(_compilation, _compilation.SyntaxTrees, _sourceMap);
             logTime("Macros completed");
@@ -139,12 +141,11 @@ namespace IncrementalCompiler
             // update source files
 
             var sourceChanges = _sourceFileList.Update(options.Files);
-            var parseOption = new CSharpParseOptions(LanguageVersion.CSharp6, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines);
 
             var allTrees = _compilation.SyntaxTrees;
 
             var newTrees = sourceChanges.Added.AsParallel().Select(file => {
-                var tree = ParseSource(file, parseOption);
+                var tree = ParseSource(file, parseOptions);
                 return (file, tree);
             }).ToArray();
 
@@ -156,7 +157,7 @@ namespace IncrementalCompiler
             _compilation = _compilation.AddSyntaxTrees(newTrees.Select(t => t.tree));
 
             var changes = sourceChanges.Changed.AsParallel().Select(file => {
-                var tree = ParseSource(file, parseOption);
+                var tree = ParseSource(file, parseOptions);
                 return (file, tree);
             }).ToArray();
 
@@ -183,7 +184,7 @@ namespace IncrementalCompiler
 
             var allAddedTrees = newTrees.Concat(changes).Select(t => t.tree).ToImmutableArray();
 
-            _compilation = CodeGeneration.Run(_compilation, allAddedTrees, parseOption, assemblyNameNoExtension);
+            _compilation = CodeGeneration.Run(_compilation, allAddedTrees, parseOptions, assemblyNameNoExtension);
 
             //TODO: macros on new generated files
 
@@ -331,19 +332,13 @@ namespace IncrementalCompiler
             var toolPath = Path.Combine(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location), "pdb2mdb.exe");
             using (var process = new Process())
             {
-                var startInfo = new ProcessStartInfo(toolPath, '"' + dllFile.Replace("/", "\\") + '"');
-
-
-                var vars = startInfo.EnvironmentVariables;
-                vars.Remove("MONO_PATH");
-                vars.Remove("MONO_CFG_DIR");
-
-                startInfo.RedirectStandardOutput = true;
-                startInfo.UseShellExecute = false;
-
+                var startInfo = new ProcessStartInfo(toolPath, '"' + dllFile + '"') {
+                    RedirectStandardOutput = true,
+                    UseShellExecute = false
+                };
                 process.StartInfo = startInfo;
 
-                process.OutputDataReceived += (sender, e) => logger.Info(e.Data);
+                process.OutputDataReceived += (sender, e) => logger.Info("Output :" + e.Data);
 
                 logger.Info($"Process: {process.StartInfo.FileName}");
                 logger.Info($"Arguments: {process.StartInfo.Arguments}");
