@@ -34,7 +34,8 @@ namespace IncrementalCompiler
                 _options.AssemblyName != options.AssemblyName ||
                 _options.Output != options.Output ||
                 _options.NoWarnings.SequenceEqual(options.NoWarnings) == false ||
-                _options.Defines.SequenceEqual(options.Defines) == false)
+                _options.Defines.SequenceEqual(options.Defines) == false ||
+                _options.DebugSymbolFile != options.DebugSymbolFile)
             {
                 return BuildFull(options);
             }
@@ -203,11 +204,7 @@ namespace IncrementalCompiler
                 // write dll
 
                 var dllFile = Path.Combine(_options.WorkDirectory, _options.Output);
-                using (var dllStream = new FileStream(dllFile, FileMode.Create))
-                {
-                    _outputDllStream.Seek(0L, SeekOrigin.Begin);
-                    _outputDllStream.CopyTo(dllStream);
-                }
+                WriteToFile(_outputDllStream, dllFile);
 
                 // write pdb or mdb
 
@@ -215,21 +212,13 @@ namespace IncrementalCompiler
                 {
                     case DebugSymbolFileType.Pdb:
                         var pdbFile = Path.Combine(_options.WorkDirectory, Path.ChangeExtension(_options.Output, ".pdb"));
-                        using (var debugSymbolStream = new FileStream(pdbFile, FileMode.Create))
-                        {
-                            _outputDebugSymbolStream.Seek(0L, SeekOrigin.Begin);
-                            _outputDebugSymbolStream.CopyTo(debugSymbolStream);
-                        }
+                        WriteToFile(_outputDebugSymbolStream, pdbFile);
                         break;
 
                     case DebugSymbolFileType.PdbToMdb:
                     case DebugSymbolFileType.Mdb:
                         var mdbFile = Path.Combine(_options.WorkDirectory, _options.Output + ".mdb");
-                        using (var debugSymbolStream = new FileStream(mdbFile, FileMode.Create))
-                        {
-                            _outputDebugSymbolStream.Seek(0L, SeekOrigin.Begin);
-                            _outputDebugSymbolStream.CopyTo(debugSymbolStream);
-                        }
+                        WriteToFile(_outputDebugSymbolStream, mdbFile);
                         break;
                 }
 
@@ -261,6 +250,7 @@ namespace IncrementalCompiler
         {
             _outputDllStream?.Dispose();
             _outputDllStream = new MemoryStream();
+            _outputDebugSymbolStream?.Dispose();
             _outputDebugSymbolStream = _options.DebugSymbolFile != DebugSymbolFileType.None ? new MemoryStream() : null;
 
             // emit to memory
@@ -277,19 +267,11 @@ namespace IncrementalCompiler
 
             var emitDebugSymbolFile = _options.DebugSymbolFile == DebugSymbolFileType.Mdb ? mdbFile : pdbFile;
 
-            using (var dllStream = new FileStream(dllFile, FileMode.Create))
-            {
-                _outputDllStream.Seek(0L, SeekOrigin.Begin);
-                _outputDllStream.CopyTo(dllStream);
-            }
+            WriteToFile(_outputDllStream, dllFile);
 
             if (_outputDebugSymbolStream != null)
             {
-                using (var debugSymbolStream = new FileStream(emitDebugSymbolFile, FileMode.Create))
-                {
-                    _outputDebugSymbolStream.Seek(0L, SeekOrigin.Begin);
-                    _outputDebugSymbolStream.CopyTo(debugSymbolStream);
-                }
+                WriteToFile(_outputDebugSymbolStream, emitDebugSymbolFile);
             }
 
             // gather result
@@ -308,13 +290,22 @@ namespace IncrementalCompiler
 
             if (_options.DebugSymbolFile == DebugSymbolFileType.PdbToMdb)
             {
-                var code = ConvertPdb2Mdb(dllFile);
+                var code = ConvertPdb2Mdb(dllFile, LogManager.GetLogger("Pdb2Mdb"));
                 _logger.Info("pdb2mdb exited with {0}", code);
                 File.Delete(pdbFile);
 
                 // read converted mdb file to cache contents
                 _outputDebugSymbolStream?.Dispose();
                 _outputDebugSymbolStream = new MemoryStream(File.ReadAllBytes(mdbFile));
+            }
+        }
+
+        void WriteToFile(MemoryStream stream, string file) {
+            _logger.Info($"Writing data to file {file}, size: {stream.Length:N0}");
+            using (var dllStream = new FileStream(file, FileMode.Create))
+            {
+                stream.Seek(0L, SeekOrigin.Begin);
+                stream.CopyTo(dllStream);
             }
         }
 
@@ -334,15 +325,37 @@ namespace IncrementalCompiler
             return $"{path}({line.StartLinePosition.Line + 1},{line.StartLinePosition.Character + 1}): " + $"{type} {diagnostic.Id}: {diagnostic.GetMessage()}";
         }
 
-        public static int ConvertPdb2Mdb(string dllFile)
+        public static int ConvertPdb2Mdb(string dllFile, Logger logger)
         {
+            
             var toolPath = Path.Combine(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location), "pdb2mdb.exe");
-            var process = new Process();
-            process.StartInfo = new ProcessStartInfo(toolPath, '"' + dllFile + '"');
-            process.StartInfo.WindowStyle = ProcessWindowStyle.Hidden;
-            process.Start();
-            process.WaitForExit();
-            return process.ExitCode;
+            using (var process = new Process())
+            {
+                var startInfo = new ProcessStartInfo(toolPath, '"' + dllFile.Replace("/", "\\") + '"');
+
+
+                var vars = startInfo.EnvironmentVariables;
+                vars.Remove("MONO_PATH");
+                vars.Remove("MONO_CFG_DIR");
+
+                startInfo.RedirectStandardOutput = true;
+                startInfo.UseShellExecute = false;
+
+                process.StartInfo = startInfo;
+
+                process.OutputDataReceived += (sender, e) => logger.Info(e.Data);
+
+                logger.Info($"Process: {process.StartInfo.FileName}");
+                logger.Info($"Arguments: {process.StartInfo.Arguments}");
+
+                process.Start();
+                process.BeginOutputReadLine();
+                process.WaitForExit();
+
+                logger.Info($"Exit code: {process.ExitCode}");
+            
+                return process.ExitCode;
+            }
         }
 
         #region IDisposable

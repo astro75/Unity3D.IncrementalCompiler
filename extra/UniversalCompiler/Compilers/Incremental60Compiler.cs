@@ -9,7 +9,7 @@ internal class Incremental60Compiler : Compiler
 	public override bool NeedsPdb2MdbConversion => false;
 
 	public Incremental60Compiler(Logger logger, string directory)
-		: base(logger, Path.Combine(directory, "IncrementalCompiler.exe")) { }
+		: base(logger, Path.Combine(directory, "IncrementalCompiler.exe"), Path.Combine(directory, "pdb2mdb.exe")) { }
 
 	public static bool IsAvailable(string directory) => File.Exists(Path.Combine(directory, "IncrementalCompiler.exe"));
 
