@@ -35,6 +35,8 @@ namespace IncrementalCompiler
         [DataMember] public DebugSymbolFileType DebugSymbolFile;
         [DataMember] public PrebuiltOutputReuseType PrebuiltOutputReuse;
 
+        static string trimQuotes(string value) => value.Trim('"', '\'');
+
         public void ParseArgument(string[] args)
         {
             foreach (var arg in args)
@@ -60,7 +62,7 @@ namespace IncrementalCompiler
                     {
                         case "r":
                         case "reference":
-                            References.Add(value.Trim('"'));
+                            References.Add(trimQuotes(value));
                             break;
 
                         case "define":
@@ -68,7 +70,7 @@ namespace IncrementalCompiler
                             break;
 
                         case "out":
-                            Output = value.Trim('"');
+                            Output = trimQuotes(value);
                             AssemblyName = Path.GetFileNameWithoutExtension(value);
                             break;
 
@@ -96,7 +98,7 @@ namespace IncrementalCompiler
                 }
                 else
                 {
-                    var path = arg.Trim('"');
+                    var path = trimQuotes(arg);
                     if (path.Length > 0)
                         Files.Add(path);
                 }

@@ -115,7 +115,7 @@ internal abstract class Compiler
 					}
 					else
 					{
-						runtimePath = Path.Combine(unityEditorDataDir, "MonoBleedingEdge/bin/mono");
+						runtimePath = "/Library/Frameworks/Mono.framework/Versions/Current/bin/mono";
 					}
 					break;
 
