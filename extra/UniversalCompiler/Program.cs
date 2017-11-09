@@ -8,7 +8,8 @@ using System.Reflection;
 
 internal class Program
 {
-	private const string CSHARP_60_SUPPORT_DIR = "CSharp60Support";
+    private const string LANGUAGE_SUPPORT_DIR = "Compiler";
+    private const string CSHARP_60_SUPPORT_DIR = "CSharp60Support";
 	private const string CSHARP_70_SUPPORT_DIR = "CSharp70Support";
 
 	private static int Main(string[] args)
@@ -73,9 +74,9 @@ internal class Program
 			return -1;
 		}
 
-		var compiler = FindSuitableCompiler(logger, CurrentPlatform, projectDir, compilationOptions, unityEditorDataDir);
+	    var compiler = CreateCompiler(settings.Compiler, logger, CurrentPlatform, targetProfileDir, projectDir, compilationOptions, unityEditorDataDir);
 
-		logger?.Append($"Compiler: {compiler.Name}");
+        logger?.Append($"Compiler: {compiler.Name}");
 		logger?.Append("");
 		logger?.Append("- Compilation -----------------------------------------------");
 		logger?.Append("");
@@ -126,22 +127,66 @@ internal class Program
 		return 0;
 	}
 
-	private static Compiler FindSuitableCompiler(Logger logger, Platform platform, string projectDir, string[] compilationOptions, string unityEditorDataDir)
-	{
-		Compiler compiler = null;
 
-		// Looking for Roslyn C# 6.0 or 7.0 compiler
-		string roslyn60Directory = Path.Combine(Path.Combine(projectDir, CSHARP_60_SUPPORT_DIR), "Roslyn");
-		string roslyn70Directory = Path.Combine(Path.Combine(projectDir, CSHARP_70_SUPPORT_DIR), "Roslyn");
+    // TODO: clean this mess
+    private static Compiler CreateCompiler(CompilerType compilerType, Logger logger, Platform platform, string monoProfileDir, string projectDir, string[] compilationOptions, string unityEditorDataDir)
+    {
+        var compilerDirectory = Path.Combine(projectDir, LANGUAGE_SUPPORT_DIR);
 
-		if (MicrosoftCompiler.IsAvailable(roslyn70Directory))
-		{
-			compiler = new MicrosoftCompiler(logger, roslyn70Directory);
-		}
-		else if (MicrosoftCompiler.IsAvailable(roslyn60Directory))
-		{
-			compiler = new MicrosoftCompiler(logger, roslyn60Directory);
-		}
+        switch (compilerType)
+        {
+            case CompilerType.Auto:
+                return FindSuitableCompiler(logger, platform, monoProfileDir, projectDir, compilationOptions, unityEditorDataDir);
+
+            case CompilerType.Mono3:
+                var stockCompilerPath = monoProfileDir.IndexOf("2.0") != -1
+                    ? Path.Combine(unityEditorDataDir, @"Mono/lib/mono/2.0/gmcs.exe")
+                    : Path.Combine(monoProfileDir, "smcs.exe");
+                return new Mono30Compiler(logger, stockCompilerPath);
+
+            case CompilerType.Mono6:
+                if (Mono60Compiler.IsAvailable(compilerDirectory))
+                    return new Mono60Compiler(logger, compilerDirectory);
+                break;
+
+            case CompilerType.Microsoft6:
+                var roslynDirectory = Path.Combine(compilerDirectory, "Roslyn");
+                if (MicrosoftCompiler.IsAvailable(roslynDirectory))
+                    return new MicrosoftCompiler(logger, roslynDirectory);
+                break;
+
+            case CompilerType.Incremental6:
+                if (Incremental60Compiler.IsAvailable(compilerDirectory))
+                    return new Incremental60Compiler(logger, compilerDirectory);
+                break;
+        }
+
+        return null;
+    }
+
+    private static Compiler FindSuitableCompiler(Logger logger, Platform platform, string monoProfileDir, string projectDir, string[] compilationOptions, string unityEditorDataDir)
+    {
+        Compiler compiler = null;
+
+        // Looking for Incremental C# 6.0 compiler
+        var icscDirectory = Path.Combine(projectDir, LANGUAGE_SUPPORT_DIR);
+        if (Incremental60Compiler.IsAvailable(icscDirectory))
+        {
+            compiler = new Incremental60Compiler(logger, icscDirectory);
+        }
+
+        // Looking for Roslyn C# 6.0 or 7.0 compiler
+        string roslyn60Directory = Path.Combine(Path.Combine(projectDir, CSHARP_60_SUPPORT_DIR), "Roslyn");
+        string roslyn70Directory = Path.Combine(Path.Combine(projectDir, CSHARP_70_SUPPORT_DIR), "Roslyn");
+
+        if (MicrosoftCompiler.IsAvailable(roslyn70Directory))
+        {
+            compiler = new MicrosoftCompiler(logger, roslyn70Directory);
+        }
+        else if (MicrosoftCompiler.IsAvailable(roslyn60Directory))
+        {
+            compiler = new MicrosoftCompiler(logger, roslyn60Directory);
+        }
 
 		if (compiler == null)
 		{
@@ -153,15 +198,15 @@ internal class Program
 			}
 		}
 
-		if (compiler == null)
-		{
-			// Using stock Mono C# 3.0 compiler
-			string stockCompilerPath = Path.Combine(unityEditorDataDir, @"Mono/lib/mono/2.0/gmcs.exe");
-			compiler = new Mono30Compiler(logger, stockCompilerPath);
-		}
+        if (compiler == null)
+        {
+            // Using stock Mono C# 3.0 compiler
+            string stockCompilerPath = Path.Combine(unityEditorDataDir, @"Mono/lib/mono/2.0/gmcs.exe");
+            compiler = new Mono30Compiler(logger, stockCompilerPath);
+        }
 
-		return compiler;
-	}
+        return compiler;
+    }
 
 	private static Platform CurrentPlatform
 	{
