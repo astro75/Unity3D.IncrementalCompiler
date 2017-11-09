@@ -8,6 +8,7 @@ internal class Mono60Compiler : Compiler
 		: base(logger, Path.Combine(directory, "mcs.exe"), null) { }
 
 	public override string Name => "Mono C# 6.0";
+    public override bool NeedsPdb2MdbConversion => false;
 
 	protected override Process CreateCompilerProcess(Platform platform, string unityEditorDataDir, string targetProfileDir, string responseFile)
 	{

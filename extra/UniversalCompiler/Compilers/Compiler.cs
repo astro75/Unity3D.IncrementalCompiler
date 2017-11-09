@@ -13,7 +13,7 @@ internal abstract class Compiler
 	}
 
 	public abstract string Name { get; }
-	public virtual bool NeedsPdb2MdbConversion => false;
+	public abstract bool NeedsPdb2MdbConversion { get; }
 
 	protected readonly Logger logger;
 	protected readonly string compilerPath;
