@@ -1,5 +1,6 @@
 ﻿using System;
 using System.IO;
+using System.Reflection;
 using System.Text;
 using System.Threading;
 
@@ -23,7 +24,15 @@ internal class Logger : IDisposable
 		*/
 	}
 
-	private const string LOG_FILENAME = "./Temp/UniversalCompiler.log";
+	private string LogFilename
+	{
+		get
+		{
+			string directory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+			return Path.Combine(directory, "compilation.log");
+		}
+	}
+
 	private const int MAXIMUM_FILE_AGE_IN_MINUTES = 5;
 
 	private readonly Mutex mutex;
@@ -32,7 +41,7 @@ internal class Logger : IDisposable
 
 	public Logger()
 	{
-		mutex = new Mutex(true, "smcs");
+		mutex = new Mutex(true, "CSharpCompilerWrapper");
 
 		if (mutex.WaitOne(0)) // check if no other process is owning the mutex
 		{
@@ -53,7 +62,7 @@ internal class Logger : IDisposable
 		if (loggingMethod == LoggingMethod.Retained)
 		{
 			DeleteLogFileIfTooOld();
-			File.AppendAllText(LOG_FILENAME, pendingLines.ToString());
+			File.AppendAllText(LogFilename, pendingLines.ToString());
 		}
 
 		mutex.ReleaseMutex();
@@ -61,17 +70,17 @@ internal class Logger : IDisposable
 
 	private void DeleteLogFileIfTooOld()
 	{
-		var lastWriteTime = new FileInfo(LOG_FILENAME).LastWriteTimeUtc;
+		var lastWriteTime = new FileInfo(LogFilename).LastWriteTimeUtc;
 		if (DateTime.UtcNow - lastWriteTime > TimeSpan.FromMinutes(MAXIMUM_FILE_AGE_IN_MINUTES))
 		{
-			File.Delete(LOG_FILENAME);
+			File.Delete(LogFilename);
 		}
 	}
 
 	public void AppendHeader()
 	{
-		var dateTimeString = DateTime.Now.ToString("yyyy-MM-dd HH:mm:ss.fff");
-		var middleLine = "*" + new string(' ', 78) + "*";
+		string dateTimeString = DateTime.Now.ToString("F");
+		string middleLine = "*" + new string(' ', 78) + "*";
 		int index = (80 - dateTimeString.Length) / 2;
 		middleLine = middleLine.Remove(index, dateTimeString.Length).Insert(index, dateTimeString);
 
@@ -84,7 +93,7 @@ internal class Logger : IDisposable
 	{
 		if (loggingMethod == LoggingMethod.Immediate)
 		{
-			File.AppendAllText(LOG_FILENAME, message + Environment.NewLine);
+			File.AppendAllText(LogFilename, message + Environment.NewLine);
 		}
 		else
 		{
