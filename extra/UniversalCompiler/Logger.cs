@@ -29,7 +29,7 @@ internal class Logger : IDisposable
 		get
 		{
 			string directory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
-			return Path.Combine(directory, "compilation.log");
+			return Path.Combine(directory, Path.Combine("Temp", "UniversalCompiler.log"));
 		}
 	}
 
