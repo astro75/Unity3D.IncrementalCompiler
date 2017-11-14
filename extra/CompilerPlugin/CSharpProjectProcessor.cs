@@ -80,6 +80,7 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         EnableUnsafeCode(xdoc);
         RemoveAnnoyingReferences(xdoc);
 
+        AddDefine(xdoc, CustomCSharpCompiler.COMPILER_DEFINE);
         AddGeneratedFiles(xdoc);
 
         var writer = new Utf8StringWriter();
@@ -143,5 +144,14 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
          let include = element.Attribute("Include").Value
          where include == "Boo.Lang" || include == "UnityScript.Lang"
          select element).Remove();
+    }
+
+    private static void AddDefine(XDocument xdoc, string define)
+    {
+        var ns = xdoc.Root.GetDefaultNamespace();
+        foreach (var defines in xdoc.Descendants(ns + "DefineConstants"))
+        {
+            defines.Value += ";" + define;
+        }
     }
 }
