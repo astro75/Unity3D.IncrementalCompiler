@@ -28,7 +28,7 @@ internal class Logger : IDisposable
 	{
 		get
 		{
-			string directory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
+			var directory = Path.GetDirectoryName(Assembly.GetExecutingAssembly().Location);
 			return Path.Combine(directory, Path.Combine("Temp", "UniversalCompiler.log"));
 		}
 	}
@@ -41,6 +41,8 @@ internal class Logger : IDisposable
 
 	public Logger()
 	{
+	    Directory.CreateDirectory(Path.GetDirectoryName(LogFilename));
+
 		mutex = new Mutex(true, "CSharpCompilerWrapper");
 
 		if (mutex.WaitOne(0)) // check if no other process is owning the mutex
