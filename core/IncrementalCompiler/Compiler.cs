@@ -31,7 +31,8 @@ namespace IncrementalCompiler
 
         public CompileResult Build(CompileOptions options)
         {
-            parseOptions = new CSharpParseOptions(LanguageVersion.CSharp6, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines);
+            parseOptions = new CSharpParseOptions(LanguageVersion.CSharp6, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines)
+                .WithFeatures(new []{new KeyValuePair<string, string>("IOperation", ""), });
             if (_compilation == null ||
                 _options.WorkDirectory != options.WorkDirectory ||
                 _options.AssemblyName != options.AssemblyName ||

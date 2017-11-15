@@ -1,16 +1,16 @@
 ﻿using System;
 using System.Collections;
-using GenerationAttributes;
 using UnityEngine;
 using UnityEngine.UI;
+using static GenerationAttributes.Macros;
 
 public class Test01 : MonoBehaviour
 {
     void Start()
     {
         Debug.Log("Test01.Start");
-        Debug.Log("Class name " + Macros.className);
-        Debug.Log("Class and method name " + Macros.classAndMethodName);
+        Debug.Log("Class name: " + className);
+        Debug.Log($"Class and method name: {classAndMethodName}");
         GetComponent<Text>().text = "01";
 
         var temp = GetComponent<Text>().text;
