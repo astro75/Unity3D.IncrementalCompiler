@@ -33,6 +33,14 @@ namespace IncrementalCompiler
         {
             parseOptions = new CSharpParseOptions(LanguageVersion.CSharp6, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines)
                 .WithFeatures(new []{new KeyValuePair<string, string>("IOperation", ""), });
+            if (PlatformHelper.CurrentPlatform != Platform.Windows)
+            {
+                if (options.DebugSymbolFile == DebugSymbolFileType.Pdb ||
+                    options.DebugSymbolFile == DebugSymbolFileType.PdbToMdb)
+                {
+                    options.DebugSymbolFile = DebugSymbolFileType.None;
+                }
+            }
             if (_compilation == null ||
                 _options.WorkDirectory != options.WorkDirectory ||
                 _options.AssemblyName != options.AssemblyName ||

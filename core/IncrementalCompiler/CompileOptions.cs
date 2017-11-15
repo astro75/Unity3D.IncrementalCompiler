@@ -35,7 +35,7 @@ namespace IncrementalCompiler
         [DataMember] public DebugSymbolFileType DebugSymbolFile;
         [DataMember] public PrebuiltOutputReuseType PrebuiltOutputReuse;
 
-        static string trimQuotes(string value) => value.Trim('"', '\'');
+        static string trimQuotes(string value) => value.Trim('"');
 
         public void ParseArgument(string[] args)
         {

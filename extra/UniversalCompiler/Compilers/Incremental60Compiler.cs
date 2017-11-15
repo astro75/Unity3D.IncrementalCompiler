@@ -15,7 +15,15 @@ internal class Incremental60Compiler : Compiler
 
 	protected override Process CreateCompilerProcess(Platform platform, string unityEditorDataDir, string targetProfileDir, string responseFile)
 	{
-		var systemDllPath = Path.Combine(targetProfileDir, "System.dll");
+	    if (platform == Platform.Mac)
+        {
+	        string filename = responseFile.TrimStart('@');
+	        string content = File.ReadAllText(filename);
+	        content = content.Replace('\'', '\"');
+	        File.WriteAllText(filename, content);
+	    }
+
+        var systemDllPath = Path.Combine(targetProfileDir, "System.dll");
 		var systemCoreDllPath = Path.Combine(targetProfileDir, "System.Core.dll");
 		var systemXmlDllPath = Path.Combine(targetProfileDir, "System.Xml.dll");
 		var mscorlibDllPath = Path.Combine(targetProfileDir, "mscorlib.dll");
