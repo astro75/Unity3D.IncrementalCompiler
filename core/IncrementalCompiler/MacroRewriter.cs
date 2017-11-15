@@ -9,12 +9,12 @@ namespace IncrementalCompiler
     {
         private readonly SemanticModel _model;
 
-        public delegate SyntaxNode MemberAccess(SemanticModel model, MemberAccessExpressionSyntax syntax);
-        private readonly ImmutableDictionary<ISymbol, MemberAccess> _memberAccessMacros;
+        public delegate SyntaxNode PropertyMacro(SemanticModel model, SyntaxNode syntax);
+        private readonly ImmutableDictionary<ISymbol, PropertyMacro> _memberAccessMacros;
 
         public bool ChangesMade { get; private set; }
 
-        public MacroRewriter(SemanticModel model, ImmutableDictionary<ISymbol, MemberAccess> memberAccessMacros) {
+        public MacroRewriter(SemanticModel model, ImmutableDictionary<ISymbol, PropertyMacro> memberAccessMacros) {
             _model = model;
             _memberAccessMacros = memberAccessMacros;
         }
