@@ -35,6 +35,7 @@ namespace IncrementalCompiler
                 .WithFeatures(new []{new KeyValuePair<string, string>("IOperation", ""), });
             if (PlatformHelper.CurrentPlatform != Platform.Windows)
             {
+                // OSX does not support pdb
                 if (options.DebugSymbolFile == DebugSymbolFileType.Pdb ||
                     options.DebugSymbolFile == DebugSymbolFileType.PdbToMdb)
                 {
@@ -275,14 +276,6 @@ namespace IncrementalCompiler
             var mdbFile = Path.Combine(_options.WorkDirectory, _options.Output + ".mdb");
             var pdbFile = Path.Combine(_options.WorkDirectory, Path.ChangeExtension(_options.Output, ".pdb"));
 
-            var emitDebugSymbolFile = _options.DebugSymbolFile == DebugSymbolFileType.Mdb ? mdbFile : pdbFile;
-
-            WriteToFile(_outputDllStream, dllFile);
-
-            if (_outputDebugSymbolStream != null)
-            {
-                WriteToFile(_outputDebugSymbolStream, emitDebugSymbolFile);
-            }
 
             // gather result
 
@@ -296,17 +289,27 @@ namespace IncrementalCompiler
 
             result.Succeeded = r.Success;
 
-            // pdb to mdb when required
-
-            if (_options.DebugSymbolFile == DebugSymbolFileType.PdbToMdb)
+            if (r.Success)
             {
-                var code = ConvertPdb2Mdb(dllFile, LogManager.GetLogger("Pdb2Mdb"));
-                _logger.Info("pdb2mdb exited with {0}", code);
-                File.Delete(pdbFile);
+                WriteToFile(_outputDllStream, dllFile);
 
-                // read converted mdb file to cache contents
-                _outputDebugSymbolStream?.Dispose();
-                _outputDebugSymbolStream = new MemoryStream(File.ReadAllBytes(mdbFile));
+                if (_outputDebugSymbolStream != null)
+                {
+                    var emitDebugSymbolFile = _options.DebugSymbolFile == DebugSymbolFileType.Mdb ? mdbFile : pdbFile;
+                    WriteToFile(_outputDebugSymbolStream, emitDebugSymbolFile);
+                }
+
+                // pdb to mdb when required
+                if (_options.DebugSymbolFile == DebugSymbolFileType.PdbToMdb)
+                {
+                    var code = ConvertPdb2Mdb(dllFile, LogManager.GetLogger("Pdb2Mdb"));
+                    _logger.Info("pdb2mdb exited with {0}", code);
+                    File.Delete(pdbFile);
+
+                    // read converted mdb file to cache contents
+                    _outputDebugSymbolStream?.Dispose();
+                    _outputDebugSymbolStream = new MemoryStream(File.ReadAllBytes(mdbFile));
+                }
             }
         }
 
