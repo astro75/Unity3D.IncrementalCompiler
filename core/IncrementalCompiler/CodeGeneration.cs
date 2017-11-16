@@ -38,8 +38,9 @@ namespace IncrementalCompiler
                         }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
                         {
-                            newMembers = newMembers.Add(AddAncestors(tds,
-                                GenerateMatcher(model, (ClassDeclarationSyntax) tds, typesInFile)));
+                            newMembers = newMembers.Add(
+                                AddAncestors(tds,GenerateMatcher(model, (ClassDeclarationSyntax) tds, typesInFile))
+                            );
                         }
                     }
                 }
@@ -341,12 +342,14 @@ namespace IncrementalCompiler
                     case ClassDeclarationSyntax a:
                         generatedType = a
                             .WithMembers(SyntaxFactory.SingletonList(generatedType))
+                            .WithModifiers(a.Modifiers.Add(SyntaxKind.PartialKeyword))
                             .WithLeadingTrivia(SyntaxFactory.TriviaList())
                             .WithTrailingTrivia(SyntaxFactory.TriviaList());
                         break;
                     case StructDeclarationSyntax a:
                         generatedType = a
                             .WithMembers(SyntaxFactory.SingletonList(generatedType))
+                            .WithModifiers(a.Modifiers.Add(SyntaxKind.PartialKeyword))
                             .WithLeadingTrivia(SyntaxFactory.TriviaList())
                             .WithTrailingTrivia(SyntaxFactory.TriviaList());
                         break;
