@@ -4,13 +4,19 @@ using UnityEngine;
 using UnityEngine.UI;
 using static GenerationAttributes.Macros;
 
-public class Test01 : MonoBehaviour
-{
+public class Test01 : MonoBehaviour {
+    public string getter => classAndMethodName;
+    public static string arrowMethod() => classAndMethodName;
+
     void Start()
     {
         Debug.Log("Test01.Start");
         Debug.Log("Class name: " + className);
         Debug.Log($"Class and method name: {classAndMethodName}");
+        Debug.Log($"getter: {getter}");
+        Debug.Log($"arrow: {arrowMethod()}");
+
+
         GetComponent<Text>().text = "01";
 
         var temp = GetComponent<Text>().text;
@@ -22,8 +28,11 @@ public class Test01 : MonoBehaviour
             }));
     }
 
+    static void defaultParams(string text = "text") {}
+
     IEnumerator TestCoroutine(int a, Func<int, string> b)
     {
+        Debug.Log($"Class and method name: {classAndMethodName}");
         var v = a;
         yield return null;
         GetComponent<Text>().text = v.ToString();
@@ -34,6 +43,7 @@ public class Test01 : MonoBehaviour
 
     public void Rerun()
     {
+        Debug.Log($"Class and method name: {classAndMethodName}");
         Start();
     }
 }

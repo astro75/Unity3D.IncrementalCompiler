@@ -64,22 +64,21 @@ namespace IncrementalCompiler
                 var root = tree.GetCompilationUnitRoot();
                 var model = oldCompilation.GetSemanticModel(tree);
 
+                var opFinder = new RootOperationsFinder(model);
+
+                opFinder.Visit(root);
+
                 var changes = new Dictionary<SyntaxNode, SyntaxNode>();
 
-                foreach (var block in root.DescendantNodes(node => node.Kind() != SyntaxKind.Block).OfType<BlockSyntax>())
+                foreach (var operation in opFinder.results)
                 {
-//                    Console.WriteLine(block.SyntaxTree.FilePath);
-                    var op = model.GetOperation(block);
-//                    op.Accept(walker);
+                    Console.WriteLine("Found Operation: " + operation);
+                    Console.WriteLine(operation.Syntax);
 
-                    var props = op.DescendantsAndSelf().OfType<IPropertyReferenceExpression>();
+                    var props = operation.DescendantsAndSelf().OfType<IPropertyReferenceExpression>();
 
-
-
-                    foreach (var prop in props)
-                    {
-                        if (allMacros.TryGetValue(prop.Property, out var fn))
-                        {
+                    foreach (var prop in props) {
+                        if (allMacros.TryGetValue(prop.Property, out var fn)) {
                             changes.Add(prop.Syntax, fn(model, prop.Syntax));
                         }
                     }
@@ -109,7 +108,9 @@ namespace IncrementalCompiler
 
                 if (changes.Any())
                 {
-                    return new[] {(tree, root.ReplaceNodes(changes.Keys, (a, b) => changes[a]))};
+                    var updatedTree = root.ReplaceNodes(changes.Keys, (a, b) => changes[a]);
+                    Console.WriteLine(updatedTree.GetText());
+                    return new[] {(tree, updatedTree)};
                 }
                 return Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
             });
@@ -117,10 +118,25 @@ namespace IncrementalCompiler
             {
                 var newTree = tree.WithRootAndOptions(syntax, tree.Options);
                 sourceMap[newTree.FilePath] = newTree;
-                compilation = compilation.ReplaceSyntaxTree(
-                    tree, newTree);
+                compilation = compilation.ReplaceSyntaxTree(tree, newTree);
             }
             return compilation;
+        }
+    }
+
+    public class RootOperationsFinder : CSharpSyntaxWalker
+    {
+        private readonly SemanticModel model;
+        public List<IOperation> results = new List<IOperation>();
+
+        public RootOperationsFinder(SemanticModel model) {
+            this.model = model;
+        }
+
+        public override void Visit(SyntaxNode node) {
+            var operation = model.GetOperation(node);
+            if (operation == null) base.Visit(node);
+            else results.Add(operation);
         }
     }
 
@@ -128,18 +144,13 @@ namespace IncrementalCompiler
     {
         private int ident;
         public override void Visit(IOperation operation) {
-            for (int i = 0; i < ident; i++)
-            {
+            for (var i = 0; i < ident; i++) {
                 Console.Write("  ");
             }
             Console.WriteLine(operation?.Kind.ToString());
             ident++;
             base.Visit(operation);
             ident--;
-        }
-
-        public override void VisitBlockStatement(IBlockStatement operation) {
-            base.VisitBlockStatement(operation);
         }
     }
 
