@@ -52,7 +52,7 @@ Target "Package" (fun _ ->
         "./core/IncrementalCompiler/IncrementalCompiler.xml" |> CopyFile compilerDir
         "./core/UnityPackage/Assets/Editor/CompilerSettings.cs" |> CopyFile editorDir
         "./GenerationAttributes/bin/Release/GenerationAttrs.dll" |> CopyFile pluginsDir
-        "./extra/CompilerPlugin." + target + "/bin/Release/Unity.PureCSharpTests.dll" |> CopyFile (editorDir @@ "CompilerPlugin.dll")
+        "./extra/CompilerPlugin." + target + "/bin/Release/Unity.PureCSharpTests.dll" |> CopyFile (editorDir @@ "CSharpVNextSupport.dll")
         "./extra/UniversalCompiler/bin/Release/UniversalCompiler.exe" |> CopyFile compilerDir
         "./extra/UniversalCompiler/UniversalCompiler.xml" |> CopyFile compilerDir
         "./tools/pdb2mdb/pdb2mdb.exe" |> CopyFile compilerDir
