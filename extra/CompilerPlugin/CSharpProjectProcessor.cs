@@ -92,6 +92,8 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
     {
         var ns = xdoc.Root.GetDefaultNamespace();
         var assemblyName = xdoc.Root.Descendants(ns + "AssemblyName").Select(el => el.Value).First();
+        // .dll suffix appears here if we select VS2017 in unity preferences
+        assemblyName = EnsureDoesNotEndWith(assemblyName, ".dll");
         var filename = Path.Combine("Generated", "Generated-files-" + assemblyName + ".txt");
         if (!File.Exists(filename)) return;
         var filesToAdd = File.ReadAllLines(filename);
@@ -100,6 +102,11 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         );
         xdoc.Root.Add(new XElement(ns + "ItemGroup", newFiles.ToArray()));
     }
+
+    static string EnsureDoesNotEndWith(string s, string suffix) =>
+        s.EndsWith(suffix, StringComparison.Ordinal)
+        ? s.Substring(s.Length - suffix.Length)
+        : s;
 
     private class Utf8StringWriter : StringWriter
     {
