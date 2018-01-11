@@ -58,7 +58,6 @@ namespace IncrementalCompiler
                 }
                 return Enumerable.Empty<SyntaxTree>();
             }).ToArray();
-            
             compilation = compilation.AddSyntaxTrees(newTrees);
             foreach (var syntaxTree in newTrees)
             {

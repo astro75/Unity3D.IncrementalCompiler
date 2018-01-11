@@ -7,7 +7,7 @@ using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Semantics;
+using Microsoft.CodeAnalysis.Operations;
 
 namespace IncrementalCompiler
 {
@@ -75,14 +75,14 @@ namespace IncrementalCompiler
                     Console.WriteLine("Found Operation: " + operation);
                     Console.WriteLine(operation.Syntax);
 
-                    var props = operation.DescendantsAndSelf().OfType<IPropertyReferenceExpression>();
+                    var props = operation.DescendantsAndSelf().OfType<IPropertyReferenceOperation>();
 
                     foreach (var prop in props) {
                         if (allMacros.TryGetValue(prop.Property, out var fn)) {
                             changes.Add(prop.Syntax, fn(model, prop.Syntax));
                         }
                     }
-                    
+
 //                    Console.WriteLine(op?.Type?.ToString() ?? "null");
 //                    var symbol = model.GetDeclaredSymbol(classDecl);
 //                    var op = symbol.GetRootOperation();
@@ -99,7 +99,7 @@ namespace IncrementalCompiler
 //                        Console.WriteLine(op?.Type);
 //                    }
                 }
-                
+
 //                var rewriter = new MacroRewriter(model, builder.ToImmutable());
 //                var newRoot = (CompilationUnitSyntax)rewriter.VisitCompilationUnit(root);
 //                return rewriter.ChangesMade

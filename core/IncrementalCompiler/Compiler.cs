@@ -340,7 +340,7 @@ namespace IncrementalCompiler
 
         public static int ConvertPdb2Mdb(string dllFile, Logger logger)
         {
-            
+
             var toolPath = Path.Combine(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location), "pdb2mdb.exe");
             using (var process = new Process())
             {
@@ -360,7 +360,7 @@ namespace IncrementalCompiler
                 process.WaitForExit();
 
                 logger.Info($"Exit code: {process.ExitCode}");
-            
+
                 return process.ExitCode;
             }
         }
