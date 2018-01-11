@@ -17,6 +17,6 @@
     - WhenNoSourceChange : When nothing changed in sources and references (except update of some references),
                            reuse prebuilt results.
   -->
-  <PrebuiltOutputReuse>WhenNoSourceChange</PrebuiltOutputReuse>
+  <PrebuiltOutputReuse>WhenNoChange</PrebuiltOutputReuse>
 
 </Settings>
