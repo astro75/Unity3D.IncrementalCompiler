@@ -31,7 +31,7 @@ namespace IncrementalCompiler
 
         public CompileResult Build(CompileOptions options)
         {
-            parseOptions = new CSharpParseOptions(LanguageVersion.CSharp6, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines)
+            parseOptions = new CSharpParseOptions(LanguageVersion.CSharp7_2, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines)
                 .WithFeatures(new []{new KeyValuePair<string, string>("IOperation", ""), });
             if (PlatformHelper.CurrentPlatform != Platform.Windows)
             {
