@@ -14,10 +14,18 @@ using UnityEngine;
 [InitializeOnLoad]
 public class CSharpProjectPostprocessor : AssetPostprocessor
 {
+    #region Overrides of AssetPostprocessor
+
+    // We need to run this after Rider postprocessor, because we override LangVersion
+    // Rider postprocessor has a default order 0
+    public override int GetPostprocessOrder() => 1;
+
+    #endregion
+
     // In case VSTU is installed
-    static CSharpProjectPostprocessor()
-    {
-        foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
+    static CSharpProjectPostprocessor() {
+        OnGeneratedCSProjectFiles();
+        /*foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
             if (assembly.FullName.StartsWith("SyntaxTree.VisualStudio.Unity.Bridge") == false)
             {
@@ -53,16 +61,17 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
             projectFileGenerationField.SetValue(null, delegateValue);
 
             return;
-        }
+        }*/
     }
 
     // In case VSTU is not installed
     private static void OnGeneratedCSProjectFiles()
     {
-        if (AppDomain.CurrentDomain.GetAssemblies().Any(a => a.FullName.StartsWith("SyntaxTree.VisualStudio.Unity.Bridge")))
+        Debug.Log("Incremental compiler: " + nameof(OnGeneratedCSProjectFiles));
+        /*if (AppDomain.CurrentDomain.GetAssemblies().Any(a => a.FullName.StartsWith("SyntaxTree.VisualStudio.Unity.Bridge")))
         {
             return;
-        }
+        }*/
 
         foreach (string projectFile in Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csproj"))
         {
@@ -115,7 +124,8 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
 
     private static void SetUpCorrectLangVersion(XDocument xdoc)
     {
-        string csharpVersion;
+        string csharpVersion = "7.2";
+        /*
         if (Directory.Exists("CSharp70Support"))
         {
             csharpVersion = "7";
@@ -127,7 +137,7 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         else
         {
             csharpVersion = "default";
-        }
+        }*/
 
         var ns = xdoc.Root.GetDefaultNamespace();
         xdoc.Descendants(ns + "LangVersion").Remove();
