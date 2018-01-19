@@ -335,22 +335,23 @@ namespace IncrementalCompiler
                     case NamespaceDeclarationSyntax a:
                         generatedType = a
                             .WithMembers(SyntaxFactory.SingletonList(generatedType))
-                            .WithLeadingTrivia(SyntaxFactory.TriviaList())
-                            .WithTrailingTrivia(SyntaxFactory.TriviaList());
+                            .WithoutTrivia();
                         break;
                     case ClassDeclarationSyntax a:
                         generatedType = a
                             .WithMembers(SyntaxFactory.SingletonList(generatedType))
                             .WithModifiers(a.Modifiers.Add(SyntaxKind.PartialKeyword))
-                            .WithLeadingTrivia(SyntaxFactory.TriviaList())
-                            .WithTrailingTrivia(SyntaxFactory.TriviaList());
+                            .WithoutTrivia()
+                            .WithCloseBraceToken(a.CloseBraceToken.WithoutTrivia())
+                            .WithBaseList(Extensions.EmptyBaseList);
                         break;
                     case StructDeclarationSyntax a:
                         generatedType = a
                             .WithMembers(SyntaxFactory.SingletonList(generatedType))
                             .WithModifiers(a.Modifiers.Add(SyntaxKind.PartialKeyword))
-                            .WithLeadingTrivia(SyntaxFactory.TriviaList())
-                            .WithTrailingTrivia(SyntaxFactory.TriviaList());
+                            .WithoutTrivia()
+                            .WithCloseBraceToken(a.CloseBraceToken.WithoutTrivia())
+                            .WithBaseList(Extensions.EmptyBaseList);
                         break;
                 }
             }

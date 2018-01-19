@@ -68,5 +68,8 @@ namespace IncrementalCompiler
 
         public static LiteralExpressionSyntax StringLiteral(this string value)
             => SF.LiteralExpression(SyntaxKind.StringLiteralExpression, SF.Literal(value));
+
+        public static BaseListSyntax EmptyBaseList =
+            SyntaxFactory.BaseList(SyntaxFactory.SeparatedList<BaseTypeSyntax>());
     }
 }

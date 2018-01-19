@@ -48,8 +48,8 @@ namespace Assets.Scripts {
     [Case]
     sealed partial class GenericClassTest<A, B, C>
         where A : struct
-        where B : class 
-        where C : InterfaceTest 
+        where B : class
+        where C : InterfaceTest
     {
         public readonly A valStruct;
         public readonly B valClass;
@@ -90,4 +90,20 @@ namespace Assets.Scripts {
     sealed class GenericOne<A> : ADTBaseGeneric<A> { }
     sealed class GenericOneV2<B> : ADTBaseGeneric<B> { }
     sealed class GenericTwo : ADTBaseGeneric<string> { }
+
+    partial class Nested1 : IDisposable {
+        [Case]
+        partial class Nested2 {
+            public readonly int val;
+        }
+
+        #region Implementation of IDisposable
+
+        public void Dispose() {
+            throw new NotImplementedException();
+        }
+
+        // line below is left for purpose
+        #endregion
+    }
 }
