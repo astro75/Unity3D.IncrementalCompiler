@@ -15,6 +15,7 @@ namespace IncrementalCompiler
     public static class CodeGeneration
     {
         public const string GENERATED_FOLDER = "Generated";
+        static Type caseType = typeof(RecordAttribute);
 
         public static CSharpCompilation Run(CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, CSharpParseOptions parseOptions, string assemblyName)
         {
@@ -32,9 +33,17 @@ namespace IncrementalCompiler
                     foreach (var attr in attrs)
                     {
                         var attrClassName = attr.AttributeClass.ToDisplayString();
-                        if (attrClassName == typeof(CaseAttribute).FullName)
+                        if (attrClassName == caseType.FullName)
                         {
-                            newMembers = newMembers.Add(AddAncestors(tds, GenerateCaseClass(model, tds)));
+                            var instance = new RecordAttribute();
+                            foreach (var arg in attr.NamedArguments)
+                            {
+                                // if some arguments are invelid they do not appear in NamedArguments list
+                                // because of that we do not check for errors
+                                var prop = caseType.GetProperty(arg.Key);
+                                prop.SetValue(instance, arg.Value.Value);
+                            }
+                            newMembers = newMembers.Add(AddAncestors(tds, GenerateCaseClass(instance, model, tds)));
                         }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
                         {
@@ -127,7 +136,7 @@ namespace IncrementalCompiler
             return CreatePartial(cds, ParseClassMembers(VoidMatch() + Match()), null);
         }
 
-        private static MemberDeclarationSyntax GenerateCaseClass(SemanticModel model, TypeDeclarationSyntax cds)
+        private static MemberDeclarationSyntax GenerateCaseClass(RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds)
         {
             var fields = cds.Members.OfType<FieldDeclarationSyntax>().SelectMany(field =>
             {
@@ -135,7 +144,8 @@ namespace IncrementalCompiler
                 var type = decl.Type;
                 return decl.Variables.Select(varDecl => (type, varDecl.Identifier));
             }).ToArray();
-            var constructor = SyntaxFactory.ConstructorDeclaration(cds.Identifier)
+            var constructor = createIf(attr.GenerateConstructor, () =>
+                ImmutableList.Create((MemberDeclarationSyntax) SyntaxFactory.ConstructorDeclaration(cds.Identifier)
                 .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
                 .WithParameterList(SyntaxFactory.ParameterList(
                     SyntaxFactory.SeparatedList(fields.Select(f =>
@@ -143,10 +153,17 @@ namespace IncrementalCompiler
                 .WithBody(SyntaxFactory.Block(fields.Select(f => SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(
                     SyntaxKind.SimpleAssignmentExpression,
                     SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.ThisExpression(),
-                        SyntaxFactory.IdentifierName(f.Identifier)), SyntaxFactory.IdentifierName(f.Identifier))))));
+                        SyntaxFactory.IdentifierName(f.Identifier)), SyntaxFactory.IdentifierName(f.Identifier)))))))
+            );
             var paramsStr = Join(", ", fields.Select(f => f.Identifier.ValueText).Select(n => n + ": \" + " + n + " + \""));
-            var toString = ParseClassMembers(
-                $"public override string ToString() => \"{cds.Identifier.ValueText}(\" + \"{paramsStr})\";");
+
+            IEnumerable<MemberDeclarationSyntax> createIf(bool condition, Func<IEnumerable<MemberDeclarationSyntax>> a) =>
+                condition ? a() : Enumerable.Empty<MemberDeclarationSyntax>();
+
+            var toString = createIf(
+                attr.GenerateToString,
+                () => ParseClassMembers($"public override string ToString() => \"{cds.Identifier.ValueText}(\" + \"{paramsStr})\";")
+            );
 
             /*
             public override int GetHashCode() {
@@ -167,35 +184,37 @@ namespace IncrementalCompiler
             }
             */
 
-            var hashLines = Join("\n", fields.Select(f =>
-            {
-                var type = model.GetTypeInfo(f.type).Type;
-                var isValueType = type.IsValueType;
-                var name = f.Identifier.ValueText;
-                string ValueTypeHash(SpecialType sType)
-                {
-                    switch (sType)
+            var getHashCode = createIf(attr.GenerateGetHashCode, () => {
+                var hashLines = Join("\n", fields.Select(f => {
+                    var type = model.GetTypeInfo(f.type).Type;
+                    var isValueType = type.IsValueType;
+                    var name = f.Identifier.ValueText;
+                    string ValueTypeHash(SpecialType sType)
                     {
-                        case SpecialType.System_Byte:
-                        case SpecialType.System_SByte:
-                        case SpecialType.System_Int16:
-                        case SpecialType.System_Int32: return name;
-                        case SpecialType.System_UInt32:
-                        //TODO: `long` type enums should not cast
-                        case SpecialType.System_Enum: return "(int) " + name;
-                        default: return name + ".GetHashCode()";
+                        switch (sType)
+                        {
+                            case SpecialType.System_Byte:
+                            case SpecialType.System_SByte:
+                            case SpecialType.System_Int16:
+                            case SpecialType.System_Int32: return name;
+                            case SpecialType.System_UInt32:
+                            //TODO: `long` type enums should not cast
+                            case SpecialType.System_Enum: return "(int) " + name;
+                            default: return name + ".GetHashCode()";
+                        }
                     }
-                }
-                return "hashCode = (hashCode * 397) ^ " + (isValueType ? ValueTypeHash(type.SpecialType) : $"({name} == null ? 0 : {name}.GetHashCode())") + ";";
-            }));
-            var getHashCode = ParseClassMembers(
-            $@"public override int GetHashCode() {{
-                unchecked {{
-                    var hashCode = 0;
-                    {hashLines}
-                    return hashCode;
-                }}
-            }}");
+                    return "hashCode = (hashCode * 397) ^ " + (isValueType ? ValueTypeHash(type.SpecialType) : $"({name} == null ? 0 : {name}.GetHashCode())") + ";";
+                }));
+                return ParseClassMembers(
+                $@"public override int GetHashCode() {{
+                    unchecked {{
+                        var hashCode = 0;
+                        {hashLines}
+                        return hashCode;
+                    }}
+                }}");
+            });
+
 
             /*
             // class
@@ -245,43 +264,47 @@ namespace IncrementalCompiler
             EqualityComparer<B>.Default.Equals(valClass, other.valClass);
             */
 
-            var isStruct = cds.Kind() == SyntaxKind.StructDeclaration;
-
             var typeName = cds.Identifier.ValueText + cds.TypeParameterList;
-            var comparisons = fields.Select(f =>
-            {
-                var type = model.GetTypeInfo(f.type).Type;
-                var name = f.Identifier.ValueText;
-                var otherName = "other." + name;
-                switch (type.SpecialType)
-                {
-                    case SpecialType.System_Byte:
-                    case SpecialType.System_SByte:
-                    case SpecialType.System_Int16:
-                    case SpecialType.System_UInt16:
-                    case SpecialType.System_Int32:
-                    case SpecialType.System_UInt32:
-                    case SpecialType.System_Int64:
-                    case SpecialType.System_UInt64:
-                    case SpecialType.System_Enum: return $"{name} == {otherName}";
-                    case SpecialType.System_String: return $"string.Equals({name}, {otherName})";
-                    default: return $"{name}.Equals({otherName})";
-                }
-            });
-            var equalsExpr = isStruct ? "left.Equals(right)" : "Equals(left, right)";
-            var equals = ParseClassMembers(
-                $"public bool Equals({typeName} other) => {Join(" && ", comparisons)};" +
-                $"public override bool Equals(object obj) {{" +
-                $"  if (ReferenceEquals(null, obj)) return false;" +
-                (!isStruct ? "if (ReferenceEquals(this, obj)) return true;" : "") +
-                $"  return obj is {typeName} && Equals(({typeName}) obj);" +
-                $"}}" +
-                $"public static bool operator ==({typeName} left, {typeName} right) => {equalsExpr};" +
-                $"public static bool operator !=({typeName} left, {typeName} right) => !{equalsExpr};");
 
-            // : IEquatable<TypeName>
-            var baseList = SyntaxFactory.BaseList(SyntaxFactory.SingletonSeparatedList<BaseTypeSyntax>(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName($"System.IEquatable<{typeName}>"))));
-            var newMembers = new[] { constructor }.Concat(toString).Concat(getHashCode).Concat(equals);
+            var equals = createIf(attr.GenerateComparer, () => {
+                var isStruct = cds.Kind() == SyntaxKind.StructDeclaration;
+                var comparisons = fields.Select(f =>
+                {
+                    var type = model.GetTypeInfo(f.type).Type;
+                    var name = f.Identifier.ValueText;
+                    var otherName = "other." + name;
+                    switch (type.SpecialType)
+                    {
+                        case SpecialType.System_Byte:
+                        case SpecialType.System_SByte:
+                        case SpecialType.System_Int16:
+                        case SpecialType.System_UInt16:
+                        case SpecialType.System_Int32:
+                        case SpecialType.System_UInt32:
+                        case SpecialType.System_Int64:
+                        case SpecialType.System_UInt64:
+                        case SpecialType.System_Enum: return $"{name} == {otherName}";
+                        case SpecialType.System_String: return $"string.Equals({name}, {otherName})";
+                        default: return $"{name}.Equals({otherName})";
+                    }
+                });
+                var equalsExpr = isStruct ? "left.Equals(right)" : "Equals(left, right)";
+                return ParseClassMembers(
+                    $"public bool Equals({typeName} other) => {Join(" && ", comparisons)};" +
+                    $"public override bool Equals(object obj) {{" +
+                    $"  if (ReferenceEquals(null, obj)) return false;" +
+                    (!isStruct ? "if (ReferenceEquals(this, obj)) return true;" : "") +
+                    $"  return obj is {typeName} && Equals(({typeName}) obj);" +
+                    $"}}" +
+                    $"public static bool operator ==({typeName} left, {typeName} right) => {equalsExpr};" +
+                    $"public static bool operator !=({typeName} left, {typeName} right) => !{equalsExpr};");
+            });
+
+            var baseList = attr.GenerateComparer
+                // : IEquatable<TypeName>
+                ? SyntaxFactory.BaseList(SyntaxFactory.SingletonSeparatedList<BaseTypeSyntax>(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName($"System.IEquatable<{typeName}>"))))
+                : Extensions.EmptyBaseList;
+            var newMembers = constructor.Concat(toString).Concat(getHashCode).Concat(equals);
 
             return CreatePartial(cds, newMembers, baseList);
         }
