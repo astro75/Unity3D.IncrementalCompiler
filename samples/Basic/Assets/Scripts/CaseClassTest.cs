@@ -17,7 +17,7 @@ namespace Assets.Scripts {
     enum ByteEnum : byte { A, B, C }
     enum LongEnum : long { A, B, C }
 
-    [Case]
+    [Record(GenerateToString = false)]
     sealed partial class ClassTest {
         public readonly int int1, int2;
         public readonly string str1, str2;
@@ -38,14 +38,14 @@ namespace Assets.Scripts {
         public readonly Class classRef;
     }
 
-    [Case]
+    [Record(GenerateComparer = false)]
     partial struct StructTest {
         public readonly int int1, int2;
         public readonly string str1, str2;
         public readonly ClassTest classRef;
     }
 
-    [Case]
+    [Record]
     sealed partial class GenericClassTest<A, B, C>
         where A : struct
         where B : class
@@ -56,7 +56,7 @@ namespace Assets.Scripts {
         public readonly C valInterface;
     }
 
-    [Case]
+    [Record]
     partial struct GenericStructTest<A> {
         public readonly A value;
     }
@@ -74,12 +74,12 @@ namespace Assets.Scripts {
         }
     }
 
-    [Case]
+    [Record]
     sealed partial class One : ADTBase {
         public readonly int val;
     }
 
-    [Case]
+    [Record]
     sealed partial class Two : ADTBase {
         public readonly string val;
     }
@@ -92,7 +92,7 @@ namespace Assets.Scripts {
     sealed class GenericTwo : ADTBaseGeneric<string> { }
 
     partial class Nested1 : IDisposable {
-        [Case]
+        [Record]
         partial class Nested2 {
             public readonly int val;
         }
