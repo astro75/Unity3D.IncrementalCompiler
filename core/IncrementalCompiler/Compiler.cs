@@ -26,7 +26,8 @@ namespace IncrementalCompiler
         MemoryStream _outputDebugSymbolStream;
         string assemblyNameNoExtension;
         CSharpParseOptions parseOptions;
-        bool previousSuccess;
+
+        CompileResult previousResult;
 
         public CompileResult Build(CompileOptions options)
         {
@@ -113,13 +114,12 @@ namespace IncrementalCompiler
 
             _logger.Info($"Total elapsed {totalSW.Elapsed}");
 
+            previousResult = result;
             return result;
         }
 
         private CompileResult BuildIncremental(CompileOptions options)
         {
-            var result = new CompileResult();
-
             _logger.Info("BuildIncremental");
             _options = options;
 
@@ -201,7 +201,7 @@ namespace IncrementalCompiler
 
             // emit or reuse prebuilt output
 
-            var reusePrebuilt = previousSuccess && _outputDllStream != null && (
+            var reusePrebuilt = previousResult.Succeeded && _outputDllStream != null && (
                 (_options.PrebuiltOutputReuse == PrebuiltOutputReuseType.WhenNoChange &&
                  sourceChanges.Empty && referenceChanges.Empty) ||
                 (_options.PrebuiltOutputReuse == PrebuiltOutputReuseType.WhenNoSourceChange &&
@@ -232,16 +232,17 @@ namespace IncrementalCompiler
                         break;
                 }
 
-                result.Succeeded = true;
+                return previousResult;
             }
             else
             {
                 _logger.Info("Emit");
 
+                var result = previousResult;
+                result.Clear();
                 Emit(result);
+                return result;
             }
-
-            return result;
         }
 
         private MetadataReference CreateReference(string file)
@@ -258,7 +259,6 @@ namespace IncrementalCompiler
 
         private void Emit(CompileResult result)
         {
-            previousSuccess = false;
             _outputDllStream?.Dispose();
             _outputDllStream = new MemoryStream();
             _outputDebugSymbolStream?.Dispose();
@@ -287,7 +287,7 @@ namespace IncrementalCompiler
                     result.Errors.Add(GetDiagnosticString(d, "error"));
             }
 
-            previousSuccess = result.Succeeded = r.Success;
+            result.Succeeded = r.Success;
 
             if (r.Success)
             {
