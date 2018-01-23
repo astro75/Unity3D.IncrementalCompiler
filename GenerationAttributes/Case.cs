@@ -13,7 +13,7 @@ namespace GenerationAttributes
         public bool GenerateConstructor { get; set; } = true;
     }
 
-    [AttributeUsage(AttributeTargets.Class)]
+    [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface)]
     [Conditional("CodeGeneration")]
     public class MatcherAttribute : Attribute
     {

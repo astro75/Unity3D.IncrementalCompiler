@@ -103,12 +103,13 @@ namespace IncrementalCompiler
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
                     .WithAllowUnsafe(options.Options.Contains("-unsafe")));
             logTime("Compialtion created");
-            _compilation = CodeGeneration.Run(_compilation, _compilation.SyntaxTrees, parseOptions, assemblyNameNoExtension);
+            ICollection<Diagnostic> diagnostic;
+            (_compilation, diagnostic) = CodeGeneration.Run(_compilation, _compilation.SyntaxTrees, parseOptions, assemblyNameNoExtension);
             logTime("Code generated");
             _compilation = MacroProcessor.Run(_compilation, _compilation.SyntaxTrees, _sourceMap);
             logTime("Macros completed");
 
-            Emit(result);
+            Emit(result, diagnostic);
 
             logTime("Emitted dll");
 
@@ -193,7 +194,8 @@ namespace IncrementalCompiler
 
             var allAddedTrees = newTrees.Concat(changes).Select(t => t.tree).ToImmutableArray();
 
-            _compilation = CodeGeneration.Run(_compilation, allAddedTrees, parseOptions, assemblyNameNoExtension);
+            ICollection<Diagnostic> diagnostic;
+            (_compilation, diagnostic) = CodeGeneration.Run(_compilation, allAddedTrees, parseOptions, assemblyNameNoExtension);
 
             //TODO: macros on new generated files
 
@@ -240,7 +242,7 @@ namespace IncrementalCompiler
 
                 var result = previousResult;
                 result.Clear();
-                Emit(result);
+                Emit(result, diagnostic);
                 return result;
             }
         }
@@ -257,7 +259,7 @@ namespace IncrementalCompiler
             return CSharpSyntaxTree.ParseText(text, parseOption, file, Encoding.UTF8);
         }
 
-        private void Emit(CompileResult result)
+        private void Emit(CompileResult result, ICollection<Diagnostic> diagnostic)
         {
             _outputDllStream?.Dispose();
             _outputDllStream = new MemoryStream();
@@ -279,7 +281,7 @@ namespace IncrementalCompiler
 
             // gather result
 
-            foreach (var d in r.Diagnostics)
+            foreach (var d in diagnostic.Concat(r.Diagnostics))
             {
                 if (d.Severity == DiagnosticSeverity.Warning && d.IsWarningAsError == false)
                     result.Warnings.Add(GetDiagnosticString(d, "warning"));

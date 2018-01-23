@@ -15,12 +15,33 @@ namespace IncrementalCompiler
     public static class CodeGeneration
     {
         public const string GENERATED_FOLDER = "Generated";
-        static Type caseType = typeof(RecordAttribute);
+        static readonly Type caseType = typeof(RecordAttribute);
+        static readonly HashSet<SyntaxKind> kindsForExtensionClass = new HashSet<SyntaxKind>(new[] {
+            SyntaxKind.PublicKeyword, SyntaxKind.InternalKeyword, SyntaxKind.PrivateKeyword
+        });
 
-        public static CSharpCompilation Run(CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, CSharpParseOptions parseOptions, string assemblyName)
-        {
+        static readonly DiagnosticDescriptor errorDescriptor =
+            new DiagnosticDescriptor("ER0001", "Error", "{0} - {1}", "Error", DiagnosticSeverity.Error, true);
+
+        public static (CSharpCompilation, ICollection<Diagnostic>) Run(
+            CSharpCompilation compilation,
+            ImmutableArray<SyntaxTree> trees,
+            CSharpParseOptions parseOptions,
+            string assemblyName
+        ) {
             Directory.CreateDirectory(GENERATED_FOLDER);
             var oldCompilation = compilation;
+            var diagnostic = new List<Diagnostic>();
+
+            void tryAttribute(Location location, Action a) {
+                try { a(); }
+                catch (Exception e) {
+                    diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                        "ER0001", "Error", $"Compiler error: {e.Message}({e.Source}) at {e.StackTrace}", "Error", DiagnosticSeverity.Error, true
+                    ), location));
+                }
+            }
+
             var newTrees = trees.AsParallel().SelectMany(tree =>
             {
                 var model = oldCompilation.GetSemanticModel(tree);
@@ -35,21 +56,27 @@ namespace IncrementalCompiler
                         var attrClassName = attr.AttributeClass.ToDisplayString();
                         if (attrClassName == caseType.FullName)
                         {
-                            var instance = new RecordAttribute();
-                            foreach (var arg in attr.NamedArguments)
-                            {
-                                // if some arguments are invelid they do not appear in NamedArguments list
-                                // because of that we do not check for errors
-                                var prop = caseType.GetProperty(arg.Key);
-                                prop.SetValue(instance, arg.Value.Value);
-                            }
-                            newMembers = newMembers.Add(AddAncestors(tds, GenerateCaseClass(instance, model, tds)));
+                            tryAttribute(attr.ApplicationSyntaxReference.GetSyntax().GetLocation(), () => {
+                                var instance = new RecordAttribute();
+                                foreach (var arg in attr.NamedArguments)
+                                {
+                                    // if some arguments are invelid they do not appear in NamedArguments list
+                                    // because of that we do not check for errors
+                                    var prop = caseType.GetProperty(arg.Key);
+                                    prop.SetValue(instance, arg.Value.Value);
+                                }
+                                newMembers = newMembers.Add(AddAncestors(tds, GenerateCaseClass(instance, model, tds)));
+                            });
                         }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
                         {
-                            newMembers = newMembers.Add(
-                                AddAncestors(tds,GenerateMatcher(model, (ClassDeclarationSyntax) tds, typesInFile))
-                            );
+                            tryAttribute(attr.ApplicationSyntaxReference.GetSyntax().GetLocation(), () =>
+                            {
+                                newMembers = newMembers.Add(
+                                    AddAncestors(tds, GenerateMatcher(model, tds, typesInFile))
+                                );
+                            });
+
                         }
                     }
                 }
@@ -80,18 +107,27 @@ namespace IncrementalCompiler
                     .Select(tree => tree.FilePath)
                     .Where(path => path.StartsWith(GENERATED_FOLDER, StringComparison.Ordinal))
                     .Select(path => path.Replace("/", "\\")));
-            return compilation;
+            return (compilation, diagnostic);
         }
 
         private static MemberDeclarationSyntax GenerateMatcher(
-            SemanticModel model, ClassDeclarationSyntax cds, ImmutableArray<TypeDeclarationSyntax> typesInFile)
+            SemanticModel model, TypeDeclarationSyntax tds, ImmutableArray<TypeDeclarationSyntax> typesInFile)
         {
             // TODO: ban extendig this class in different files
             // TODO: generics ?
 
-            var baseTypeSymbol = model.GetDeclaredSymbol(cds);
+            var baseTypeSymbol = model.GetDeclaredSymbol(tds);
 
-            var childTypes = typesInFile.Where(t => model.GetDeclaredSymbol(t).BaseType?.Equals(baseTypeSymbol) ?? false);
+            IEnumerable<TypeDeclarationSyntax> findTypes() { switch (tds) {
+                case ClassDeclarationSyntax _:
+                    return typesInFile.Where(t => model.GetDeclaredSymbol(t).BaseType?.Equals(baseTypeSymbol) ?? false);
+                case InterfaceDeclarationSyntax _:
+                    return typesInFile.Where(t => model.GetDeclaredSymbol(t).Interfaces.Contains(baseTypeSymbol));
+                default:
+                    throw new Exception($"{tds} - matcher should be added on class or interface");
+            } }
+
+            var childTypes = findTypes();
 
             /*
             public void match(Action<One> t1, Action<Two> t2) {
@@ -110,30 +146,32 @@ namespace IncrementalCompiler
 
             var childNames = childTypes.Select(t => t.Identifier.ValueText + t.TypeParameterList).ToArray();
 
+            var firstParam = new[]{$"this {baseTypeSymbol} obj"};
+
             string VoidMatch()
             {
-                var parameters = Join(", ", childNames.Select((name, idx) => $"Action<{name}> a{idx}"));
+                var parameters = Join(", ", firstParam.Concat(childNames.Select((name, idx) => $"Action<{name}> a{idx}")));
                 var body = Join("\n", childNames.Select((name, idx) =>
-                  $"var val{idx} = this as {name};" +
+                  $"var val{idx} = obj as {name};" +
                   $"if (val{idx} != null) {{ a{idx}(val{idx}); return; }}"));
 
-                return $"public void voidMatch({parameters}) {{{body}}}";
+                return $"public static void voidMatch({parameters}) {{{body}}}";
             }
 
             string Match()
             {
-                var parameters = Join(", ", childNames.Select((name, idx) => $"Func<{name}, A> f{idx}"));
+                var parameters = Join(", ", firstParam.Concat(childNames.Select((name, idx) => $"Func<{name}, A> f{idx}")));
                 var body = Join("\n", childNames.Select((name, idx) =>
-                    $"var val{idx} = this as {name};" +
+                    $"var val{idx} = obj as {name};" +
                     $"if (val{idx} != null) return f{idx}(val{idx});"));
 
-                return $"public A match<A>({parameters}) {{" +
+                return $"public static A match<A>({parameters}) {{" +
                        $"{body}" +
-                       $"throw new ArgumentOutOfRangeException(\"this\", this, \"Should never reach this\");" +
+                       $"throw new ArgumentOutOfRangeException(\"obj\", obj, \"Should never reach this\");" +
                        $"}}";
             }
 
-            return CreatePartial(cds, ParseClassMembers(VoidMatch() + Match()), null);
+            return CreateStatic(tds, ParseClassMembers(VoidMatch() + Match()));
         }
 
         private static MemberDeclarationSyntax GenerateCaseClass(RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds)
@@ -317,6 +355,13 @@ namespace IncrementalCompiler
                 originalType.TypeParameterList,
                 SyntaxFactory.List(newMembers),
                 baseList);
+
+        private static TypeDeclarationSyntax CreateStatic(TypeDeclarationSyntax originalType, IEnumerable<MemberDeclarationSyntax> newMembers)
+            => SyntaxFactory.ClassDeclaration(originalType.Identifier + "Matcher")
+                .WithModifiers(SyntaxFactory
+                    .TokenList(originalType.Modifiers.Where(k => kindsForExtensionClass.Contains(k.Kind())))
+                    .Add(SyntaxKind.StaticKeyword))
+                .WithMembers(SyntaxFactory.List(newMembers));
 
         public static TypeDeclarationSyntax CreateType(
             SyntaxKind kind, SyntaxToken identifier, SyntaxTokenList modifiers, TypeParameterListSyntax typeParams,
