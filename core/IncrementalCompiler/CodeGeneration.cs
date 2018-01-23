@@ -33,12 +33,12 @@ namespace IncrementalCompiler
             var oldCompilation = compilation;
             var diagnostic = new List<Diagnostic>();
 
-            void tryAttribute(Location location, Action a) {
+            void tryAttribute(AttributeData attr, Action a) {
                 try { a(); }
                 catch (Exception e) {
                     diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
                         "ER0001", "Error", $"Compiler error: {e.Message}({e.Source}) at {e.StackTrace}", "Error", DiagnosticSeverity.Error, true
-                    ), location));
+                    ), attr.ApplicationSyntaxReference.GetSyntax().GetLocation()));
                 }
             }
 
@@ -50,13 +50,13 @@ namespace IncrementalCompiler
                 var typesInFile = root.DescendantNodes().OfType<TypeDeclarationSyntax>().ToImmutableArray();
                 foreach (var tds in typesInFile)
                 {
-                    var attrs = model.GetDeclaredSymbol(tds).GetAttributes();
-                    foreach (var attr in attrs)
+                    var symbol = model.GetDeclaredSymbol(tds);
+                    foreach (var attr in symbol.GetAttributes())
                     {
                         var attrClassName = attr.AttributeClass.ToDisplayString();
                         if (attrClassName == caseType.FullName)
                         {
-                            tryAttribute(attr.ApplicationSyntaxReference.GetSyntax().GetLocation(), () => {
+                            tryAttribute(attr, () => {
                                 var instance = new RecordAttribute();
                                 foreach (var arg in attr.NamedArguments)
                                 {
@@ -70,7 +70,7 @@ namespace IncrementalCompiler
                         }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
                         {
-                            tryAttribute(attr.ApplicationSyntaxReference.GetSyntax().GetLocation(), () =>
+                            tryAttribute(attr, () =>
                             {
                                 newMembers = newMembers.Add(
                                     AddAncestors(tds, GenerateMatcher(model, tds, typesInFile))
@@ -78,6 +78,35 @@ namespace IncrementalCompiler
                             });
 
                         }
+                    }
+
+                    var newClassMembers = ImmutableArray<string>.Empty;
+                    foreach (var member in symbol.GetMembers())
+                    {
+                        switch (member)
+                        {
+                            case IFieldSymbol fieldSymbol:
+                                foreach (var attr in fieldSymbol.GetAttributes())
+                                {
+                                    var attrClassName = attr.AttributeClass.ToDisplayString();
+                                    if (attrClassName == typeof(PublicAccessor).FullName)
+                                    {
+                                        tryAttribute(attr, () =>
+                                        {
+                                            newClassMembers = newClassMembers.Add(GenerateAccessor(fieldSymbol));
+                                        });
+                                    }
+                                }
+                                break;
+                        }
+                    }
+
+                    if (newClassMembers.Length > 0)
+                    {
+                        newMembers = newMembers.Add(AddAncestors(
+                            tds,
+                            CreatePartial(tds, ParseClassMembers(Join("\n", newClassMembers)), Extensions.EmptyBaseList
+                        )));
                     }
                 }
                 if (newMembers.Any())
@@ -108,6 +137,13 @@ namespace IncrementalCompiler
                     .Where(path => path.StartsWith(GENERATED_FOLDER, StringComparison.Ordinal))
                     .Select(path => path.Replace("/", "\\")));
             return (compilation, diagnostic);
+        }
+
+        static string GenerateAccessor(IFieldSymbol fieldSymbol) {
+            var name = fieldSymbol.Name;
+            var newName = name.TrimStart('_');
+            if (name == newName) newName += "_";
+            return $"public {fieldSymbol.Type} {newName} => {name};";
         }
 
         private static MemberDeclarationSyntax GenerateMatcher(

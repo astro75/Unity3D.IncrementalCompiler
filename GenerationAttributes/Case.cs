@@ -19,4 +19,11 @@ namespace GenerationAttributes
     {
 
     }
+
+    [AttributeUsage(AttributeTargets.Field)]
+    [Conditional("CodeGeneration")]
+    public class PublicAccessor : Attribute
+    {
+
+    }
 }
