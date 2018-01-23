@@ -8,7 +8,6 @@ using System.Reflection;
 using System.Text;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
-using Microsoft.CodeAnalysis.Text;
 using Mono.CompilerServices.SymbolWriter;
 using NLog;
 
@@ -16,18 +15,18 @@ namespace IncrementalCompiler
 {
     public sealed class Compiler : IDisposable
     {
-        private Logger _logger = LogManager.GetLogger("Compiler");
-        private CSharpCompilation _compilation;
-        private CompileOptions _options;
-        private FileTimeList _referenceFileList;
-        private FileTimeList _sourceFileList;
-        private Dictionary<string, MetadataReference> _referenceMap;
-        private Dictionary<string, SyntaxTree> _sourceMap;
-        private MemoryStream _outputDllStream;
-        private MemoryStream _outputDebugSymbolStream;
-        private string assemblyNameNoExtension;
-        private CSharpParseOptions parseOptions;
-
+        Logger _logger = LogManager.GetLogger("Compiler");
+        CSharpCompilation _compilation;
+        CompileOptions _options;
+        FileTimeList _referenceFileList;
+        FileTimeList _sourceFileList;
+        Dictionary<string, MetadataReference> _referenceMap;
+        Dictionary<string, SyntaxTree> _sourceMap;
+        MemoryStream _outputDllStream;
+        MemoryStream _outputDebugSymbolStream;
+        string assemblyNameNoExtension;
+        CSharpParseOptions parseOptions;
+        bool previousSuccess;
 
         public CompileResult Build(CompileOptions options)
         {
@@ -202,7 +201,7 @@ namespace IncrementalCompiler
 
             // emit or reuse prebuilt output
 
-            var reusePrebuilt = _outputDllStream != null && (
+            var reusePrebuilt = previousSuccess && _outputDllStream != null && (
                 (_options.PrebuiltOutputReuse == PrebuiltOutputReuseType.WhenNoChange &&
                  sourceChanges.Empty && referenceChanges.Empty) ||
                 (_options.PrebuiltOutputReuse == PrebuiltOutputReuseType.WhenNoSourceChange &&
@@ -259,6 +258,7 @@ namespace IncrementalCompiler
 
         private void Emit(CompileResult result)
         {
+            previousSuccess = false;
             _outputDllStream?.Dispose();
             _outputDllStream = new MemoryStream();
             _outputDebugSymbolStream?.Dispose();
@@ -287,7 +287,7 @@ namespace IncrementalCompiler
                     result.Errors.Add(GetDiagnosticString(d, "error"));
             }
 
-            result.Succeeded = r.Success;
+            previousSuccess = result.Succeeded = r.Success;
 
             if (r.Success)
             {
