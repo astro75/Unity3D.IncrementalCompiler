@@ -191,7 +191,7 @@ namespace IncrementalCompiler
 
             string VoidMatch()
             {
-                var parameters = Join(", ", firstParam.Concat(childNames.Select((name, idx) => $"Action<{name}> a{idx}")));
+                var parameters = Join(", ", firstParam.Concat(childNames.Select((name, idx) => $"System.Action<{name}> a{idx}")));
                 var body = Join("\n", childNames.Select((name, idx) =>
                   $"var val{idx} = obj as {name};" +
                   $"if (val{idx} != null) {{ a{idx}(val{idx}); return; }}"));
@@ -201,7 +201,7 @@ namespace IncrementalCompiler
 
             string Match()
             {
-                var parameters = Join(", ", firstParam.Concat(childNames.Select((name, idx) => $"Func<{name}, A> f{idx}")));
+                var parameters = Join(", ", firstParam.Concat(childNames.Select((name, idx) => $"System.Func<{name}, A> f{idx}")));
                 var body = Join("\n", childNames.Select((name, idx) =>
                     $"var val{idx} = obj as {name};" +
                     $"if (val{idx} != null) return f{idx}(val{idx});"));
@@ -282,7 +282,11 @@ namespace IncrementalCompiler
                             default: return name + ".GetHashCode()";
                         }
                     }
-                    return "hashCode = (hashCode * 397) ^ " + (isValueType ? ValueTypeHash(type.SpecialType) : $"({name} == null ? 0 : {name}.GetHashCode())") + ";";
+
+                    var fieldHashCode = isValueType
+                        ? ValueTypeHash(type.SpecialType)
+                        : $"({name} == null ? 0 : {name}.GetHashCode())";
+                    return $"hashCode = (hashCode * 397) ^ {(fieldHashCode)}; // {type.SpecialType}";
                 }));
                 return ParseClassMembers(
                 $@"public override int GetHashCode() {{
