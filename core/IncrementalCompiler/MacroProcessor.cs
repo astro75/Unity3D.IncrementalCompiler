@@ -72,8 +72,8 @@ namespace IncrementalCompiler
 
                 foreach (var operation in opFinder.results)
                 {
-                    Console.WriteLine("Found Operation: " + operation);
-                    Console.WriteLine(operation.Syntax);
+//                    Console.WriteLine("Found Operation: " + operation);
+//                    Console.WriteLine(operation.Syntax);
 
                     var props = operation.DescendantsAndSelf().OfType<IPropertyReferenceOperation>();
 
@@ -109,7 +109,7 @@ namespace IncrementalCompiler
                 if (changes.Any())
                 {
                     var updatedTree = root.ReplaceNodes(changes.Keys, (a, b) => changes[a]);
-                    Console.WriteLine(updatedTree.GetText());
+//                    Console.WriteLine(updatedTree.GetText());
                     return new[] {(tree, updatedTree)};
                 }
                 return Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();

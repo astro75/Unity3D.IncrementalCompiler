@@ -20,9 +20,6 @@ namespace IncrementalCompiler
             SyntaxKind.PublicKeyword, SyntaxKind.InternalKeyword, SyntaxKind.PrivateKeyword
         });
 
-        static readonly DiagnosticDescriptor errorDescriptor =
-            new DiagnosticDescriptor("ER0001", "Error", "{0} - {1}", "Error", DiagnosticSeverity.Error, true);
-
         public static (CSharpCompilation, ICollection<Diagnostic>) Run(
             CSharpCompilation compilation,
             ImmutableArray<SyntaxTree> trees,
@@ -65,7 +62,7 @@ namespace IncrementalCompiler
                                     var prop = caseType.GetProperty(arg.Key);
                                     prop.SetValue(instance, arg.Value.Value);
                                 }
-                                newMembers = newMembers.Add(AddAncestors(tds, GenerateCaseClass(instance, model, tds)));
+                                newMembers = newMembers.Add(AddAncestors(tds, GenerateCaseClass(instance, model, tds), onlyNamespace: false));
                             });
                         }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
@@ -73,7 +70,7 @@ namespace IncrementalCompiler
                             tryAttribute(attr, () =>
                             {
                                 newMembers = newMembers.Add(
-                                    AddAncestors(tds, GenerateMatcher(model, tds, typesInFile))
+                                    AddAncestors(tds, GenerateMatcher(model, tds, typesInFile), onlyNamespace: true)
                                 );
                             });
 
@@ -105,8 +102,9 @@ namespace IncrementalCompiler
                     {
                         newMembers = newMembers.Add(AddAncestors(
                             tds,
-                            CreatePartial(tds, ParseClassMembers(Join("\n", newClassMembers)), Extensions.EmptyBaseList
-                        )));
+                            CreatePartial(tds, ParseClassMembers(Join("\n", newClassMembers)), Extensions.EmptyBaseList),
+                            onlyNamespace: false
+                        ));
                     }
                 }
                 if (newMembers.Any())
@@ -153,12 +151,19 @@ namespace IncrementalCompiler
             // TODO: generics ?
 
             var baseTypeSymbol = model.GetDeclaredSymbol(tds);
+            var symbols = typesInFile
+                .Select(t => model.GetDeclaredSymbol(t))
+                // move current symbol to back
+                .OrderBy(s => s.Equals(baseTypeSymbol));
 
-            IEnumerable<TypeDeclarationSyntax> findTypes() { switch (tds) {
+            IEnumerable<INamedTypeSymbol> findTypes() { switch (tds) {
                 case ClassDeclarationSyntax _:
-                    return typesInFile.Where(t => model.GetDeclaredSymbol(t).BaseType?.Equals(baseTypeSymbol) ?? false);
+                    return symbols.Where(s => {
+                        if (!baseTypeSymbol.IsAbstract && s.Equals(baseTypeSymbol)) return true;
+                        return s.BaseType?.Equals(baseTypeSymbol) ?? false;
+                    });
                 case InterfaceDeclarationSyntax _:
-                    return typesInFile.Where(t => model.GetDeclaredSymbol(t).Interfaces.Contains(baseTypeSymbol));
+                    return symbols.Where(s => s.Interfaces.Contains(baseTypeSymbol));
                 default:
                     throw new Exception($"{tds} - matcher should be added on class or interface");
             } }
@@ -180,7 +185,7 @@ namespace IncrementalCompiler
             }
             */
 
-            var childNames = childTypes.Select(t => t.Identifier.ValueText + t.TypeParameterList).ToArray();
+            var childNames = childTypes.Select(s => s.ToString()).ToArray();
 
             var firstParam = new[]{$"this {baseTypeSymbol} obj"};
 
@@ -429,7 +434,7 @@ namespace IncrementalCompiler
         }
 
         // stolen from CodeGeneration.Roslyn
-        public static MemberDeclarationSyntax AddAncestors(MemberDeclarationSyntax memberNode, MemberDeclarationSyntax generatedType)
+        static MemberDeclarationSyntax AddAncestors(MemberDeclarationSyntax memberNode, MemberDeclarationSyntax generatedType, bool onlyNamespace)
         {
             // Figure out ancestry for the generated type, including nesting types and namespaces.
             foreach (var ancestor in memberNode.Ancestors())
@@ -442,6 +447,7 @@ namespace IncrementalCompiler
                             .WithoutTrivia();
                         break;
                     case ClassDeclarationSyntax a:
+                        if (onlyNamespace) break;
                         generatedType = a
                             .WithMembers(SyntaxFactory.SingletonList(generatedType))
                             .WithModifiers(a.Modifiers.Add(SyntaxKind.PartialKeyword))
@@ -450,6 +456,7 @@ namespace IncrementalCompiler
                             .WithBaseList(Extensions.EmptyBaseList);
                         break;
                     case StructDeclarationSyntax a:
+                        if (onlyNamespace) break;
                         generatedType = a
                             .WithMembers(SyntaxFactory.SingletonList(generatedType))
                             .WithModifiers(a.Modifiers.Add(SyntaxKind.PartialKeyword))
@@ -462,7 +469,7 @@ namespace IncrementalCompiler
             return generatedType;
         }
 
-        public static SyntaxList<MemberDeclarationSyntax> ParseClassMembers(string syntax)
+        static SyntaxList<MemberDeclarationSyntax> ParseClassMembers(string syntax)
         {
             var cls = (ClassDeclarationSyntax)CSharpSyntaxTree.ParseText($"class C {{ {syntax} }}").GetCompilationUnitRoot().Members[0];
             return cls.Members;

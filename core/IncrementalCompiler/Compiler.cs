@@ -15,7 +15,7 @@ namespace IncrementalCompiler
 {
     public sealed class Compiler : IDisposable
     {
-        Logger _logger = LogManager.GetLogger("Compiler");
+        readonly Logger _logger = LogManager.GetLogger("Compiler");
         CSharpCompilation _compilation;
         CompileOptions _options;
         FileTimeList _referenceFileList;
@@ -50,7 +50,8 @@ namespace IncrementalCompiler
                 _options.Defines.SequenceEqual(options.Defines) == false ||
                 _options.DebugSymbolFile != options.DebugSymbolFile)
             {
-                return BuildFull(options);
+                (previousResult, _compilation) = BuildFull(options);
+                return previousResult;
             }
             else
             {
@@ -58,7 +59,7 @@ namespace IncrementalCompiler
             }
         }
 
-        private CompileResult BuildFull(CompileOptions options)
+        (CompileResult, CSharpCompilation) BuildFull(CompileOptions options)
         {
             var result = new CompileResult();
 
@@ -83,8 +84,9 @@ namespace IncrementalCompiler
             _sourceFileList.Update(options.Files);
 
             _referenceMap = options.References.ToDictionary(
-               file => file,
-               file => CreateReference(file));
+                keySelector: file => file,
+                elementSelector: CreateReference
+            );
 
             logTime("Loaded references");
 
@@ -94,7 +96,7 @@ namespace IncrementalCompiler
             logTime("Loaded sources");
 
             var specificDiagnosticOptions = options.NoWarnings.ToDictionary(x => x, _ => ReportDiagnostic.Suppress);
-            _compilation = CSharpCompilation.Create(
+            var compilation = CSharpCompilation.Create(
                 options.AssemblyName,
                 _sourceMap.Values,
                 _referenceMap.Values,
@@ -104,22 +106,22 @@ namespace IncrementalCompiler
                     .WithAllowUnsafe(options.Options.Contains("-unsafe")));
             logTime("Compialtion created");
             ICollection<Diagnostic> diagnostic;
-            (_compilation, diagnostic) = CodeGeneration.Run(_compilation, _compilation.SyntaxTrees, parseOptions, assemblyNameNoExtension);
+            (compilation, diagnostic) = CodeGeneration.Run(compilation, compilation.SyntaxTrees, parseOptions, assemblyNameNoExtension);
             logTime("Code generated");
-            _compilation = MacroProcessor.Run(_compilation, _compilation.SyntaxTrees, _sourceMap);
+            compilation = MacroProcessor.Run(compilation, compilation.SyntaxTrees, _sourceMap);
             logTime("Macros completed");
 
-            Emit(result, diagnostic);
+            Emit(result, diagnostic, compilation);
 
             logTime("Emitted dll");
 
             _logger.Info($"Total elapsed {totalSW.Elapsed}");
 
             previousResult = result;
-            return result;
+            return (result, compilation);
         }
 
-        private CompileResult BuildIncremental(CompileOptions options)
+        CompileResult BuildIncremental(CompileOptions options)
         {
             _logger.Info("BuildIncremental");
             _options = options;
@@ -242,7 +244,7 @@ namespace IncrementalCompiler
 
                 var result = previousResult;
                 result.Clear();
-                Emit(result, diagnostic);
+                Emit(result, diagnostic, _compilation);
                 return result;
             }
         }
@@ -259,7 +261,7 @@ namespace IncrementalCompiler
             return CSharpSyntaxTree.ParseText(text, parseOption, file, Encoding.UTF8);
         }
 
-        private void Emit(CompileResult result, ICollection<Diagnostic> diagnostic)
+        private void Emit(CompileResult result, ICollection<Diagnostic> diagnostic, CSharpCompilation compilation)
         {
             _outputDllStream?.Dispose();
             _outputDllStream = new MemoryStream();
@@ -269,8 +271,8 @@ namespace IncrementalCompiler
             // emit to memory
 
             var r = _options.DebugSymbolFile == DebugSymbolFileType.Mdb
-                ? _compilation.EmitWithMdb(_outputDllStream, _outputDebugSymbolStream)
-                : _compilation.Emit(_outputDllStream, _outputDebugSymbolStream);
+                ? compilation.EmitWithMdb(_outputDllStream, _outputDebugSymbolStream)
+                : compilation.Emit(_outputDllStream, _outputDebugSymbolStream);
 
             // memory to file
 
