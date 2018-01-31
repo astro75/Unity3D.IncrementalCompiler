@@ -217,12 +217,13 @@ namespace IncrementalCompiler
 
         private static MemberDeclarationSyntax GenerateCaseClass(RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds)
         {
-            var fields = cds.Members.OfType<FieldDeclarationSyntax>().SelectMany(field =>
-            {
-                var decl = field.Declaration;
-                var type = decl.Type;
-                return decl.Variables.Select(varDecl => (type, varDecl.Identifier));
-            }).ToArray();
+            var fields = cds.Members.OfType<FieldDeclarationSyntax>()
+                .Where(field => field.Modifiers.HasNot(SyntaxKind.StaticKeyword))
+                .SelectMany(field => {
+                    var decl = field.Declaration;
+                    var type = decl.Type;
+                    return decl.Variables.Select(varDecl => (type, varDecl.Identifier));
+                }).ToArray();
             var constructor = createIf(attr.GenerateConstructor, () =>
                 ImmutableList.Create((MemberDeclarationSyntax) SyntaxFactory.ConstructorDeclaration(cds.Identifier)
                 .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
