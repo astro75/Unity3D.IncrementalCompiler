@@ -70,5 +70,7 @@ namespace IncrementalCompiler
             => SF.LiteralExpression(SyntaxKind.StringLiteralExpression, SF.Literal(value));
 
         public static BaseListSyntax EmptyBaseList = null;
+        public static SyntaxList<AttributeListSyntax> EmptyAttributeList = SyntaxFactory.List<AttributeListSyntax>();
+        public static SyntaxTriviaList EmptyTriviaList = SyntaxFactory.TriviaList();
     }
 }

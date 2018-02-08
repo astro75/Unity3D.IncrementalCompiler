@@ -185,26 +185,28 @@ namespace IncrementalCompiler
             }
             */
 
-            var childNames = childTypes.Select(s => s.ToString()).ToArray();
+            string toLowerFirstLetter(string s) => char.ToLowerInvariant(s[0]) + s.Substring(1);
+
+            var childNames = childTypes.Select(s => (fullName: s.ToString(), varName: toLowerFirstLetter(s.Name))).ToArray();
 
             var firstParam = new[]{$"this {baseTypeSymbol} obj"};
 
             string VoidMatch()
             {
-                var parameters = Join(", ", firstParam.Concat(childNames.Select((name, idx) => $"System.Action<{name}> a{idx}")));
-                var body = Join("\n", childNames.Select((name, idx) =>
-                  $"var val{idx} = obj as {name};" +
-                  $"if (val{idx} != null) {{ a{idx}(val{idx}); return; }}"));
+                var parameters = Join(", ", firstParam.Concat(childNames.Select(t => $"System.Action<{t.fullName}> {t.varName}")));
+                var body = Join("\n", childNames.Select(t =>
+                  $"var val_{t.varName} = obj as {t.fullName};" +
+                  $"if (val_{t.varName} != null) {{ {t.varName}(val_{t.varName}); return; }}"));
 
                 return $"public static void voidMatch({parameters}) {{{body}}}";
             }
 
             string Match()
             {
-                var parameters = Join(", ", firstParam.Concat(childNames.Select((name, idx) => $"System.Func<{name}, A> f{idx}")));
-                var body = Join("\n", childNames.Select((name, idx) =>
-                    $"var val{idx} = obj as {name};" +
-                    $"if (val{idx} != null) return f{idx}(val{idx});"));
+                var parameters = Join(", ", firstParam.Concat(childNames.Select(t => $"System.Func<{t.fullName}, A> {t.varName}")));
+                var body = Join("\n", childNames.Select(t =>
+                    $"var val_{t.varName} = obj as {t.fullName};" +
+                    $"if (val_{t.varName} != null) return {t.varName}(val_{t.varName});"));
 
                 return $"public static A match<A>({parameters}) {{" +
                        $"{body}" +
@@ -218,7 +220,10 @@ namespace IncrementalCompiler
         private static MemberDeclarationSyntax GenerateCaseClass(RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds)
         {
             var fields = cds.Members.OfType<FieldDeclarationSyntax>()
-                .Where(field => field.Modifiers.HasNot(SyntaxKind.StaticKeyword))
+                .Where(field => {
+                    var modifiers = field.Modifiers;
+                    return modifiers.HasNot(SyntaxKind.StaticKeyword) && modifiers.HasNot(SyntaxKind.ConstKeyword);
+                })
                 .SelectMany(field => {
                     var decl = field.Declaration;
                     var type = decl.Type;
@@ -449,7 +454,10 @@ namespace IncrementalCompiler
                     case NamespaceDeclarationSyntax a:
                         generatedType = a
                             .WithMembers(SyntaxFactory.SingletonList(generatedType))
-                            .WithoutTrivia();
+                            .WithoutTrivia()
+                            .WithUsings(SyntaxFactory.List(a.Usings.Select(u =>
+                                u.WithUsingKeyword(u.UsingKeyword.WithLeadingTrivia(Extensions.EmptyTriviaList))
+                            )));
                         break;
                     case ClassDeclarationSyntax a:
                         if (onlyNamespace) break;
@@ -458,7 +466,8 @@ namespace IncrementalCompiler
                             .WithModifiers(a.Modifiers.Add(SyntaxKind.PartialKeyword))
                             .WithoutTrivia()
                             .WithCloseBraceToken(a.CloseBraceToken.WithoutTrivia())
-                            .WithBaseList(Extensions.EmptyBaseList);
+                            .WithBaseList(Extensions.EmptyBaseList)
+                            .WithAttributeLists(Extensions.EmptyAttributeList);
                         break;
                     case StructDeclarationSyntax a:
                         if (onlyNamespace) break;
@@ -467,7 +476,8 @@ namespace IncrementalCompiler
                             .WithModifiers(a.Modifiers.Add(SyntaxKind.PartialKeyword))
                             .WithoutTrivia()
                             .WithCloseBraceToken(a.CloseBraceToken.WithoutTrivia())
-                            .WithBaseList(Extensions.EmptyBaseList);
+                            .WithBaseList(Extensions.EmptyBaseList)
+                            .WithAttributeLists(Extensions.EmptyAttributeList);
                         break;
                 }
             }
