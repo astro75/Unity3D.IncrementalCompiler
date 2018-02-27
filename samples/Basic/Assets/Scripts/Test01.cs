@@ -1,10 +1,15 @@
 ﻿using System;
 using System.Collections;
+using GenerationAttributes;
 using UnityEngine;
 using UnityEngine.UI;
 using static GenerationAttributes.Macros;
 
-public class Test01 : MonoBehaviour {
+public partial class Test01 : MonoBehaviour {
+    [SerializeField, PublicAccessor] int _privateVal, _private2, private3;
+    [SerializeField, PublicAccessor] MonoBehaviour mb;
+
+
     public string getter => classAndMethodName;
     public static string arrowMethod() => classAndMethodName;
 
@@ -13,33 +18,16 @@ public class Test01 : MonoBehaviour {
         Debug.Log("Test01.Start");
         Debug.Log("Class name: " + className);
         Debug.Log($"Class and method name: {classAndMethodName}");
-        Debug.Log($"getter: {getter}");
-        Debug.Log($"arrow: {arrowMethod()}");
+//        Debug.Log($"getter: {getter}");
+//        Debug.Log($"arrow: {arrowMethod()}");
 
 
         GetComponent<Text>().text = "01";
 
         var temp = GetComponent<Text>().text;
-        StartCoroutine(TestCoroutine(
-            10, 
-            n =>
-            {
-                return string.Format("<{0}:{1}>", temp, n);
-            }));
     }
 
     static void defaultParams(string text = "text") {}
-
-    IEnumerator TestCoroutine(int a, Func<int, string> b)
-    {
-        Debug.Log($"Class and method name: {classAndMethodName}");
-        var v = a;
-        yield return null;
-        GetComponent<Text>().text = v.ToString();
-        v += 1;
-        yield return null;
-        GetComponent<Text>().text = b(v);
-    }
 
     public void Rerun()
     {

@@ -1,4 +1,7 @@
-﻿using System;
+﻿#if UNITY_5
+
+
+using System;
 using System.Collections.Generic;
 using GenerationAttributes;
 
@@ -35,7 +38,7 @@ namespace Assets.Scripts {
         public readonly Enum enum1;
         public readonly ByteEnum byteEnum;
         public readonly LongEnum longEnum;
-        public readonly Class classRef;
+        [PublicAccessor] public readonly Class _classRef;
     }
 
     [Record(GenerateComparer = false)]
@@ -64,12 +67,12 @@ namespace Assets.Scripts {
     partial interface InterfaceTest {}
 
     [Matcher]
-    abstract partial class ADTBase {
+    abstract class ADTBase {
         static void sample() {
             var val = (ADTBase) new One(1);
             val.match(
-                one => one.val,
-                two => 2
+                one: one => one.val,
+                two: two => 2
             );
         }
     }
@@ -80,21 +83,42 @@ namespace Assets.Scripts {
     }
 
     [Record]
+    [Matcher]
     sealed partial class Two : ADTBase {
         public readonly string val;
+        public static readonly int aaa = 10;
     }
 
     [Matcher]
+    interface IAdt { }
+
+    struct ssss { }
+
+    [Record]
+    sealed partial class OneI : IAdt {
+        public readonly int val;
+    }
+
+    [Record]
+    sealed partial class TwoI : IAdt {
+        public readonly string val;
+    }
+
+
+//    [Matcher]
     abstract partial class ADTBaseGeneric<A> { }
 
     sealed class GenericOne<A> : ADTBaseGeneric<A> { }
     sealed class GenericOneV2<B> : ADTBaseGeneric<B> { }
     sealed class GenericTwo : ADTBaseGeneric<string> { }
 
-    partial class Nested1 : IDisposable {
-        [Record]
-        partial class Nested2 {
+    public partial class Nested1 : IDisposable {
+        [Matcher]
+        public partial class Nested2 {
             public readonly int val;
+        }
+
+        public class Nested22 : Nested2 {
         }
 
         #region Implementation of IDisposable
@@ -106,4 +130,14 @@ namespace Assets.Scripts {
         // line below is left for purpose
         #endregion
     }
+
+    [Record]
+    sealed partial class DoublePartial {
+        [PublicAccessor] readonly string _val;
+    }
+
+    sealed partial class DoublePartial {
+        [PublicAccessor] readonly int _intVal;
+    }
 }
+#endif
