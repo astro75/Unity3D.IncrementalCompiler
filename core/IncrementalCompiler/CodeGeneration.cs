@@ -47,9 +47,13 @@ namespace IncrementalCompiler
                 var typesInFile = root.DescendantNodes().OfType<TypeDeclarationSyntax>().ToImmutableArray();
                 foreach (var tds in typesInFile)
                 {
+                    bool treeContains(SyntaxReference syntaxRef) =>
+                        tree == syntaxRef.SyntaxTree && tds.Span.Contains(syntaxRef.Span);
+
                     var symbol = model.GetDeclaredSymbol(tds);
                     foreach (var attr in symbol.GetAttributes())
                     {
+                        if (!treeContains(attr.ApplicationSyntaxReference)) continue;
                         var attrClassName = attr.AttributeClass.ToDisplayString();
                         if (attrClassName == caseType.FullName)
                         {
@@ -85,6 +89,7 @@ namespace IncrementalCompiler
                             case IFieldSymbol fieldSymbol:
                                 foreach (var attr in fieldSymbol.GetAttributes())
                                 {
+                                    if (!treeContains(attr.ApplicationSyntaxReference)) continue;
                                     var attrClassName = attr.AttributeClass.ToDisplayString();
                                     if (attrClassName == typeof(PublicAccessor).FullName)
                                     {
