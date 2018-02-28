@@ -139,5 +139,11 @@ namespace Assets.Scripts {
     sealed partial class DoublePartial {
         [PublicAccessor] readonly int _intVal;
     }
+
+    class InvalidStuff {
+        // Can't use this
+//        [ThreadStatic]
+        static int nonono;
+    }
 }
 #endif

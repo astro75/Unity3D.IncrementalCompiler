@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -97,6 +98,11 @@ namespace IncrementalCompiler
                                         {
                                             newClassMembers = newClassMembers.Add(GenerateAccessor(fieldSymbol));
                                         });
+                                    }
+                                    // TODO: generic way to add new attributes
+                                    if (attrClassName == typeof(ThreadStaticAttribute).FullName)
+                                    {
+                                        tryAttribute(attr, () => throw new Exception($"Can't use {nameof(ThreadStaticAttribute)} in Unity"));
                                     }
                                 }
                                 break;
