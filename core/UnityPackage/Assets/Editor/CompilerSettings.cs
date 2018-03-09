@@ -48,7 +48,7 @@ public class CompilerSettings : EditorWindow
 
     private readonly string[] BuildTargets = { "Assembly-CSharp-firstpass", "Assembly-CSharp", "Assembly-CSharp-Editor" };
     private const string UcsFilePath = "./Compiler/UniversalCompiler.xml";
-    private const string UcLogFilePath = "./Temp/UniversalCompiler.log";
+    private const string UcLogFilePath = "./Compiler/Temp/UniversalCompiler.log";
     private const string IcsFilePath = "./Compiler/IncrementalCompiler.xml";
 
     private DateTime _ucsLastWriteTime;
