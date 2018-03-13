@@ -17,8 +17,8 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
     #region Overrides of AssetPostprocessor
 
     // We need to run this after Rider postprocessor, because we override LangVersion
-    // Rider postprocessor has a default order 0
-    public override int GetPostprocessOrder() => 1;
+    // Rider postprocessor has order of 10
+    public override int GetPostprocessOrder() => 11;
 
     #endregion
 
