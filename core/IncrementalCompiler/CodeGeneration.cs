@@ -122,7 +122,7 @@ namespace IncrementalCompiler
                 {
                     var nt = CSharpSyntaxTree.Create(
                         SyntaxFactory.CompilationUnit()
-                            .WithUsings(root.Usings)
+                            .WithUsings(cleanUsings(root.Usings))
                             .WithMembers(SyntaxFactory.List(newMembers))
                             .NormalizeWhitespace(),
                         path: Path.Combine(GENERATED_FOLDER, tree.FilePath),
@@ -463,12 +463,9 @@ namespace IncrementalCompiler
                 switch (ancestor)
                 {
                     case NamespaceDeclarationSyntax a:
-                        generatedType = a
-                            .WithMembers(SyntaxFactory.SingletonList(generatedType))
-                            .WithoutTrivia()
-                            .WithUsings(SyntaxFactory.List(a.Usings.Select(u =>
-                                u.WithUsingKeyword(u.UsingKeyword.WithLeadingTrivia(Extensions.EmptyTriviaList))
-                            )));
+                        generatedType = SyntaxFactory.NamespaceDeclaration(a.Name)
+                            .WithUsings(cleanUsings(a.Usings))
+                            .WithMembers(SyntaxFactory.SingletonList(generatedType));
                         break;
                     case ClassDeclarationSyntax a:
                         if (onlyNamespace) break;
@@ -494,6 +491,11 @@ namespace IncrementalCompiler
             }
             return generatedType;
         }
+
+        static SyntaxList<UsingDirectiveSyntax> cleanUsings(SyntaxList<UsingDirectiveSyntax> usings) =>
+            SyntaxFactory.List(usings.Select(u =>
+                u.WithUsingKeyword(u.UsingKeyword.WithoutTrivia())
+            ));
 
         static SyntaxList<MemberDeclarationSyntax> ParseClassMembers(string syntax)
         {
