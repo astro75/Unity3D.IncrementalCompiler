@@ -90,27 +90,48 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         RemoveAnnoyingReferences(xdoc);
 
         AddDefine(xdoc, CustomCSharpCompiler.COMPILER_DEFINE);
-        AddGeneratedFiles(xdoc);
+        {
+            var ns = xdoc.Root.GetDefaultNamespace();
+            var compileName = ns + "Compile";
+            var includeName = (XName) "Include";
+            const string GENERATED = "Generated";
+            var generatedPathStart = GENERATED + Path.PathSeparator;
+
+            void RemoveOldGeneratedFiles()
+            {
+                foreach (var fileNode in xdoc.Root.Descendants(compileName))
+                {
+                    if (fileNode.Attribute(includeName)?.Value.StartsWith(generatedPathStart, StringComparison.Ordinal) ?? false)
+                    {
+                        fileNode.Remove();
+                    }
+                }
+            }
+
+            void AddGeneratedFiles()
+            {
+                var assemblyName = xdoc.Root.Descendants(ns + "AssemblyName").Select(el => el.Value).First();
+                // .dll suffix appears here if we select VS2017 in unity preferences
+                assemblyName = EnsureDoesNotEndWith(assemblyName, ".dll");
+                var filename = Path.Combine(GENERATED, $"Generated-files-{assemblyName}.txt");
+                if (!File.Exists(filename)) return;
+                var filesToAdd = File.ReadAllLines(filename);
+                var newFiles = filesToAdd.Select(
+                    file => (object)new XElement(compileName, new XAttribute(includeName, file))
+                );
+                xdoc.Root.Add(new XElement(ns + "ItemGroup", newFiles.ToArray()));
+            }
+
+            RemoveOldGeneratedFiles();
+            AddGeneratedFiles();
+        }
 
         var writer = new Utf8StringWriter();
         xdoc.Save(writer);
         return writer.ToString();
     }
 
-    private static void AddGeneratedFiles(XDocument xdoc)
-    {
-        var ns = xdoc.Root.GetDefaultNamespace();
-        var assemblyName = xdoc.Root.Descendants(ns + "AssemblyName").Select(el => el.Value).First();
-        // .dll suffix appears here if we select VS2017 in unity preferences
-        assemblyName = EnsureDoesNotEndWith(assemblyName, ".dll");
-        var filename = Path.Combine("Generated", "Generated-files-" + assemblyName + ".txt");
-        if (!File.Exists(filename)) return;
-        var filesToAdd = File.ReadAllLines(filename);
-        var newFiles = filesToAdd.Select(
-          file => (object)new XElement(ns + "Compile", new XAttribute("Include", file))
-        );
-        xdoc.Root.Add(new XElement(ns + "ItemGroup", newFiles.ToArray()));
-    }
+
 
     static string EnsureDoesNotEndWith(string s, string suffix) =>
         s.EndsWith(suffix, StringComparison.Ordinal)
@@ -124,7 +145,7 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
 
     private static void SetUpCorrectLangVersion(XDocument xdoc)
     {
-        string csharpVersion = "7.2";
+        var csharpVersion = "latest";
         /*
         if (Directory.Exists("CSharp70Support"))
         {
