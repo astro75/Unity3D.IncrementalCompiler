@@ -95,7 +95,7 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
             var compileName = ns + "Compile";
             var includeName = (XName) "Include";
             const string GENERATED = "Generated";
-            var generatedPathStart = GENERATED + Path.PathSeparator;
+            var generatedPathStart = GENERATED + Path.DirectorySeparatorChar;
 
             void RemoveOldGeneratedFiles()
             {
