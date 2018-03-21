@@ -231,11 +231,11 @@ namespace IncrementalCompiler
         private static MemberDeclarationSyntax GenerateCaseClass(RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds) {
             var properties = cds.Members.OfType<PropertyDeclarationSyntax>()
                 .Where(prop => prop.Modifiers.HasNot(SyntaxKind.StaticKeyword))
-                .Where(prop => prop.AccessorList.Accessors.Any(ads =>
+                .Where(prop => prop.AccessorList?.Accessors.Any(ads =>
                     ads.IsKind(SyntaxKind.GetAccessorDeclaration)
                     && ads.Body == null
                     && ads.ExpressionBody == null
-                ))
+                ) ?? false)
                 .Select(prop => (type: prop.Type, prop.Identifier));
 
             var fields = cds.Members.OfType<FieldDeclarationSyntax>()

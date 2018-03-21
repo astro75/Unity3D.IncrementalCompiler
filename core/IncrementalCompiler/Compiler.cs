@@ -306,13 +306,21 @@ namespace IncrementalCompiler
                 // pdb to mdb when required
                 if (_options.DebugSymbolFile == DebugSymbolFileType.PdbToMdb)
                 {
-                    var code = ConvertPdb2Mdb(dllFile, LogManager.GetLogger("Pdb2Mdb"));
-                    _logger.Info("pdb2mdb exited with {0}", code);
-                    File.Delete(pdbFile);
+                    try {
+                        var code = ConvertPdb2Mdb(dllFile, LogManager.GetLogger("Pdb2Mdb"), result.Errors);
+                        _logger.Info("pdb2mdb exited with {0}", code);
+                        File.Delete(pdbFile);
 
-                    // read converted mdb file to cache contents
-                    _outputDebugSymbolStream?.Dispose();
-                    _outputDebugSymbolStream = new MemoryStream(File.ReadAllBytes(mdbFile));
+                        // read converted mdb file to cache contents
+                        _outputDebugSymbolStream?.Dispose();
+                        _outputDebugSymbolStream = new MemoryStream(File.ReadAllBytes(mdbFile));
+                    }
+                    catch (Exception e)
+                    {
+                        _logger.Error(e);
+                        result.Errors.Add($"Error while running pdb2mdb: {e}");
+                    }
+
                 }
             }
         }
@@ -342,10 +350,14 @@ namespace IncrementalCompiler
             return $"{path}({line.StartLinePosition.Line + 1},{line.StartLinePosition.Character + 1}): " + $"{type} {diagnostic.Id}: {diagnostic.GetMessage()}";
         }
 
-        public static int ConvertPdb2Mdb(string dllFile, Logger logger)
+        public static int ConvertPdb2Mdb(string dllFile, Logger logger, List<string> resultErrors)
         {
-
             var toolPath = Path.Combine(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location), "pdb2mdb.exe");
+            if (!File.Exists(toolPath))
+            {
+                resultErrors.Add($"Could not find pdb2mdb tool at '{toolPath}'");
+                return 666;
+            }
             using (var process = new Process())
             {
                 var startInfo = new ProcessStartInfo(toolPath, '"' + dllFile + '"') {
