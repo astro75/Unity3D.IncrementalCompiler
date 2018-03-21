@@ -228,8 +228,16 @@ namespace IncrementalCompiler
             return CreateStatic(tds, ParseClassMembers(VoidMatch() + Match()));
         }
 
-        private static MemberDeclarationSyntax GenerateCaseClass(RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds)
-        {
+        private static MemberDeclarationSyntax GenerateCaseClass(RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds) {
+            var properties = cds.Members.OfType<PropertyDeclarationSyntax>()
+                .Where(prop => prop.Modifiers.HasNot(SyntaxKind.StaticKeyword))
+                .Where(prop => prop.AccessorList.Accessors.Any(ads =>
+                    ads.IsKind(SyntaxKind.GetAccessorDeclaration)
+                    && ads.Body == null
+                    && ads.ExpressionBody == null
+                ))
+                .Select(prop => (type: prop.Type, prop.Identifier));
+
             var fields = cds.Members.OfType<FieldDeclarationSyntax>()
                 .Where(field => {
                     var modifiers = field.Modifiers;
@@ -239,19 +247,22 @@ namespace IncrementalCompiler
                     var decl = field.Declaration;
                     var type = decl.Type;
                     return decl.Variables.Select(varDecl => (type, varDecl.Identifier));
-                }).ToArray();
+                });
+
+            var fieldsAndProps = fields.Concat(properties).ToArray();
+
             var constructor = createIf(attr.GenerateConstructor, () =>
                 ImmutableList.Create((MemberDeclarationSyntax) SyntaxFactory.ConstructorDeclaration(cds.Identifier)
                 .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
                 .WithParameterList(SyntaxFactory.ParameterList(
-                    SyntaxFactory.SeparatedList(fields.Select(f =>
+                    SyntaxFactory.SeparatedList(fieldsAndProps.Select(f =>
                         SyntaxFactory.Parameter(f.Identifier).WithType(f.type)))))
-                .WithBody(SyntaxFactory.Block(fields.Select(f => SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(
+                .WithBody(SyntaxFactory.Block(fieldsAndProps.Select(f => SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(
                     SyntaxKind.SimpleAssignmentExpression,
                     SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.ThisExpression(),
                         SyntaxFactory.IdentifierName(f.Identifier)), SyntaxFactory.IdentifierName(f.Identifier)))))))
             );
-            var paramsStr = Join(", ", fields.Select(f => f.Identifier.ValueText).Select(n => n + ": \" + " + n + " + \""));
+            var paramsStr = Join(", ", fieldsAndProps.Select(f => f.Identifier.ValueText).Select(n => n + ": \" + " + n + " + \""));
 
             IEnumerable<MemberDeclarationSyntax> createIf(bool condition, Func<IEnumerable<MemberDeclarationSyntax>> a) =>
                 condition ? a() : Enumerable.Empty<MemberDeclarationSyntax>();
@@ -281,7 +292,7 @@ namespace IncrementalCompiler
             */
 
             var getHashCode = createIf(attr.GenerateGetHashCode, () => {
-                var hashLines = Join("\n", fields.Select(f => {
+                var hashLines = Join("\n", fieldsAndProps.Select(f => {
                     var type = model.GetTypeInfo(f.type).Type;
                     var isValueType = type.IsValueType;
                     var name = f.Identifier.ValueText;
@@ -368,7 +379,7 @@ namespace IncrementalCompiler
 
             var equals = createIf(attr.GenerateComparer, () => {
                 var isStruct = cds.Kind() == SyntaxKind.StructDeclaration;
-                var comparisons = fields.Select(f =>
+                var comparisons = fieldsAndProps.Select(f =>
                 {
                     var type = model.GetTypeInfo(f.type).Type;
                     var name = f.Identifier.ValueText;
