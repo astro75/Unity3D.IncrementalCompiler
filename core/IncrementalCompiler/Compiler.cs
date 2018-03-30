@@ -26,6 +26,7 @@ namespace IncrementalCompiler
         MemoryStream _outputDebugSymbolStream;
         string assemblyNameNoExtension;
         CSharpParseOptions parseOptions;
+        CodeGeneration.GeneratedFilesMapping _filesMapping;
 
         CompileResult previousResult;
 
@@ -65,6 +66,8 @@ namespace IncrementalCompiler
 
             var totalSW = Stopwatch.StartNew();
             var sw = Stopwatch.StartNew();
+
+            _filesMapping = new CodeGeneration.GeneratedFilesMapping();
 
             void logTime(string label) {
                 var elapsed = sw.Elapsed;
@@ -106,7 +109,9 @@ namespace IncrementalCompiler
                     .WithAllowUnsafe(options.Options.Contains("-unsafe")));
             logTime("Compialtion created");
             ICollection<Diagnostic> diagnostic;
-            (compilation, diagnostic) = CodeGeneration.Run(compilation, compilation.SyntaxTrees, parseOptions, assemblyNameNoExtension);
+            (compilation, diagnostic) = CodeGeneration.Run(
+                false, compilation, compilation.SyntaxTrees, parseOptions, assemblyNameNoExtension, ref _filesMapping, _sourceMap
+            );
             logTime("Code generated");
             compilation = MacroProcessor.Run(compilation, compilation.SyntaxTrees, _sourceMap);
             logTime("Macros completed");
@@ -187,21 +192,39 @@ namespace IncrementalCompiler
                 return tree;
             }).ToArray();
 
-            var set = sourceChanges.Removed.Concat(sourceChanges.Changed)
-                .Select(file => Path.Combine(CodeGeneration.GENERATED_FOLDER, file)).ToImmutableHashSet();
+            var generatedRemove = sourceChanges.Removed.Concat(sourceChanges.Changed).ToArray();
+            var generatedFilesRemove = generatedRemove
+                .Where(_filesMapping.dict.ContainsKey)
+                .SelectMany(path => _filesMapping.dict[path])
+                .Where(_sourceMap.ContainsKey)
+                .Select(path => _sourceMap[path]);
 
-            var generatedFilesRemove = allTrees.Where(tree => set.Contains(tree.FilePath));
+            foreach (var filePath in generatedRemove) {
+                if (_filesMapping.dict.ContainsKey(filePath))
+                {
+                    var generatedFiles = _filesMapping.dict[filePath];
+                    foreach (var generatedFile in generatedFiles)
+                    {
+                        if (File.Exists(generatedFile)) File.Delete(generatedFile);
+                    }
+                    _filesMapping.dict.Remove(filePath);
+                }
+            }
 
             _compilation = _compilation.RemoveSyntaxTrees(removedTrees.Concat(generatedFilesRemove));
 
             var allAddedTrees = newTrees.Concat(changes).Select(t => t.tree).ToImmutableArray();
 
             ICollection<Diagnostic> diagnostic;
-            (_compilation, diagnostic) = CodeGeneration.Run(_compilation, allAddedTrees, parseOptions, assemblyNameNoExtension);
+            (_compilation, diagnostic) = CodeGeneration.Run(
+                true, _compilation, allAddedTrees, parseOptions, assemblyNameNoExtension, ref _filesMapping, _sourceMap
+            );
 
             //TODO: macros on new generated files
 
-            _compilation = MacroProcessor.Run(_compilation, allAddedTrees, _sourceMap);
+            var treeSet = allAddedTrees.Select(t => t.FilePath).ToImmutableHashSet();
+            var treesForMacroProcessor = _compilation.SyntaxTrees.Where(t => treeSet.Contains(t.FilePath)).ToImmutableArray();
+            _compilation = MacroProcessor.Run(_compilation, treesForMacroProcessor, _sourceMap);
 
             // emit or reuse prebuilt output
 

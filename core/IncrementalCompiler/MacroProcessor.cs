@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.IO;
 using System.Linq;
 using System.Threading.Tasks;
 using GenerationAttributes;
@@ -113,12 +114,24 @@ namespace IncrementalCompiler
                     return new[] {(tree, updatedTree)};
                 }
                 return Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
-            });
+            }).ToArray();
+            compilation = EditTrees(compilation, sourceMap, treeEdits);
+            return compilation;
+        }
+
+        public static CSharpCompilation EditTrees(
+            CSharpCompilation compilation,
+            Dictionary<string, SyntaxTree> sourceMap,
+            IEnumerable<(SyntaxTree, CompilationUnitSyntax)> treeEdits
+        ) {
             foreach (var (tree, syntax) in treeEdits)
             {
                 var newTree = tree.WithRootAndOptions(syntax, tree.Options);
                 sourceMap[newTree.FilePath] = newTree;
                 compilation = compilation.ReplaceSyntaxTree(tree, newTree);
+                var editedFilePath = Path.Combine(CodeGeneration.GENERATED_FOLDER, "compile-time", newTree.FilePath);
+                Directory.CreateDirectory(Path.GetDirectoryName(editedFilePath));
+                File.WriteAllText(editedFilePath, newTree.GetText().ToString());
             }
             return compilation;
         }

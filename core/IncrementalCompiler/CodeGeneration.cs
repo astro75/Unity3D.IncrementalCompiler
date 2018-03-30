@@ -4,7 +4,6 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -21,64 +20,217 @@ namespace IncrementalCompiler
             SyntaxKind.PublicKeyword, SyntaxKind.InternalKeyword, SyntaxKind.PrivateKeyword
         });
 
+        public class GeneratedFilesMapping
+        {
+            public Dictionary<string, List<string>> dict = new Dictionary<string, List<string>>();
+
+            public void add(string key, string value) {
+                if (!dict.ContainsKey(key)) dict[key] = new List<string>();
+                dict[key].Add(value);
+            }
+        }
+
+        interface IGenerationResult {}
+
+        class ModifiedFile : IGenerationResult
+        {
+            public readonly SyntaxTree From;
+            public readonly CompilationUnitSyntax To;
+
+            public ModifiedFile(SyntaxTree from, CompilationUnitSyntax to) {
+                From = from;
+                To = to;
+            }
+        }
+
+        class GeneratedFile : IGenerationResult
+        {
+            public readonly string SourcePath, FilePath, Contents;
+
+            public GeneratedFile(string sourcePath, string filePath, string contents) {
+                SourcePath = sourcePath;
+                FilePath = filePath;
+                Contents = contents;
+            }
+        }
+
+        class GeneratedCsFile : GeneratedFile
+        {
+            public readonly SyntaxTree Tree;
+            public GeneratedCsFile(string sourcePath, SyntaxTree tree) : base(sourcePath, tree.FilePath, tree.GetText().ToString()) {
+                Tree = tree;
+            }
+        }
+
+        class JavaClassFile
+        {
+            readonly string Module;
+            readonly string ClassBody;
+            readonly INamedTypeSymbol Symbol;
+            readonly List<string> Methods = new List<string>();
+            string Package => "com.generated." + Module;
+            public string PackageWithClass => Package + "." + Symbol.Name;
+
+            public JavaClassFile(INamedTypeSymbol symbol, string module, string classBody) {
+                Symbol = symbol;
+                Module = module;
+                ClassBody = classBody;
+            }
+
+            public void AddMethod(string methodBody, IMethodSymbol methodSymbol) {
+                var modifier = methodSymbol.IsStatic ? "static " : "";
+                var parameters = Join(", ",
+                    methodSymbol.Parameters.Select(p => $"{ToJavaType(p.Type)} {p.Name}").ToArray());
+                Methods.Add(
+                    $"public {modifier}{ToJavaType(methodSymbol.ReturnType)} {methodSymbol.Name}({parameters}) {{\n" +
+                    $"{methodBody}\n" +
+                    "}\n"
+                );
+            }
+
+            public string GenerateJava() {
+                var modifier = Symbol.IsStatic ? "static " : "";
+                return $"package {Package}\n\n" +
+                       $"public {modifier}class {Symbol.Name} {{\n" +
+                       $"{ClassBody}\n" +
+                       Join("\n", Methods.ToArray()) +
+                       "}";
+            }
+
+            public IEnumerable<MemberDeclarationSyntax> GenerateMembers() {
+                return ParseClassMembers(
+                    $"static UnityEngine.AndroidJavaClass jc = new UnityEngine.AndroidJavaClass(\"{PackageWithClass}\");"
+                );
+            }
+
+            public MethodDeclarationSyntax GenerateMethod(IMethodSymbol symbol, MethodDeclarationSyntax syntax) {
+                var isVoid = symbol.ReturnType.SpecialType == SpecialType.System_Void;
+                var genericReturn = isVoid ? "" : "<" + syntax.ReturnType + ">";
+                var returnStatement = isVoid ? "" : "return ";
+                var callStetement = symbol.IsStatic ? "jc.CallStatic" : "jo.Call";
+                var arguments = Join(", ", syntax.ParameterList.Parameters.Select(ps => ps.Identifier.ToString()));
+                return syntax
+                    .WithBody(ParseBlock($"{returnStatement}{callStetement}{genericReturn}({arguments});"))
+                    .WithExpressionBody(null)
+                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.None));
+            }
+
+            static string ToJavaType(ITypeSymbol type) {
+                if (!type.IsDefinition) return ToJavaType(type.OriginalDefinition);
+                switch (type.SpecialType) {
+                    case SpecialType.System_String: return "String";
+                    case SpecialType.System_Boolean: return "boolean";
+                    case SpecialType.System_Byte: return "byte";
+                    case SpecialType.System_Char: return "char";
+                    case SpecialType.System_Int16: return "short";
+                    case SpecialType.System_Int32: return "int";
+                    case SpecialType.System_Int64: return "long";
+                    case SpecialType.System_Single: return "float";
+                    case SpecialType.System_Double: return "double";
+                    case SpecialType.System_Void: return "void";
+                    case SpecialType.System_Nullable_T:
+                        var arguments = type.BaseType.TypeArguments;
+                        if (arguments.Length == 0) break;
+                        switch (type.BaseType.TypeArguments[0].SpecialType) {
+                            case SpecialType.System_Boolean: return "Boolean";
+                            case SpecialType.System_Byte:    return "Byte";
+                            case SpecialType.System_Char:    return "Character";
+                            case SpecialType.System_Int16:   return "Short";
+                            case SpecialType.System_Int32:   return "Integer";
+                            case SpecialType.System_Int64:   return "Long";
+                            case SpecialType.System_Single:  return "Float";
+                            case SpecialType.System_Double:  return "Double";
+                        }
+                        break;
+                }
+                throw new Exception($"Unsupported type: {type.ToDisplayString()}");
+            }
+        }
+
+
         public static (CSharpCompilation, ICollection<Diagnostic>) Run(
+            bool incrementalRun,
             CSharpCompilation compilation,
             ImmutableArray<SyntaxTree> trees,
             CSharpParseOptions parseOptions,
-            string assemblyName
+            string assemblyName,
+            ref GeneratedFilesMapping filesMapping,
+            Dictionary<string, SyntaxTree> sourceMap
         ) {
-            Directory.CreateDirectory(GENERATED_FOLDER);
+            var generatedProjectFilesDirectory = Path.Combine(GENERATED_FOLDER, assemblyName);
+            if (!incrementalRun && Directory.Exists(generatedProjectFilesDirectory))
+            {
+                Directory.Delete(generatedProjectFilesDirectory, recursive: true);
+            }
+            Directory.CreateDirectory(generatedProjectFilesDirectory);
             var oldCompilation = compilation;
             var diagnostic = new List<Diagnostic>();
 
-            void tryAttribute(AttributeData attr, Action a) {
-                try { a(); }
+            void tryAttribute<A>(AttributeData attr, Action<A> a) where A : Attribute {
+                try {
+                    var instance = CreateAttributeByReflection<A>(attr);
+                    a(instance);
+                }
                 catch (Exception e) {
                     diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
-                        "ER0001", "Error", $"Compiler error: {e.Message}({e.Source}) at {e.StackTrace}", "Error", DiagnosticSeverity.Error, true
+                        "ER0001", "Error", $"Compiler error for attribute {typeof(A).Name}: {e.Message}({e.Source}) at {e.StackTrace}", "Error", DiagnosticSeverity.Error, true
                     ), attr.ApplicationSyntaxReference.GetSyntax().GetLocation()));
                 }
             }
 
-            var newTrees = trees.AsParallel().SelectMany(tree =>
+            var results = trees.AsParallel().SelectMany(originalTree =>
             {
+                var tree = originalTree;
+
                 var model = oldCompilation.GetSemanticModel(tree);
                 var root = tree.GetCompilationUnitRoot();
                 var newMembers = ImmutableList<MemberDeclarationSyntax>.Empty;
                 var typesInFile = root.DescendantNodes().OfType<TypeDeclarationSyntax>().ToImmutableArray();
+                var result = ImmutableList<IGenerationResult>.Empty;
+
+                var treeEdited = false;
+                var editsList = new List<(SyntaxNode, SyntaxNode)>();
+                void replaceSyntax(SyntaxNode oldNode, SyntaxNode newNode) {
+                    treeEdited = true;
+                    editsList.Add((oldNode, newNode));
+                }
+
                 foreach (var tds in typesInFile)
                 {
                     bool treeContains(SyntaxReference syntaxRef) =>
                         tree == syntaxRef.SyntaxTree && tds.Span.Contains(syntaxRef.Span);
 
                     var symbol = model.GetDeclaredSymbol(tds);
+                    JavaClassFile javaClassFile = null;
                     foreach (var attr in symbol.GetAttributes())
                     {
                         if (!treeContains(attr.ApplicationSyntaxReference)) continue;
                         var attrClassName = attr.AttributeClass.ToDisplayString();
                         if (attrClassName == caseType.FullName)
                         {
-                            tryAttribute(attr, () => {
-                                var instance = new RecordAttribute();
-                                foreach (var arg in attr.NamedArguments)
-                                {
-                                    // if some arguments are invelid they do not appear in NamedArguments list
-                                    // because of that we do not check for errors
-                                    var prop = caseType.GetProperty(arg.Key);
-                                    prop.SetValue(instance, arg.Value.Value);
-                                }
+                            tryAttribute<RecordAttribute>(attr, instance => {
                                 newMembers = newMembers.Add(AddAncestors(tds, GenerateCaseClass(instance, model, tds), onlyNamespace: false));
                             });
                         }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
                         {
-                            tryAttribute(attr, () =>
-                            {
+                            tryAttribute<MatcherAttribute>(attr, _ => {
                                 newMembers = newMembers.Add(
                                     AddAncestors(tds, GenerateMatcher(model, tds, typesInFile), onlyNamespace: true)
                                 );
                             });
-
+                        }
+                        if (attrClassName == typeof(JavaClassAttribute).FullName)
+                        {
+                            tryAttribute<JavaClassAttribute>(attr, instance =>
+                            {
+                                javaClassFile = new JavaClassFile(symbol, module: instance.Module, classBody: instance.ClassBody);
+                                newMembers = newMembers.Add(AddAncestors(
+                                    tds,
+                                    CreatePartial(tds, javaClassFile.GenerateMembers(), Extensions.EmptyBaseList),
+                                    onlyNamespace: false
+                                 ));
+                            });
                         }
                     }
 
@@ -94,7 +246,7 @@ namespace IncrementalCompiler
                                     var attrClassName = attr.AttributeClass.ToDisplayString();
                                     if (attrClassName == typeof(PublicAccessor).FullName)
                                     {
-                                        tryAttribute(attr, () =>
+                                        tryAttribute<PublicAccessor>(attr, _ =>
                                         {
                                             newClassMembers = newClassMembers.Add(GenerateAccessor(fieldSymbol));
                                         });
@@ -102,7 +254,29 @@ namespace IncrementalCompiler
                                     // TODO: generic way to add new attributes
                                     if (attrClassName == typeof(ThreadStaticAttribute).FullName)
                                     {
-                                        tryAttribute(attr, () => throw new Exception($"Can't use {nameof(ThreadStaticAttribute)} in Unity"));
+                                        tryAttribute<ThreadStaticAttribute>(attr, _ => throw new Exception($"Can't use {nameof(ThreadStaticAttribute)} in Unity"));
+                                    }
+                                }
+                                break;
+                            case IMethodSymbol methodSymbol:
+                                foreach (var attr in methodSymbol.GetAttributes())
+                                {
+                                    if (!treeContains(attr.ApplicationSyntaxReference)) continue;
+                                    var attrClassName = attr.AttributeClass.ToDisplayString();
+                                    if (attrClassName == typeof(JavaMethodAttribute).FullName)
+                                    {
+                                        tryAttribute<JavaMethodAttribute>(attr, instance =>
+                                        {
+                                            if (javaClassFile == null) throw new Exception(
+                                                $"must be used together with {nameof(JavaClassAttribute)}"
+                                            );
+                                            javaClassFile.AddMethod(instance.MethodBody, methodSymbol);
+                                            var syntaxes = methodSymbol.DeclaringSyntaxReferences;
+                                            if (syntaxes.Length != 1) throw new Exception($"code must be in one place");
+                                            var syntax = (MethodDeclarationSyntax) syntaxes[0].GetSyntax();
+                                            var replacedSyntax = javaClassFile.GenerateMethod(methodSymbol, syntax);
+                                            replaceSyntax(syntax, replacedSyntax);
+                                        });
                                     }
                                 }
                                 break;
@@ -117,6 +291,27 @@ namespace IncrementalCompiler
                             onlyNamespace: false
                         ));
                     }
+
+                    if (javaClassFile != null)
+                    {
+                        result = result.Add(new GeneratedFile(
+                            sourcePath: tree.FilePath,
+                            filePath: Path.Combine(
+                                generatedProjectFilesDirectory,
+                                javaClassFile.PackageWithClass.Replace('.', Path.DirectorySeparatorChar),
+                                symbol.Name + ".java"
+                            ),
+                            contents: javaClassFile.GenerateJava()
+                        ));
+                    }
+                }
+                if (treeEdited)
+                {
+                    var newRoot = root.ReplaceNodes(
+                        editsList.Select(t => t.Item1),
+                        (toReplace, _) => editsList.First(t => t.Item1 == toReplace).Item2
+                    );
+                    result = result.Add(new ModifiedFile(tree, newRoot));
                 }
                 if (newMembers.Any())
                 {
@@ -125,27 +320,52 @@ namespace IncrementalCompiler
                             .WithUsings(cleanUsings(root.Usings))
                             .WithMembers(SyntaxFactory.List(newMembers))
                             .NormalizeWhitespace(),
-                        path: Path.Combine(GENERATED_FOLDER, tree.FilePath),
+                        path: Path.Combine(generatedProjectFilesDirectory, tree.FilePath),
                         options: parseOptions,
                         encoding: Encoding.UTF8);
-                    return new[] {nt};
+                    result = result.Add(new GeneratedCsFile(tree.FilePath, nt));
                 }
-                return Enumerable.Empty<SyntaxTree>();
+                return result.ToArray();
             }).ToArray();
-            compilation = compilation.AddSyntaxTrees(newTrees);
-            foreach (var syntaxTree in newTrees)
+            var newFiles = results.OfType<GeneratedFile>().ToArray();
+            var csFiles = newFiles.OfType<GeneratedCsFile>().ToArray();
+            compilation = compilation.AddSyntaxTrees(csFiles.Select(_ => _.Tree));
+            foreach (var csFile in csFiles) sourceMap[csFile.FilePath] = csFile.Tree;
+            foreach (var file in newFiles)
             {
-                var path = syntaxTree.FilePath;
-                Directory.CreateDirectory(Path.GetDirectoryName(path));
-                File.WriteAllText(path, syntaxTree.GetText().ToString());
+                var generatedPath = file.FilePath;
+                Directory.CreateDirectory(Path.GetDirectoryName(generatedPath));
+                File.WriteAllText(generatedPath, file.Contents);
+                filesMapping.add(file.SourcePath, generatedPath);
             }
+            compilation = MacroProcessor.EditTrees(
+                compilation, sourceMap, results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
+            );
             File.WriteAllLines(
                 Path.Combine(GENERATED_FOLDER, $"Generated-files-{assemblyName}.txt"),
-                compilation.SyntaxTrees
-                    .Select(tree => tree.FilePath)
-                    .Where(path => path.StartsWith(GENERATED_FOLDER, StringComparison.Ordinal))
+                filesMapping.dict
+                    .SelectMany(kv => kv.Value.Where(path => path.EndsWith(".cs", StringComparison.Ordinal)))
                     .Select(path => path.Replace("/", "\\")));
             return (compilation, diagnostic);
+        }
+
+        static void SetNamedArguments(AttributeData attributeData, Attribute instance) {
+            foreach (var arg in attributeData.NamedArguments)
+            {
+                // if some arguments are invelid they do not appear in NamedArguments list
+                // because of that we do not check for errors
+                var prop = caseType.GetProperty(arg.Key);
+                prop.SetValue(instance, arg.Value.Value);
+            }
+        }
+
+        static A CreateAttributeByReflection<A>(AttributeData attributeData) where A : Attribute{
+            var type = typeof(A);
+            var arguments = attributeData.ConstructorArguments;
+            var ctor = type.GetConstructors().First(ci => ci.GetParameters().Length == arguments.Length);
+            var res = (A) ctor.Invoke(arguments.Select(a => a.Value).ToArray());
+            SetNamedArguments(attributeData, res);
+            return res;
         }
 
         static string GenerateAccessor(IFieldSymbol fieldSymbol) {
@@ -512,6 +732,10 @@ namespace IncrementalCompiler
         {
             var cls = (ClassDeclarationSyntax)CSharpSyntaxTree.ParseText($"class C {{ {syntax} }}").GetCompilationUnitRoot().Members[0];
             return cls.Members;
+        }
+
+        static BlockSyntax ParseBlock(string syntax) {
+            return (BlockSyntax) SyntaxFactory.ParseStatement("{" + syntax + "}");
         }
 
         public static string Quote(string s) => $"\"{s}\"";
