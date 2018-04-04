@@ -30,10 +30,12 @@ namespace GenerationAttributes
     public class JavaClassAttribute : Attribute
     {
         public readonly string Module;
+        public readonly string Imports;
         public readonly string ClassBody;
 
-        public JavaClassAttribute(string module, string classBody) {
+        public JavaClassAttribute(string module, string imports, string classBody) {
             Module = module;
+            Imports = imports;
             ClassBody = classBody;
         }
     }

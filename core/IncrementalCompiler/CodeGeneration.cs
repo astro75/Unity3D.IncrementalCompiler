@@ -70,17 +70,17 @@ namespace IncrementalCompiler
         class JavaClassFile
         {
             public readonly Location Location;
-            readonly string Module;
-            readonly string ClassBody;
+            readonly string Module, Imports, ClassBody;
             readonly INamedTypeSymbol Symbol;
             readonly List<string> Methods = new List<string>();
             string Package => "com.generated." + Module;
             public string PackageWithClass => Package + "." + Symbol.Name;
             readonly IMethodSymbol[] allMethods;
 
-            public JavaClassFile(INamedTypeSymbol symbol, string module, string classBody, Location location) {
+            public JavaClassFile(INamedTypeSymbol symbol, string module, string imports, string classBody, Location location) {
                 Symbol = symbol;
                 Module = module;
+                Imports = imports;
                 ClassBody = classBody;
                 allMethods = AllInterfaceMembers(symbol).OfType<IMethodSymbol>().ToArray();
                 Location = location;
@@ -101,9 +101,9 @@ namespace IncrementalCompiler
             }
 
             public string GenerateJava() {
-                var modifier = Symbol.IsStatic ? "static " : "";
                 return $"package {Package};\n\n" +
-                       $"public {modifier}class {Symbol.Name} {{\n" +
+                       Imports +
+                       $"public class {Symbol.Name} {{\n" +
                        $"{ClassBody}\n" +
                        Join("\n", Methods) +
                        "}";
@@ -120,7 +120,9 @@ namespace IncrementalCompiler
                 var genericReturn = isVoid ? "" : "<" + syntax.ReturnType + ">";
                 var returnStatement = isVoid ? "" : "return ";
                 var callStetement = symbol.IsStatic ? "jc.CallStatic" : "jo.Call";
-                var arguments = Join(", ", syntax.ParameterList.Parameters.Select(ps => ps.Identifier.ToString()));
+                var firstParam = $"\"{symbol.Name}\"";
+                var remainingParams = syntax.ParameterList.Parameters.Select(ps => ps.Identifier.ToString());
+                var arguments = Join(", ", new []{firstParam}.Concat(remainingParams));
                 return syntax
                     .WithBody(ParseBlock($"{returnStatement}{callStetement}{genericReturn}({arguments});"))
                     .WithExpressionBody(null)
@@ -155,6 +157,11 @@ namespace IncrementalCompiler
                         }
                         break;
                 }
+                switch (type.ToString()) {
+                    // TODO: allow subtypes and detect java type automatically
+                    case "UnityEngine.AndroidJavaProxy":
+                    case "UnityEngine.AndroidJavaObject": return "Object";
+                }
                 throw new Exception($"Unsupported type: {type.ToDisplayString()}");
             }
 
@@ -167,11 +174,8 @@ namespace IncrementalCompiler
             }
 
             public string GenerateJavaInterface() =>
-                $"package {Package}\n\n" +
-                $"public interface {Symbol.Name} " + Block(
-                    $"{ClassBody}",
-                    Join("\n", InterfaceMethods())
-                );
+                $"package {Package};\n\n" +
+                $"public interface {Symbol.Name} " + Block(InterfaceMethods());
 
             public string JavaFilePath(string rootPath) => Path.Combine(
                 rootPath,
@@ -191,7 +195,7 @@ namespace IncrementalCompiler
                             var genericArgs = parameterTypes.Length == 0 ? "" : $"<{Join(", ", parameterTypes)}>";
                             return $"public event System.Action{genericArgs} {m.Name};";
                         })),
-                        $"{Symbol.Name}Proxy() : base(\"{PackageWithClass}\"){{}}" +
+                        $"public {Symbol.Name}Proxy() : base(\"{PackageWithClass}\"){{}}" +
                             "protected override void invokeOnMain(string methodName, object[] args)" + Block(
                             "  switch(methodName)" + Block(
                                 allMethods.Select(m => {
@@ -313,7 +317,7 @@ namespace IncrementalCompiler
                         {
                             tryAttribute<JavaClassAttribute>(attr, instance =>
                             {
-                                javaClassFile = new JavaClassFile(symbol, module: instance.Module, classBody: instance.ClassBody, attrLocation(attr));
+                                javaClassFile = new JavaClassFile(symbol, module: instance.Module, imports: instance.Imports, classBody: instance.ClassBody, attrLocation(attr));
                                 newMembers = newMembers.Add(AddAncestors(
                                     tds,
                                     CreatePartial(tds, javaClassFile.GenerateMembers(), Extensions.EmptyBaseList),
@@ -325,7 +329,7 @@ namespace IncrementalCompiler
                         {
                             tryAttribute<JavaListenerInterfaceAttribute>(attr, instance =>
                             {
-                                var javaInterface = new JavaClassFile(symbol, module: instance.Module, classBody: "", attrLocation(attr));
+                                var javaInterface = new JavaClassFile(symbol, module: instance.Module, imports: "", classBody: "", attrLocation(attr));
                                 result = result.Add(new GeneratedFile(
                                     sourcePath: tree.FilePath,
                                     filePath: javaInterface.JavaFilePath(generatedProjectFilesDirectory),
