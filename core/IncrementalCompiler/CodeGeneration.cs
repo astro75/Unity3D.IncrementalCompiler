@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -46,41 +47,52 @@ namespace IncrementalCompiler
         class GeneratedFile : IGenerationResult
         {
             public readonly string SourcePath, FilePath, Contents;
+            public readonly Location location;
 
-            public GeneratedFile(string sourcePath, string filePath, string contents) {
+            public GeneratedFile(string sourcePath, string filePath, string contents, Location location) {
                 SourcePath = sourcePath;
                 FilePath = filePath;
                 Contents = contents;
+                this.location = location;
             }
         }
 
         class GeneratedCsFile : GeneratedFile
         {
             public readonly SyntaxTree Tree;
-            public GeneratedCsFile(string sourcePath, SyntaxTree tree) : base(sourcePath, tree.FilePath, tree.GetText().ToString()) {
+            public GeneratedCsFile(string sourcePath, SyntaxTree tree, Location location) : base(sourcePath, tree.FilePath, tree.GetText().ToString(), location) {
                 Tree = tree;
             }
         }
 
+        // TODO: clean this class
+        // refactor parts to tlplib
         class JavaClassFile
         {
+            public readonly Location Location;
             readonly string Module;
             readonly string ClassBody;
             readonly INamedTypeSymbol Symbol;
             readonly List<string> Methods = new List<string>();
             string Package => "com.generated." + Module;
             public string PackageWithClass => Package + "." + Symbol.Name;
+            readonly IMethodSymbol[] allMethods;
 
-            public JavaClassFile(INamedTypeSymbol symbol, string module, string classBody) {
+            public JavaClassFile(INamedTypeSymbol symbol, string module, string classBody, Location location) {
                 Symbol = symbol;
                 Module = module;
                 ClassBody = classBody;
+                allMethods = AllInterfaceMembers(symbol).OfType<IMethodSymbol>().ToArray();
+                Location = location;
             }
+
+            static ImmutableArray<ISymbol> AllInterfaceMembers(INamedTypeSymbol symbol) =>
+                symbol.GetMembers().AddRange(symbol.AllInterfaces.SelectMany(i => i.GetMembers()));
 
             public void AddMethod(string methodBody, IMethodSymbol methodSymbol) {
                 var modifier = methodSymbol.IsStatic ? "static " : "";
                 var parameters = Join(", ",
-                    methodSymbol.Parameters.Select(p => $"{ToJavaType(p.Type)} {p.Name}").ToArray());
+                    methodSymbol.Parameters.Select(p => $"final {ToJavaType(p.Type)} {p.Name}").ToArray());
                 Methods.Add(
                     $"public {modifier}{ToJavaType(methodSymbol.ReturnType)} {methodSymbol.Name}({parameters}) {{\n" +
                     $"{methodBody}\n" +
@@ -90,10 +102,10 @@ namespace IncrementalCompiler
 
             public string GenerateJava() {
                 var modifier = Symbol.IsStatic ? "static " : "";
-                return $"package {Package}\n\n" +
+                return $"package {Package};\n\n" +
                        $"public {modifier}class {Symbol.Name} {{\n" +
                        $"{ClassBody}\n" +
-                       Join("\n", Methods.ToArray()) +
+                       Join("\n", Methods) +
                        "}";
             }
 
@@ -145,8 +157,85 @@ namespace IncrementalCompiler
                 }
                 throw new Exception($"Unsupported type: {type.ToDisplayString()}");
             }
+
+            IEnumerable<string> InterfaceMethods() {
+                return allMethods.Select(m =>
+                {
+                    var parameters = m.Parameters.Select(p => $"final {ToJavaType(p.Type)} {p.Name}");
+                    return $"void {m.Name}({Join(", ", parameters)});";
+                });
+            }
+
+            public string GenerateJavaInterface() =>
+                $"package {Package}\n\n" +
+                $"public interface {Symbol.Name} " + Block(
+                    $"{ClassBody}",
+                    Join("\n", InterfaceMethods())
+                );
+
+            public string JavaFilePath(string rootPath) => Path.Combine(
+                rootPath,
+                "android",
+                Module,
+                PackageWithClass.Replace('.', Path.DirectorySeparatorChar) + ".java"
+            );
+
+            public ClassDeclarationSyntax GetInterfaceClass() {
+                return ParseClass(
+                    $"public class {Symbol.Name}Proxy : com.tinylabproductions.TLPLib.Android.JavaListenerProxy" +
+                    Block(
+                        Join("\n", allMethods.Select(m =>
+                        {
+                            if (m.ReturnType.SpecialType != SpecialType.System_Void) throw new Exception("Return type must be void");
+                            var parameterTypes = m.Parameters.Select(p => p.Type.ToString()).ToArray();
+                            var genericArgs = parameterTypes.Length == 0 ? "" : $"<{Join(", ", parameterTypes)}>";
+                            return $"public event System.Action{genericArgs} {m.Name};";
+                        })),
+                        $"{Symbol.Name}Proxy() : base(\"{PackageWithClass}\"){{}}" +
+                            "protected override void invokeOnMain(string methodName, object[] args)" + Block(
+                            "  switch(methodName)" + Block(
+                                allMethods.Select(m => {
+                                    var invokeParams = Join(", ", m.Parameters.Select((p, idx) => $"({p.Type.ToString()}) args[{idx}]"));
+                                    return $"case \"{m.Name}\": {m.Name}?.Invoke({invokeParams}); return;";
+                                })
+                            ),
+                            "base.invokeOnMain(methodName, args);"
+                        ),
+                        "public void registerLogger(string prefix, com.tinylabproductions.TLPLib.Logger.ILog log)" + Block(
+                            allMethods.Select(m =>
+                            {
+                                var paramNames = m.Parameters.Select(p => p.Name).ToArray();
+                                var paramsStr = paramNames.Length == 0 ? "\"\"" : Join(" + \", \" + ", paramNames.Select(p => $"{p}.ToString()"));
+                                return $"{m.Name} += ({Join(", ", paramNames)}) => com.tinylabproductions.TLPLib.Logger.ILogExts.debug(log, prefix + \"{m.Name}(\" + {paramsStr} + \")\");";
+                            })
+                        )
+                    )
+                );
+            }
         }
 
+        static string Block(IEnumerable<string> contents) => "{" + Join("\n", contents) + "}";
+        static string Block(params string[] contents) => Block((IEnumerable<string>)contents);
+
+        // Directory.Delete(recursive: true) throws an exception in some cases
+        static void DeleteFilesAndFoldersRecursively(string targetDir)
+        {
+            foreach (var file in Directory.GetFiles(targetDir))
+                File.Delete(file);
+
+            foreach (var subDir in Directory.GetDirectories(targetDir))
+                DeleteFilesAndFoldersRecursively(subDir);
+
+            try
+            {
+                Directory.Delete(targetDir);
+            }
+            catch (IOException)
+            {
+                // it fails one thime if Windows file explorer is opened in targetDir
+                Directory.Delete(targetDir);
+            }
+        }
 
         public static (CSharpCompilation, ICollection<Diagnostic>) Run(
             bool incrementalRun,
@@ -160,7 +249,7 @@ namespace IncrementalCompiler
             var generatedProjectFilesDirectory = Path.Combine(GENERATED_FOLDER, assemblyName);
             if (!incrementalRun && Directory.Exists(generatedProjectFilesDirectory))
             {
-                Directory.Delete(generatedProjectFilesDirectory, recursive: true);
+                DeleteFilesAndFoldersRecursively(generatedProjectFilesDirectory);
             }
             Directory.CreateDirectory(generatedProjectFilesDirectory);
             var oldCompilation = compilation;
@@ -174,7 +263,7 @@ namespace IncrementalCompiler
                 catch (Exception e) {
                     diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
                         "ER0001", "Error", $"Compiler error for attribute {typeof(A).Name}: {e.Message}({e.Source}) at {e.StackTrace}", "Error", DiagnosticSeverity.Error, true
-                    ), attr.ApplicationSyntaxReference.GetSyntax().GetLocation()));
+                    ), attrLocation(attr)));
                 }
             }
 
@@ -224,12 +313,26 @@ namespace IncrementalCompiler
                         {
                             tryAttribute<JavaClassAttribute>(attr, instance =>
                             {
-                                javaClassFile = new JavaClassFile(symbol, module: instance.Module, classBody: instance.ClassBody);
+                                javaClassFile = new JavaClassFile(symbol, module: instance.Module, classBody: instance.ClassBody, attrLocation(attr));
                                 newMembers = newMembers.Add(AddAncestors(
                                     tds,
                                     CreatePartial(tds, javaClassFile.GenerateMembers(), Extensions.EmptyBaseList),
                                     onlyNamespace: false
                                  ));
+                            });
+                        }
+                        if (attrClassName == typeof(JavaListenerInterfaceAttribute).FullName)
+                        {
+                            tryAttribute<JavaListenerInterfaceAttribute>(attr, instance =>
+                            {
+                                var javaInterface = new JavaClassFile(symbol, module: instance.Module, classBody: "", attrLocation(attr));
+                                result = result.Add(new GeneratedFile(
+                                    sourcePath: tree.FilePath,
+                                    filePath: javaInterface.JavaFilePath(generatedProjectFilesDirectory),
+                                    contents: javaInterface.GenerateJavaInterface(),
+                                    location: attrLocation(attr)
+                                ));
+                                newMembers = newMembers.Add(AddAncestors(tds, javaInterface.GetInterfaceClass(), onlyNamespace: false));
                             });
                         }
                     }
@@ -296,12 +399,9 @@ namespace IncrementalCompiler
                     {
                         result = result.Add(new GeneratedFile(
                             sourcePath: tree.FilePath,
-                            filePath: Path.Combine(
-                                generatedProjectFilesDirectory,
-                                javaClassFile.PackageWithClass.Replace('.', Path.DirectorySeparatorChar),
-                                symbol.Name + ".java"
-                            ),
-                            contents: javaClassFile.GenerateJava()
+                            filePath: javaClassFile.JavaFilePath(generatedProjectFilesDirectory),
+                            contents: javaClassFile.GenerateJava(),
+                            javaClassFile.Location
                         ));
                     }
                 }
@@ -323,7 +423,7 @@ namespace IncrementalCompiler
                         path: Path.Combine(generatedProjectFilesDirectory, tree.FilePath),
                         options: parseOptions,
                         encoding: Encoding.UTF8);
-                    result = result.Add(new GeneratedCsFile(tree.FilePath, nt));
+                    result = result.Add(new GeneratedCsFile(tree.FilePath, nt, root.GetLocation()));
                 }
                 return result.ToArray();
             }).ToArray();
@@ -335,8 +435,17 @@ namespace IncrementalCompiler
             {
                 var generatedPath = file.FilePath;
                 Directory.CreateDirectory(Path.GetDirectoryName(generatedPath));
-                File.WriteAllText(generatedPath, file.Contents);
-                filesMapping.add(file.SourcePath, generatedPath);
+                if (File.Exists(generatedPath))
+                {
+                    diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                        "ER0002", "Error", $"Could not generate file '{generatedPath}'. File already exists.", "Error", DiagnosticSeverity.Error, true
+                    ), file.location));
+                }
+                else
+                {
+                    File.WriteAllText(generatedPath, file.Contents);
+                    filesMapping.add(file.SourcePath, generatedPath);
+                }
             }
             compilation = MacroProcessor.EditTrees(
                 compilation, sourceMap, results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
@@ -348,6 +457,8 @@ namespace IncrementalCompiler
                     .Select(path => path.Replace("/", "\\")));
             return (compilation, diagnostic);
         }
+
+        static Location attrLocation(AttributeData attr) => attr.ApplicationSyntaxReference.GetSyntax().GetLocation();
 
         static void SetNamedArguments(AttributeData attributeData, Attribute instance) {
             foreach (var arg in attributeData.NamedArguments)
@@ -727,6 +838,12 @@ namespace IncrementalCompiler
             SyntaxFactory.List(usings.Select(u =>
                 u.WithUsingKeyword(u.UsingKeyword.WithoutTrivia())
             ));
+
+        static ClassDeclarationSyntax ParseClass(string syntax)
+        {
+            var cls = (ClassDeclarationSyntax)CSharpSyntaxTree.ParseText(syntax).GetCompilationUnitRoot().Members[0];
+            return cls;
+        }
 
         static SyntaxList<MemberDeclarationSyntax> ParseClassMembers(string syntax)
         {

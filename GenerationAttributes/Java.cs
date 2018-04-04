@@ -5,7 +5,14 @@ namespace GenerationAttributes
 {
     [AttributeUsage(AttributeTargets.Interface)]
     [Conditional("CodeGeneration")]
-    public class JavaInterfaceAttribute : Attribute { }
+    public class JavaListenerInterfaceAttribute : Attribute
+    {
+        public readonly string Module;
+
+        public JavaListenerInterfaceAttribute(string module) {
+            Module = module;
+        }
+    }
 
     [AttributeUsage(AttributeTargets.Method)]
     [Conditional("CodeGeneration")]

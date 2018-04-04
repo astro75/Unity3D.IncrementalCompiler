@@ -40,7 +40,7 @@ Target "Package" (fun _ ->
     for target in ["Unity4"; "Unity5"] do
         let targetDir = binDir @@ target
         let editorDir = targetDir @@ "Assets" @@ "CSharp vNext Support" @@ "Editor"
-        let pluginsDir = targetDir @@ "Assets" @@ "Plugins"
+        let pluginsDir = targetDir @@ "Assets" @@ "Plugins" @@ "Incremental Compiler"
         let compilerDir = targetDir @@ "Compiler"
         // create dirs
         CreateDir targetDir

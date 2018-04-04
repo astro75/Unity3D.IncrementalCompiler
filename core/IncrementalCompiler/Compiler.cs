@@ -199,6 +199,8 @@ namespace IncrementalCompiler
                 .Where(_sourceMap.ContainsKey)
                 .Select(path => _sourceMap[path]);
 
+            _compilation = _compilation.RemoveSyntaxTrees(removedTrees.Concat(generatedFilesRemove));
+
             foreach (var filePath in generatedRemove) {
                 if (_filesMapping.dict.ContainsKey(filePath))
                 {
@@ -210,8 +212,6 @@ namespace IncrementalCompiler
                     _filesMapping.dict.Remove(filePath);
                 }
             }
-
-            _compilation = _compilation.RemoveSyntaxTrees(removedTrees.Concat(generatedFilesRemove));
 
             var allAddedTrees = newTrees.Concat(changes).Select(t => t.tree).ToImmutableArray();
 
