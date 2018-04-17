@@ -194,24 +194,14 @@ namespace IncrementalCompiler
 
             var generatedRemove = sourceChanges.Removed.Concat(sourceChanges.Changed).ToArray();
             var generatedFilesRemove = generatedRemove
-                .Where(_filesMapping.dict.ContainsKey)
-                .SelectMany(path => _filesMapping.dict[path])
+                .Where(_filesMapping.filesDict.ContainsKey)
+                .SelectMany(path => _filesMapping.filesDict[path])
                 .Where(_sourceMap.ContainsKey)
                 .Select(path => _sourceMap[path]);
 
             _compilation = _compilation.RemoveSyntaxTrees(removedTrees.Concat(generatedFilesRemove));
 
-            foreach (var filePath in generatedRemove) {
-                if (_filesMapping.dict.ContainsKey(filePath))
-                {
-                    var generatedFiles = _filesMapping.dict[filePath];
-                    foreach (var generatedFile in generatedFiles)
-                    {
-                        if (File.Exists(generatedFile)) File.Delete(generatedFile);
-                    }
-                    _filesMapping.dict.Remove(filePath);
-                }
-            }
+            _filesMapping.removeFiles(generatedRemove);
 
             var allAddedTrees = newTrees.Concat(changes).Select(t => t.tree).ToImmutableArray();
 

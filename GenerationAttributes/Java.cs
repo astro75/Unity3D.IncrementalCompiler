@@ -14,7 +14,7 @@ namespace GenerationAttributes
         }
     }
 
-    [AttributeUsage(AttributeTargets.Method)]
+    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Constructor)]
     [Conditional("CodeGeneration")]
     public class JavaMethodAttribute : Attribute
     {
@@ -37,6 +37,17 @@ namespace GenerationAttributes
             Module = module;
             Imports = imports;
             ClassBody = classBody;
+        }
+    }
+
+    public class JavaFile
+    {
+        public readonly string Module, Path, Contents;
+
+        public JavaFile(string module, string path, string contents) {
+            Module = module;
+            Path = path;
+            Contents = contents;
         }
     }
 }

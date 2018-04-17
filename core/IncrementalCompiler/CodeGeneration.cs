@@ -4,7 +4,6 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text;
-using System.Threading;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -23,11 +22,98 @@ namespace IncrementalCompiler
 
         public class GeneratedFilesMapping
         {
-            public Dictionary<string, List<string>> dict = new Dictionary<string, List<string>>();
+            public Dictionary<string, List<string>> filesDict = new Dictionary<string, List<string>>();
+            public Dictionary<string, List<JavaFile>> javaFilesDict = new Dictionary<string, List<JavaFile>>();
+            int javaVersion = 1, lastUsedJavaVersion;
+            SyntaxTree prevousTree;
 
-            public void add(string key, string value) {
-                if (!dict.ContainsKey(key)) dict[key] = new List<string>();
+            static void addValue<A>(Dictionary<string, List<A>> dict, string key, A value) {
+                if (!dict.ContainsKey(key)) dict[key] = new List<A>();
                 dict[key].Add(value);
+            }
+
+            static IEnumerable<A> enumerate<A>(Dictionary<string, List<A>> dict) =>
+                dict.Values.SelectMany(_ => _);
+
+            public void add(string key, string value) => addValue(filesDict, key, value);
+
+            public bool tryAddJavaFile(string key, JavaFile value)
+            {
+                if (enumerate(javaFilesDict).Any(jf => jf.Module == value.Module && jf.Path == value.Path))
+                {
+                    return false;
+                }
+                else
+                {
+                    javaVersion++;
+                    addValue(javaFilesDict, key, value);
+                    return true;
+                }
+            }
+
+            public CSharpCompilation updateCompilation(CSharpCompilation compilation, CSharpParseOptions options, string assemblyName, string generatedFilesDir) {
+                if (lastUsedJavaVersion != javaVersion)
+                {
+                    lastUsedJavaVersion = javaVersion;
+                    var newTree = generateTree(options, assemblyName, generatedFilesDir);
+                    var path = newTree.FilePath;
+                    {
+                        if (File.Exists(path)) File.Delete(path);
+                        Directory.CreateDirectory(Path.GetDirectoryName(path));
+                        File.WriteAllText(path, newTree.GetText().ToString());
+                    }
+                    filesDict["GENERATED_JAVA"] = new List<string>(new []{ path });
+                    var result =
+                        prevousTree == null
+                        ? compilation.AddSyntaxTrees(newTree)
+                        : compilation.ReplaceSyntaxTree(prevousTree, newTree);
+                    prevousTree = newTree;
+                    return result;
+                }
+                return compilation;
+            }
+
+            static string asVerbatimString(string str) => $"@\"{str.Replace("\"", "\"\"")}\"";
+
+            SyntaxTree generateTree(CSharpParseOptions options, string assemblyName, string generatedFilesDir) {
+                var className = assemblyName.Replace("-", "");
+                var data = enumerate(javaFilesDict).Select(jf =>
+                    $"new JavaFile(module: \"{jf.Module}\", path: {asVerbatimString(jf.Path)}, contents: {asVerbatimString(jf.Contents)})"
+                );
+                var ns = "com.tinylabproductions.generated.java";
+                var tree = CSharpSyntaxTree.ParseText(
+                    "#if UNITY_EDITOR\n" +
+                    "using GenerationAttributes;\n" +
+                    $"namespace {ns} {{\n" +
+                    $"public static class {className} {{\n" +
+                    "public static readonly JavaFile[] javaFiles = {" +
+                    Join(", ", data) +
+                    "}; }}\n" +
+                    "#endif",
+                    options,
+                    path: Path.Combine(generatedFilesDir, ns.Replace('.', Path.DirectorySeparatorChar), className + ".cs")
+                );
+                return CSharpSyntaxTree.Create(
+                    tree.GetCompilationUnitRoot().NormalizeWhitespace(),
+                    options,
+                    path: tree.FilePath,
+                    encoding: Encoding.UTF8
+                );
+            }
+
+            public void removeFiles(IEnumerable<string> filesToRemove) {
+                foreach (var filePath in filesToRemove) {
+                    if (filesDict.TryGetValue(filePath, out var generatedFiles)) {
+                        foreach (var generatedFile in generatedFiles) {
+                            if (File.Exists(generatedFile)) File.Delete(generatedFile);
+                        }
+                        filesDict.Remove(filePath);
+                    }
+                    if (javaFilesDict.ContainsKey(filePath)) {
+                        javaFilesDict.Remove(filePath);
+                        javaVersion++;
+                    }
+                }
             }
         }
 
@@ -44,24 +130,35 @@ namespace IncrementalCompiler
             }
         }
 
-        class GeneratedFile : IGenerationResult
+        abstract class GeneratedFile : IGenerationResult
         {
-            public readonly string SourcePath, FilePath, Contents;
-            public readonly Location location;
+            public readonly string SourcePath;
+            public readonly Location Location;
 
-            public GeneratedFile(string sourcePath, string filePath, string contents, Location location) {
+            protected GeneratedFile(string sourcePath, Location location) {
                 SourcePath = sourcePath;
-                FilePath = filePath;
-                Contents = contents;
-                this.location = location;
+                Location = location;
+            }
+        }
+
+        class GeneratedJavaFile : GeneratedFile
+        {
+            public readonly JavaFile JavaFile;
+
+            public GeneratedJavaFile(string sourcePath, Location location, JavaFile javaFile) : base(sourcePath, location) {
+                JavaFile = javaFile;
             }
         }
 
         class GeneratedCsFile : GeneratedFile
         {
             public readonly SyntaxTree Tree;
-            public GeneratedCsFile(string sourcePath, SyntaxTree tree, Location location) : base(sourcePath, tree.FilePath, tree.GetText().ToString(), location) {
+            public readonly string FilePath, Contents;
+
+            public GeneratedCsFile(string sourcePath, Location location, SyntaxTree tree) : base(sourcePath, location) {
                 Tree = tree;
+                FilePath = tree.FilePath;
+                Contents = tree.GetText().ToString();
             }
         }
 
@@ -70,7 +167,7 @@ namespace IncrementalCompiler
         class JavaClassFile
         {
             public readonly Location Location;
-            readonly string Module, Imports, ClassBody;
+            public readonly string Module, Imports, ClassBody;
             readonly INamedTypeSymbol Symbol;
             readonly List<string> Methods = new List<string>();
             string Package => "com.generated." + Module;
@@ -90,11 +187,15 @@ namespace IncrementalCompiler
                 symbol.GetMembers().AddRange(symbol.AllInterfaces.SelectMany(i => i.GetMembers()));
 
             public void AddMethod(string methodBody, IMethodSymbol methodSymbol) {
+                var isConstructor = methodSymbol.MethodKind == MethodKind.Constructor;
                 var modifier = methodSymbol.IsStatic ? "static " : "";
                 var parameters = Join(", ",
                     methodSymbol.Parameters.Select(p => $"final {ToJavaType(p.Type)} {p.Name}").ToArray());
+                var typeAndName = isConstructor
+                    ? Symbol.Name
+                    : $"{ToJavaType(methodSymbol.ReturnType)} {methodSymbol.Name}";
                 Methods.Add(
-                    $"public {modifier}{ToJavaType(methodSymbol.ReturnType)} {methodSymbol.Name}({parameters}) {{\n" +
+                    $"public {modifier}{typeAndName}({parameters}) {{\n" +
                     $"{methodBody}\n" +
                     "}\n"
                 );
@@ -146,6 +247,8 @@ namespace IncrementalCompiler
                         var arguments = type.BaseType.TypeArguments;
                         if (arguments.Length == 0) break;
                         switch (type.BaseType.TypeArguments[0].SpecialType) {
+                            // this code is never reached.
+                            // TODO: find a way to detect nullable types in C# (int?, bool?, ...)
                             case SpecialType.System_Boolean: return "Boolean";
                             case SpecialType.System_Byte:    return "Byte";
                             case SpecialType.System_Char:    return "Character";
@@ -177,12 +280,8 @@ namespace IncrementalCompiler
                 $"package {Package};\n\n" +
                 $"public interface {Symbol.Name} " + Block(InterfaceMethods());
 
-            public string JavaFilePath(string rootPath) => Path.Combine(
-                rootPath,
-                "android",
-                Module,
-                PackageWithClass.Replace('.', Path.DirectorySeparatorChar) + ".java"
-            );
+            public string JavaFilePath() =>
+                PackageWithClass.Replace('.', Path.DirectorySeparatorChar) + ".java";
 
             public ClassDeclarationSyntax GetInterfaceClass() {
                 return ParseClass(
@@ -330,11 +429,14 @@ namespace IncrementalCompiler
                             tryAttribute<JavaListenerInterfaceAttribute>(attr, instance =>
                             {
                                 var javaInterface = new JavaClassFile(symbol, module: instance.Module, imports: "", classBody: "", attrLocation(attr));
-                                result = result.Add(new GeneratedFile(
+                                result = result.Add(new GeneratedJavaFile(
                                     sourcePath: tree.FilePath,
-                                    filePath: javaInterface.JavaFilePath(generatedProjectFilesDirectory),
-                                    contents: javaInterface.GenerateJavaInterface(),
-                                    location: attrLocation(attr)
+                                    location: attrLocation(attr),
+                                    javaFile: new JavaFile(
+                                        module: javaInterface.Module,
+                                        path: javaInterface.JavaFilePath(),
+                                        contents: javaInterface.GenerateJavaInterface()
+                                    )
                                 ));
                                 newMembers = newMembers.Add(AddAncestors(tds, javaInterface.GetInterfaceClass(), onlyNamespace: false));
                             });
@@ -401,11 +503,14 @@ namespace IncrementalCompiler
 
                     if (javaClassFile != null)
                     {
-                        result = result.Add(new GeneratedFile(
+                        result = result.Add(new GeneratedJavaFile(
                             sourcePath: tree.FilePath,
-                            filePath: javaClassFile.JavaFilePath(generatedProjectFilesDirectory),
-                            contents: javaClassFile.GenerateJava(),
-                            javaClassFile.Location
+                            location: javaClassFile.Location,
+                            javaFile: new JavaFile(
+                                module: javaClassFile.Module,
+                                path: javaClassFile.JavaFilePath(),
+                                contents: javaClassFile.GenerateJava()
+                            )
                         ));
                     }
                 }
@@ -427,23 +532,23 @@ namespace IncrementalCompiler
                         path: Path.Combine(generatedProjectFilesDirectory, tree.FilePath),
                         options: parseOptions,
                         encoding: Encoding.UTF8);
-                    result = result.Add(new GeneratedCsFile(tree.FilePath, nt, root.GetLocation()));
+                    result = result.Add(new GeneratedCsFile(sourcePath: tree.FilePath, tree: nt, location: root.GetLocation()));
                 }
                 return result.ToArray();
             }).ToArray();
-            var newFiles = results.OfType<GeneratedFile>().ToArray();
-            var csFiles = newFiles.OfType<GeneratedCsFile>().ToArray();
+            //var newFiles = results.OfType<GeneratedFile>().ToArray();
+            var csFiles = results.OfType<GeneratedCsFile>().ToArray();
             compilation = compilation.AddSyntaxTrees(csFiles.Select(_ => _.Tree));
-            foreach (var csFile in csFiles) sourceMap[csFile.FilePath] = csFile.Tree;
-            foreach (var file in newFiles)
+            foreach (var file in csFiles)
             {
+                sourceMap[file.FilePath] = file.Tree;
                 var generatedPath = file.FilePath;
                 Directory.CreateDirectory(Path.GetDirectoryName(generatedPath));
                 if (File.Exists(generatedPath))
                 {
                     diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
                         "ER0002", "Error", $"Could not generate file '{generatedPath}'. File already exists.", "Error", DiagnosticSeverity.Error, true
-                    ), file.location));
+                    ), file.Location));
                 }
                 else
                 {
@@ -451,13 +556,24 @@ namespace IncrementalCompiler
                     filesMapping.add(file.SourcePath, generatedPath);
                 }
             }
+            foreach (var file in results.OfType<GeneratedJavaFile>())
+            {
+                if (!filesMapping.tryAddJavaFile(file.SourcePath, file.JavaFile))
+                {
+                    diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                        "ER0002", "Error", $"Could not generate java file '{file.JavaFile.Path}'. File already exists.", "Error", DiagnosticSeverity.Error, true
+                    ), file.Location));
+                }
+            }
+
             compilation = MacroProcessor.EditTrees(
                 compilation, sourceMap, results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
             );
+            compilation = filesMapping.updateCompilation(compilation, parseOptions, assemblyName: assemblyName, generatedFilesDir: generatedProjectFilesDirectory);
             File.WriteAllLines(
                 Path.Combine(GENERATED_FOLDER, $"Generated-files-{assemblyName}.txt"),
-                filesMapping.dict
-                    .SelectMany(kv => kv.Value.Where(path => path.EndsWith(".cs", StringComparison.Ordinal)))
+                filesMapping.filesDict.Values
+                    .SelectMany(_ => _)
                     .Select(path => path.Replace("/", "\\")));
             return (compilation, diagnostic);
         }
