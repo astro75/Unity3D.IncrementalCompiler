@@ -62,6 +62,7 @@ namespace IncrementalCompiler
                         Directory.CreateDirectory(Path.GetDirectoryName(path));
                         File.WriteAllText(path, newTree.GetText().ToString());
                     }
+                    // this code smells a little
                     filesDict["GENERATED_JAVA"] = new List<string>(new []{ path });
                     var result =
                         prevousTree == null
@@ -211,23 +212,51 @@ namespace IncrementalCompiler
             }
 
             public IEnumerable<MemberDeclarationSyntax> GenerateMembers() {
-                return ParseClassMembers(
-                    $"static UnityEngine.AndroidJavaClass jc = new UnityEngine.AndroidJavaClass(\"{PackageWithClass}\");"
-                );
+                var line = $"static UnityEngine.AndroidJavaClass jc = new UnityEngine.AndroidJavaClass(\"{PackageWithClass}\");";
+                var secondLine = Symbol.IsStatic ? "" : "readonly UnityEngine.AndroidJavaObject jo;";
+                return ParseClassMembers(line + "\n" + secondLine);
             }
 
-            public MethodDeclarationSyntax GenerateMethod(IMethodSymbol symbol, MethodDeclarationSyntax syntax) {
+            static bool isSubType(ITypeSymbol type, string baseType) {
+                if (type == null) return false;
+                if (type.ToDisplayString() == baseType)
+                    return true;
+                return isSubType(type.BaseType, baseType);
+            }
+
+            public BaseMethodDeclarationSyntax GenerateMethod(IMethodSymbol symbol, BaseMethodDeclarationSyntax syntax) {
+                var isConstructor = symbol.MethodKind == MethodKind.Constructor;
                 var isVoid = symbol.ReturnType.SpecialType == SpecialType.System_Void;
-                var genericReturn = isVoid ? "" : "<" + syntax.ReturnType + ">";
                 var returnStatement = isVoid ? "" : "return ";
-                var callStetement = symbol.IsStatic ? "jc.CallStatic" : "jo.Call";
-                var firstParam = $"\"{symbol.Name}\"";
-                var remainingParams = syntax.ParameterList.Parameters.Select(ps => ps.Identifier.ToString());
+                var callStetement = isConstructor ? "jo = new UnityEngine.AndroidJavaObject" : (symbol.IsStatic ? "jc.CallStatic" : "jo.Call");
+                var firstParam = $"\"{(isConstructor ? PackageWithClass : symbol.Name)}\"";
+
+                string parameterName(IParameterSymbol ps) {
+                    var type = ps.Type;
+                    var name = ps.Name;
+                    if (isSubType(type, "com.tinylabproductions.TLPLib.Android.Bindings.Binding"))
+                        return name + ".java";
+                    return name;
+                }
+
+                var remainingParams = symbol.Parameters.Select(parameterName);
                 var arguments = Join(", ", new []{firstParam}.Concat(remainingParams));
-                return syntax
-                    .WithBody(ParseBlock($"{returnStatement}{callStetement}{genericReturn}({arguments});"))
-                    .WithExpressionBody(null)
-                    .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.None));
+
+                switch (syntax)
+                {
+                    case MethodDeclarationSyntax mds:
+                        var genericReturn = isVoid ? "" : "<" + mds.ReturnType + ">";
+                        return mds
+                            .WithBody(ParseBlock($"{returnStatement}{callStetement}{genericReturn}({arguments});"))
+                            .WithExpressionBody(null)
+                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.None));
+                    case ConstructorDeclarationSyntax cds:
+                        return cds
+                            .WithBody(ParseBlock($"{returnStatement}{callStetement}({arguments});"))
+                            .WithExpressionBody(null)
+                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.None));
+                }
+                throw new Exception("Wrong syntax type: " + syntax.GetType());
             }
 
             static string ToJavaType(ITypeSymbol type) {
@@ -260,11 +289,19 @@ namespace IncrementalCompiler
                         }
                         break;
                 }
-                switch (type.ToString()) {
-                    // TODO: allow subtypes and detect java type automatically
-                    case "UnityEngine.AndroidJavaProxy":
-                    case "UnityEngine.AndroidJavaObject": return "Object";
+
+
+                foreach (var attrData in type.GetAttributes()) {
+                    if (attrData.AttributeClass.ToDisplayString() == typeof(JavaBindingAttribute).FullName) {
+                        var instance = CreateAttributeByReflection<JavaBindingAttribute>(attrData);
+                        return instance.JavaClass;
+                    }
                 }
+
+                if (isSubType(type, "UnityEngine.AndroidJavaProxy") || isSubType(type, "UnityEngine.AndroidJavaObject")) {
+                    return "Object";
+                }
+
                 throw new Exception($"Unsupported type: {type.ToDisplayString()}");
             }
 
@@ -285,6 +322,10 @@ namespace IncrementalCompiler
 
             public ClassDeclarationSyntax GetInterfaceClass() {
                 return ParseClass(
+                    // JavaBinding attribute does nothing here.
+                    // Compiler does all code generation in one step,
+                    // so we can't depend on generated classes when generating other code
+                    // $"[GenerationAttributes.JavaBinding(\"{PackageWithClass}\")]\n" +
                     $"public class {Symbol.Name}Proxy : com.tinylabproductions.TLPLib.Android.JavaListenerProxy" +
                     Block(
                         Join("\n", allMethods.Select(m =>
@@ -482,7 +523,7 @@ namespace IncrementalCompiler
                                             javaClassFile.AddMethod(instance.MethodBody, methodSymbol);
                                             var syntaxes = methodSymbol.DeclaringSyntaxReferences;
                                             if (syntaxes.Length != 1) throw new Exception($"code must be in one place");
-                                            var syntax = (MethodDeclarationSyntax) syntaxes[0].GetSyntax();
+                                            var syntax = (BaseMethodDeclarationSyntax) syntaxes[0].GetSyntax();
                                             var replacedSyntax = javaClassFile.GenerateMethod(methodSymbol, syntax);
                                             replaceSyntax(syntax, replacedSyntax);
                                         });
