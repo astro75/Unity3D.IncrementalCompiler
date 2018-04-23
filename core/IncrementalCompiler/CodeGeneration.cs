@@ -212,7 +212,8 @@ namespace IncrementalCompiler
             }
 
             public IEnumerable<MemberDeclarationSyntax> GenerateMembers() {
-                var line = $"static UnityEngine.AndroidJavaClass jc = new UnityEngine.AndroidJavaClass(\"{PackageWithClass}\");";
+                var line = $"static UnityEngine.AndroidJavaClass jc = UnityEngine.Application.isEditor ? null : " +
+                           $"new UnityEngine.AndroidJavaClass(\"{PackageWithClass}\");";
                 var secondLine = Symbol.IsStatic ? "" : "readonly UnityEngine.AndroidJavaObject jo;";
                 return ParseClassMembers(line + "\n" + secondLine);
             }
