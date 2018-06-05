@@ -16,7 +16,13 @@ namespace IncrementalCompiler
     {
         public static CSharpCompilation Run(CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap)
         {
-            var macros = compilation.GetTypeByMetadataName(typeof(Macros).FullName);
+            var macrosType = typeof(Macros).FullName;
+            var macros = compilation.GetTypeByMetadataName(macrosType);
+
+            if (macros == null) {
+                throw new Exception($"Could not find type {macrosType} in project.");
+            }
+
             var builder = ImmutableDictionary.CreateBuilder<ISymbol, MacroRewriter.PropertyMacro>();
 
             ISymbol macroSymbol(string name) => macros.GetMembers(name).First();
