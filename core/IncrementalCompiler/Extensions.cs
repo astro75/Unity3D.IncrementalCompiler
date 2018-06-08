@@ -1,4 +1,6 @@
-﻿using System.Linq;
+﻿using System;
+using System.Collections.Generic;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -35,6 +37,21 @@ namespace IncrementalCompiler
         public static SyntaxTokenList Remove(this SyntaxTokenList tokens, SyntaxKind kind)
             => tokens.Remove(SF.Token(kind));
 
+        public static SyntaxTokenList RemoveOfKind(this SyntaxTokenList tokens, SyntaxKind kind) {
+            var i = tokens.IndexOfKind(kind);
+            return i != -1 ? tokens.RemoveAt(i) : tokens;
+        }
+
+        public static int IndexOfKind(this SyntaxTokenList tokens, SyntaxKind kind) {
+            var i = 0;
+            foreach (var t in tokens) {
+                if (t.IsKind(kind)) return i;
+                else i++;
+            }
+
+            return -1;
+        }
+
         public static SyntaxTokenList Add(this SyntaxTokenList modifiers, SyntaxKind kind)
             => modifiers.Any(m => m.IsKind(kind)) ? modifiers : modifiers.Add(SF.Token(kind));
 
@@ -66,10 +83,19 @@ namespace IncrementalCompiler
             return member;
         }
 
+        public static void ForEach<T>(this IEnumerable<T> enumeration, Action<T> action)
+        {
+            foreach(T item in enumeration)
+            {
+                action(item);
+            }
+        }
+
         public static LiteralExpressionSyntax StringLiteral(this string value)
             => SF.LiteralExpression(SyntaxKind.StringLiteralExpression, SF.Literal(value));
 
         public static BaseListSyntax EmptyBaseList = null;
+        public static BaseListSyntax NoTypeArguments = null;
         public static SyntaxList<AttributeListSyntax> EmptyAttributeList = SyntaxFactory.List<AttributeListSyntax>();
         public static SyntaxTriviaList EmptyTriviaList = SyntaxFactory.TriviaList();
     }

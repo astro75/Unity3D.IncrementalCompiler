@@ -11,6 +11,7 @@ namespace GenerationAttributes
         public bool GenerateComparer { get; set; } = true;
         public bool GenerateGetHashCode { get; set; } = true;
         public bool GenerateConstructor { get; set; } = true;
+        public bool GenerateStaticApply { get; set; } = false;
     }
 
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface)]

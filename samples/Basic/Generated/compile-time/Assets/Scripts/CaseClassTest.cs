@@ -1,4 +1,4 @@
-﻿#if UNITY_5
+#if UNITY_5
 
 
 using System;
@@ -10,7 +10,7 @@ namespace Assets.Scripts {
         public readonly int int1, int2;
 
         public string test() {
-            return Macros.className;
+            return "Assets.Scripts.DummyStruct";
         }
     }
 
