@@ -6,8 +6,12 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
+using IncrementalCompiler.SwitchAnalyzer;
+using IncrementalCompiler.SwitchEnum;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.Diagnostics;
 using Mono.CompilerServices.SymbolWriter;
 using NLog;
 
@@ -16,7 +20,7 @@ namespace IncrementalCompiler
     public sealed class Compiler : IDisposable
     {
         readonly Logger _logger = LogManager.GetLogger("Compiler");
-        CSharpCompilation _compilation;
+        CompilationWithAnalyzers _compilation;
         CompileOptions _options;
         FileTimeList _referenceFileList;
         FileTimeList _sourceFileList;
@@ -60,7 +64,7 @@ namespace IncrementalCompiler
             }
         }
 
-        (CompileResult, CSharpCompilation) BuildFull(CompileOptions options)
+        (CompileResult, CompilationWithAnalyzers) BuildFull(CompileOptions options)
         {
             var result = new CompileResult();
 
@@ -90,14 +94,15 @@ namespace IncrementalCompiler
                 keySelector: file => file,
                 elementSelector: CreateReference
             );
-
             logTime("Loaded references");
 
             _sourceMap = options.Files.AsParallel().Select(
                 fileName => (fileName, tree: ParseSource(fileName, parseOptions))).ToDictionary(t => t.fileName, t => t.tree);
-
             logTime("Loaded sources");
 
+            var analyzers = ImmutableArray.Create<DiagnosticAnalyzer>(
+                new SwitchEnumAnalyzer()
+            );
             var specificDiagnosticOptions = options.NoWarnings.ToDictionary(x => x, _ => ReportDiagnostic.Suppress);
             var compilation = CSharpCompilation.Create(
                 options.AssemblyName,
@@ -106,18 +111,38 @@ namespace IncrementalCompiler
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
                     .WithSpecificDiagnosticOptions(specificDiagnosticOptions)
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
-                    .WithAllowUnsafe(options.Options.Contains("-unsafe")));
-            logTime("Compialtion created");
+                    .WithAllowUnsafe(options.Options.Contains("-unsafe"))
+
+            )
+            .WithAnalyzers(analyzers);
+            logTime("Compilation created");
+
             ICollection<Diagnostic> diagnostic;
             (compilation, diagnostic) = CodeGeneration.Run(
-                false, compilation, compilation.SyntaxTrees, parseOptions, assemblyNameNoExtension, ref _filesMapping, _sourceMap
+                false,
+                compilation,
+                ((CSharpCompilation)compilation.Compilation).SyntaxTrees,
+                parseOptions,
+                assemblyNameNoExtension,
+                ref _filesMapping, _sourceMap
             );
             logTime("Code generated");
-            compilation = MacroProcessor.Run(compilation, compilation.SyntaxTrees, _sourceMap);
+
+            var tt = new CancellationToken();
+            var errors = await compilation.GetAllDiagnosticsAsync(tt);
+
+            // SwitchEnumAnalyzer.Run()
+            // .ForEach(diagnostic.Add);
+            logTime("Analyzers Added to compilation");
+
+            compilation = MacroProcessor.Run(
+                (CSharpCompilation)compilation.Compilation,
+                ((CSharpCompilation)compilation.Compilation).SyntaxTrees,
+                _sourceMap
+            ).WithAnalyzers(compilation.Analyzers);
             logTime("Macros completed");
 
-            Emit(result, diagnostic, compilation);
-
+            Emit(result, diagnostic, (CSharpCompilation)compilation.Compilation);
             logTime("Emitted dll");
 
             _logger.Info($"Total elapsed {totalSW.Elapsed}");
@@ -138,20 +163,27 @@ namespace IncrementalCompiler
             {
                 _logger.Info("+ {0}", file);
                 var reference = CreateReference(file);
-                _compilation = _compilation.AddReferences(reference);
+                _compilation = _compilation.Compilation.AddReferences(reference).WithAnalyzers(_compilation.Analyzers);
                 _referenceMap.Add(file, reference);
             }
             foreach (var file in referenceChanges.Changed)
             {
                 _logger.Info("* {0}", file);
                 var reference = CreateReference(file);
-                _compilation = _compilation.ReplaceReference(_referenceMap[file], reference);
+                _compilation =
+                    _compilation
+                    .Compilation
+                    .ReplaceReference(_referenceMap[file], reference)
+                    .WithAnalyzers(_compilation.Analyzers);
                 _referenceMap[file] = reference;
             }
             foreach (var file in referenceChanges.Removed)
             {
                 _logger.Info("- {0}", file);
-                _compilation = _compilation.RemoveReferences(_referenceMap[file]);
+                _compilation = _compilation
+                    .Compilation
+                    .RemoveReferences(_referenceMap[file])
+                    .WithAnalyzers(_compilation.Analyzers);
                 _referenceMap.Remove(file);
             }
 
@@ -159,7 +191,7 @@ namespace IncrementalCompiler
 
             var sourceChanges = _sourceFileList.Update(options.Files);
 
-            var allTrees = _compilation.SyntaxTrees;
+            var allTrees = _compilation.Compilation.SyntaxTrees;
 
             var newTrees = sourceChanges.Added.AsParallel().Select(file => {
                 var tree = ParseSource(file, parseOptions);
@@ -171,7 +203,10 @@ namespace IncrementalCompiler
                 _sourceMap.Add(file, tree);
             }
 
-            _compilation = _compilation.AddSyntaxTrees(newTrees.Select(t => t.tree));
+            _compilation = _compilation
+                .Compilation
+                .AddSyntaxTrees(newTrees.Select(t => t.tree))
+                .WithAnalyzers(_compilation.Analyzers);
 
             var changes = sourceChanges.Changed.AsParallel().Select(file => {
                 var tree = ParseSource(file, parseOptions);
@@ -180,7 +215,10 @@ namespace IncrementalCompiler
 
             foreach (var (file, tree) in changes) {
                 _logger.Info("* {0}", file);
-                _compilation = _compilation.ReplaceSyntaxTree(_sourceMap[file], tree);
+                _compilation = _compilation
+                    .Compilation
+                    .ReplaceSyntaxTree(_sourceMap[file], tree)
+                    .WithAnalyzers(_compilation.Analyzers);
                 _sourceMap[file] = tree;
             }
 
@@ -199,7 +237,10 @@ namespace IncrementalCompiler
                 .Where(_sourceMap.ContainsKey)
                 .Select(path => _sourceMap[path]);
 
-            _compilation = _compilation.RemoveSyntaxTrees(removedTrees.Concat(generatedFilesRemove));
+            _compilation = _compilation
+                .Compilation
+                .RemoveSyntaxTrees(removedTrees.Concat(generatedFilesRemove))
+                .WithAnalyzers(_compilation.Analyzers);
 
             _filesMapping.removeFiles(generatedRemove);
 
@@ -213,8 +254,16 @@ namespace IncrementalCompiler
             //TODO: macros on new generated files
 
             var treeSet = allAddedTrees.Select(t => t.FilePath).ToImmutableHashSet();
-            var treesForMacroProcessor = _compilation.SyntaxTrees.Where(t => treeSet.Contains(t.FilePath)).ToImmutableArray();
-            _compilation = MacroProcessor.Run(_compilation, treesForMacroProcessor, _sourceMap);
+            var treesForMacroProcessor = _compilation
+                .Compilation
+                .SyntaxTrees
+                .Where(t => treeSet.Contains(t.FilePath))
+                .ToImmutableArray();
+            _compilation = MacroProcessor.Run(
+                (CSharpCompilation)_compilation.Compilation,
+                treesForMacroProcessor,
+                _sourceMap
+            ).WithAnalyzers(_compilation.Analyzers);
 
             // emit or reuse prebuilt output
 
@@ -257,7 +306,7 @@ namespace IncrementalCompiler
 
                 var result = previousResult;
                 result.Clear();
-                Emit(result, diagnostic, _compilation);
+                Emit(result, diagnostic, (CSharpCompilation)_compilation.Compilation);
                 return result;
             }
         }

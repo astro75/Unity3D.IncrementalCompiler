@@ -9,6 +9,7 @@ using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Diagnostics;
 using MonadLib;
 using static System.String;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
@@ -385,9 +386,9 @@ namespace IncrementalCompiler
             }
         }
 
-        public static (CSharpCompilation, ICollection<Diagnostic>) Run(
+        public static (CompilationWithAnalyzers, ICollection<Diagnostic>) Run(
             bool incrementalRun,
-            CSharpCompilation compilation,
+            CompilationWithAnalyzers compWithAnalyzers,
             ImmutableArray<SyntaxTree> trees,
             CSharpParseOptions parseOptions,
             string assemblyName,
@@ -400,7 +401,7 @@ namespace IncrementalCompiler
                 DeleteFilesAndFoldersRecursively(generatedProjectFilesDirectory);
             }
             Directory.CreateDirectory(generatedProjectFilesDirectory);
-            var oldCompilation = compilation;
+            var oldCompilation = compWithAnalyzers.Compilation;
             var diagnostic = new List<Diagnostic>();
 
             void tryAttribute<A>(AttributeData attr, Action<A> a) where A : Attribute {
@@ -587,26 +588,28 @@ namespace IncrementalCompiler
                 return result.ToArray();
             }).ToArray();
             var csFiles = results.OfType<GeneratedCsFile>().ToArray();
-            compilation = compilation.AddSyntaxTrees(csFiles.Select(_ => _.Tree));
-            foreach (var file in csFiles)
-            {
+
+            compWithAnalyzers =
+                compWithAnalyzers.Compilation.AddSyntaxTrees(csFiles.Select(_ => _.Tree))
+                .WithAnalyzers(compWithAnalyzers.Analyzers);
+
+            foreach (var file in csFiles) {
                 sourceMap[file.FilePath] = file.Tree;
                 var generatedPath = file.FilePath;
                 Directory.CreateDirectory(Path.GetDirectoryName(generatedPath));
-                if (File.Exists(generatedPath))
-                {
+                if (File.Exists(generatedPath)) {
                     diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
-                        "ER0002", "Error", $"Could not generate file '{generatedPath}'. File already exists.", "Error", DiagnosticSeverity.Error, true
+                        "ER0002", "Error",
+                        $"Could not generate file '{generatedPath}'. File already exists.",
+                        "Error", DiagnosticSeverity.Error, true
                     ), file.Location));
-                }
-                else
-                {
+                } else {
                     File.WriteAllText(generatedPath, file.Contents);
                     filesMapping.add(file.SourcePath, generatedPath);
                 }
             }
-            foreach (var file in results.OfType<GeneratedJavaFile>())
-            {
+
+            foreach (var file in results.OfType<GeneratedJavaFile>()) {
                 if (!filesMapping.tryAddJavaFile(file.SourcePath, file.JavaFile))
                 {
                     diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
@@ -615,16 +618,32 @@ namespace IncrementalCompiler
                 }
             }
 
-            compilation = MacroProcessor.EditTrees(
-                compilation, sourceMap, results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
-            );
-            compilation = filesMapping.updateCompilation(compilation, parseOptions, assemblyName: assemblyName, generatedFilesDir: generatedProjectFilesDirectory);
+            compWithAnalyzers =
+                MacroProcessor.EditTrees(
+                    (CSharpCompilation)compWithAnalyzers.Compilation,
+                    sourceMap,
+                    results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
+                )
+                .WithAnalyzers(compWithAnalyzers.Analyzers);
+
+            compWithAnalyzers =
+                filesMapping
+                .updateCompilation(
+                        (CSharpCompilation)compWithAnalyzers.Compilation,
+                        parseOptions,
+                        assemblyName: assemblyName,
+                        generatedFilesDir: generatedProjectFilesDirectory
+                )
+                .WithAnalyzers(compWithAnalyzers.Analyzers);
+
             File.WriteAllLines(
                 Path.Combine(GENERATED_FOLDER, $"Generated-files-{assemblyName}.txt"),
                 filesMapping.filesDict.Values
                     .SelectMany(_ => _)
-                    .Select(path => path.Replace("/", "\\")));
-            return (compilation, diagnostic);
+                    .Select(path => path.Replace("/", "\\"))
+            );
+
+            return (compWithAnalyzers, diagnostic);
         }
 
         static Location attrLocation(AttributeData attr) => attr.ApplicationSyntaxReference.GetSyntax().GetLocation();
