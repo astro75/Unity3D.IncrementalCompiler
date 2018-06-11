@@ -19,53 +19,56 @@ namespace Assets.Scripts {
     enum Enum { A, B, C }
     enum ByteEnum : byte { A, B, C }
     enum LongEnum : long { A, B, C }
+    enum testEnum : int {
+        lol,
+        xd,
+        lmfao
+    }
 
-    // [Record(GenerateToString = false, GenerateStaticApply = true)]
-    // public partial class ClassWithCompanion {
-    //     public readonly int int1, int2;
-    //     public readonly StructTest structWithHash;
-    //     [PublicAccessor] public readonly Class _classRef;
-    // }
-    //
-    // sealed partial class ClassNoCompanion {
-    //     public readonly int int2;
-    //     [PublicAccessor] public readonly Class _classRef;
-    // }
     [Record(GenerateStaticApply = true)]
-    public partial struct CompanionasBeGenericu {
+    public partial struct CompanionNoGenerics {
         public readonly string name;
         public readonly Func<int, string> get;
         public readonly Func<double, int> nToA;
     }
 
     [Record(GenerateStaticApply = true)]
-    public partial struct VienasGenericArgumentas<A> {
+    public partial struct OneGenericArg<A> {
         public readonly string name;
         public readonly Func<A, string> get;
     }
 
-    [Record(GenerateConstructor = false; GenerateStaticApply = true)]
-    public partial struct NegeneruotKonstruktoriaus<A> {
+    [Record(GenerateConstructor = false, GenerateStaticApply = true)]
+    public partial struct NoConstructor<A> {
         public readonly string name;
         public readonly Func<A, string> get;
     }
 
-    [Record(GenerateComparer = false; GenerateStaticApply = true)]
-    public partial struct KeliGenericArgumentai<A, N> {
+    [Record(GenerateComparer = false, GenerateStaticApply = true)]
+    public partial struct SeveralGenericArgs<A, N> {
         public readonly string name;
         public readonly Func<A, string> get;
         public readonly Func<N, A> nToA;
     }
 
     [Record]
-    public partial struct BeCompanionAtributo {
+    public partial struct NoCompanionAttribute {
         public readonly string name;
         public readonly Func<int, string> get;
         public readonly Func<double, int> nToA;
-    }
 
-    [Record(GenerateStaticApply = true)]
-    public partial struct JokiuMemberiu {
+        public void lolxd() {
+            var xd = testEnum.xd;
+
+            switch (xd) {
+                case testEnum.lol: 
+                    Console.WriteLine("enum: Lol");
+                    break;
+                case testEnum.lmfao: 
+                    Console.WriteLine("enum: lmfao");
+                    break;
+            }
+        }
     }
 
     #region evaldo testai

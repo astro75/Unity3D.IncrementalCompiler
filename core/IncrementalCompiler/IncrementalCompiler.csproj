@@ -187,6 +187,7 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
+    <Content Include="Analyzers\SwitchEnum.dll" />
     <Content Include="IncrementalCompiler.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

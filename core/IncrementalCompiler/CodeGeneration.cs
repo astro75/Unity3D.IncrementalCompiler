@@ -386,9 +386,9 @@ namespace IncrementalCompiler
             }
         }
 
-        public static (CompilationWithAnalyzers, ICollection<Diagnostic>) Run(
+        public static (CSharpCompilation, List<Diagnostic>) Run(
             bool incrementalRun,
-            CompilationWithAnalyzers compWithAnalyzers,
+            CSharpCompilation compilation,
             ImmutableArray<SyntaxTree> trees,
             CSharpParseOptions parseOptions,
             string assemblyName,
@@ -401,7 +401,7 @@ namespace IncrementalCompiler
                 DeleteFilesAndFoldersRecursively(generatedProjectFilesDirectory);
             }
             Directory.CreateDirectory(generatedProjectFilesDirectory);
-            var oldCompilation = compWithAnalyzers.Compilation;
+            var oldCompilation = compilation;
             var diagnostic = new List<Diagnostic>();
 
             void tryAttribute<A>(AttributeData attr, Action<A> a) where A : Attribute {
@@ -589,9 +589,7 @@ namespace IncrementalCompiler
             }).ToArray();
             var csFiles = results.OfType<GeneratedCsFile>().ToArray();
 
-            compWithAnalyzers =
-                compWithAnalyzers.Compilation.AddSyntaxTrees(csFiles.Select(_ => _.Tree))
-                .WithAnalyzers(compWithAnalyzers.Analyzers);
+            compilation = compilation.AddSyntaxTrees(csFiles.Select(_ => _.Tree));
 
             foreach (var file in csFiles) {
                 sourceMap[file.FilePath] = file.Tree;
@@ -618,23 +616,20 @@ namespace IncrementalCompiler
                 }
             }
 
-            compWithAnalyzers =
-                MacroProcessor.EditTrees(
-                    (CSharpCompilation)compWithAnalyzers.Compilation,
-                    sourceMap,
-                    results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
-                )
-                .WithAnalyzers(compWithAnalyzers.Analyzers);
+            compilation = MacroProcessor.EditTrees(
+                compilation,
+                sourceMap,
+                results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
+            );
 
-            compWithAnalyzers =
+            compilation =
                 filesMapping
                 .updateCompilation(
-                        (CSharpCompilation)compWithAnalyzers.Compilation,
-                        parseOptions,
-                        assemblyName: assemblyName,
-                        generatedFilesDir: generatedProjectFilesDirectory
-                )
-                .WithAnalyzers(compWithAnalyzers.Analyzers);
+                    compilation,
+                    parseOptions,
+                    assemblyName: assemblyName,
+                    generatedFilesDir: generatedProjectFilesDirectory
+                );
 
             File.WriteAllLines(
                 Path.Combine(GENERATED_FOLDER, $"Generated-files-{assemblyName}.txt"),
@@ -643,7 +638,7 @@ namespace IncrementalCompiler
                     .Select(path => path.Replace("/", "\\"))
             );
 
-            return (compWithAnalyzers, diagnostic);
+            return (compilation, diagnostic);
         }
 
         static Location attrLocation(AttributeData attr) => attr.ApplicationSyntaxReference.GetSyntax().GetLocation();
@@ -950,75 +945,6 @@ namespace IncrementalCompiler
 
         static IEnumerable<SyntaxNodeOrToken> convertTokens(IEnumerable<SyntaxToken> tokens) =>
             tokens.Select<SyntaxToken, SyntaxNodeOrToken>(_ => _);
-
-        // static Maybe<TypeDeclarationSyntax> GenerateCaseClassCompanion(
-        //     RecordAttribute attr, TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props
-        // ) {
-        //     if (
-        //         cds.TypeParameterList == null
-        //         || !attr.GenerateStaticApply
-        //         || !attr.GenerateConstructor
-        //         || !props.Any()
-        //     )
-        //         return Maybe.MZero<TypeDeclarationSyntax>();
-        //     else
-        //     {
-        //         var classModifiers =
-        //             cds.Modifiers
-        //             .RemoveOfKind(SyntaxKind.ReadOnlyKeyword)
-        //             .Add(SyntaxKind.StaticKeyword);
-        //
-        //         var methodModifiers = SF.TokenList(
-        //             SF.Token(SyntaxKind.PublicKeyword),
-        //             SF.Token(SyntaxKind.StaticKeyword)
-        //         );
-        //
-        //         var funcParams =
-        //             SF.ParameterList(SF.SeparatedList<ParameterSyntax>(
-        //                 CommaSeparatedNodesOrTokens(convertNodes(ToParams(props)))
-        //             ));
-        //
-        //         var genericArgs =
-        //             SF.SeparatedList(cds.TypeParameterList.Parameters.Select(x => SF.ParseTypeName(x.ToString())));
-        //
-        //         var methodDeclaration = SF.MethodDeclaration(
-        //             SF.GenericName(cds.Identifier)
-        //             .WithTypeArgumentList(SF.TypeArgumentList(genericArgs)),
-        //             SF.Identifier("a")
-        //         );
-        //
-        //         var methodBody = SF.ArrowExpressionClause(
-        //             SF.ObjectCreationExpression(
-        //                 SF.GenericName(cds.Identifier)
-        //                 .WithTypeArgumentList(SF.TypeArgumentList(genericArgs))
-        //             )
-        //             .WithArgumentList(
-        //                 SF.ArgumentList(
-        //                     SF.SeparatedList<ArgumentSyntax>(
-        //                         CommaSeparatedNodesOrTokens(convertNodes(props.Select(_ =>
-        //                             SF.Argument(SF.IdentifierName(_.identifier.ValueText)))))
-        //                     )
-        //                 )
-        //             )
-        //         );
-        //
-        //         return Maybe.Just(
-        //             (TypeDeclarationSyntax)
-        //             SF.ClassDeclaration(cds.Identifier)
-        //             .WithModifiers(classModifiers)
-        //             .WithMembers(
-        //                 SF.SingletonList<MemberDeclarationSyntax>(
-        //                     methodDeclaration
-        //                     .WithModifiers(methodModifiers)
-        //                     .WithTypeParameterList(cds.TypeParameterList)
-        //                     .WithParameterList(funcParams)
-        //                     .WithExpressionBody(methodBody)
-        //                     .WithSemicolonToken(SF.Token(SyntaxKind.SemicolonToken))
-        //                 )
-        //             )
-        //         );
-        //     }
-        // }
 
         static Maybe<TypeDeclarationSyntax> GenerateCaseClassCompanion(
             RecordAttribute attr, TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props

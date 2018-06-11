@@ -13,18 +13,6 @@ namespace IncrementalCompiler.SwitchEnum {
     [DiagnosticAnalyzer(LanguageNames.CSharp)]
     public class SwitchEnumAnalyzer : DiagnosticAnalyzer
     {
-        public static IEnumerable<Diagnostic> Run() {
-            var x = Diagnostic.Create(new DiagnosticDescriptor(
-                "ER0001",
-                "Error",
-                "Not all enum cases covered in switch at line...",
-                "Error",
-                DiagnosticSeverity.Error,
-                true
-            ), Location.None);
-            yield return x;
-        }
-
         const string DiagnosticId = "SwitchEnumAnalyzer";
 
         const string DefaultUnreachableRuleTitle = "Switch default unreachable";

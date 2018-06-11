@@ -6,6 +6,9 @@
       <e p="CodeGeneration" t="Include" />
       <e p="Core" t="Include">
         <e p="IncrementalCompiler" t="IncludeRecursive">
+          <e p="Analyzers" t="Include">
+            <e p="SwitchEnum.dll" t="Include" />
+          </e>
           <e p="App.config" t="Include" />
           <e p="bin" t="ExcludeRecursive" />
           <e p="CodeGeneration.cs" t="Include" />
