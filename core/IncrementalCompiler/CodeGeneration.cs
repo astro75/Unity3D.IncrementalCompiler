@@ -912,95 +912,6 @@ namespace IncrementalCompiler
             return new CaseClass(caseclass, companion);
         }
 
-        static IEnumerable<ParameterSyntax> ToParams(IEnumerable<TypeWithIdentifier> props) =>
-            props.Select(prop =>
-                SF.Parameter(prop.identifier)
-                .WithType(prop.type)
-            );
-
-        static SyntaxNodeOrTokenList CommaSeparatedNodesOrTokens(IEnumerable<SyntaxNodeOrToken> tokensOrNodes) {
-            var separated = SF.NodeOrTokenList();
-            tokensOrNodes.ForEach(x =>
-                separated = separated.Add(x).Add(SF.Token(SyntaxKind.CommaToken))
-            );
-            return separated.RemoveAt(separated.Count - 1);
-        }
-
-        static IEnumerable<SyntaxNodeOrToken> convertNodes(IEnumerable<SyntaxNode> nodes) =>
-            nodes.Select<SyntaxNode, SyntaxNodeOrToken>(_ => _);
-
-        static IEnumerable<SyntaxNodeOrToken> convertTokens(IEnumerable<SyntaxToken> tokens) =>
-            tokens.Select<SyntaxToken, SyntaxNodeOrToken>(_ => _);
-
-        // static Maybe<TypeDeclarationSyntax> GenerateCaseClassCompanion(
-        //     RecordAttribute attr, TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props
-        // ) {
-        //     if (
-        //         cds.TypeParameterList == null
-        //         || !attr.GenerateStaticApply
-        //         || !attr.GenerateConstructor
-        //         || !props.Any()
-        //     )
-        //         return Maybe.MZero<TypeDeclarationSyntax>();
-        //     else
-        //     {
-        //         var classModifiers =
-        //             cds.Modifiers
-        //             .RemoveOfKind(SyntaxKind.ReadOnlyKeyword)
-        //             .Add(SyntaxKind.StaticKeyword);
-        //
-        //         var methodModifiers = SF.TokenList(
-        //             SF.Token(SyntaxKind.PublicKeyword),
-        //             SF.Token(SyntaxKind.StaticKeyword)
-        //         );
-        //
-        //         var funcParams =
-        //             SF.ParameterList(SF.SeparatedList<ParameterSyntax>(
-        //                 CommaSeparatedNodesOrTokens(convertNodes(ToParams(props)))
-        //             ));
-        //
-        //         var genericArgs =
-        //             SF.SeparatedList(cds.TypeParameterList.Parameters.Select(x => SF.ParseTypeName(x.ToString())));
-        //
-        //         var methodDeclaration = SF.MethodDeclaration(
-        //             SF.GenericName(cds.Identifier)
-        //             .WithTypeArgumentList(SF.TypeArgumentList(genericArgs)),
-        //             SF.Identifier("a")
-        //         );
-        //
-        //         var methodBody = SF.ArrowExpressionClause(
-        //             SF.ObjectCreationExpression(
-        //                 SF.GenericName(cds.Identifier)
-        //                 .WithTypeArgumentList(SF.TypeArgumentList(genericArgs))
-        //             )
-        //             .WithArgumentList(
-        //                 SF.ArgumentList(
-        //                     SF.SeparatedList<ArgumentSyntax>(
-        //                         CommaSeparatedNodesOrTokens(convertNodes(props.Select(_ =>
-        //                             SF.Argument(SF.IdentifierName(_.identifier.ValueText)))))
-        //                     )
-        //                 )
-        //             )
-        //         );
-        //
-        //         return Maybe.Just(
-        //             (TypeDeclarationSyntax)
-        //             SF.ClassDeclaration(cds.Identifier)
-        //             .WithModifiers(classModifiers)
-        //             .WithMembers(
-        //                 SF.SingletonList<MemberDeclarationSyntax>(
-        //                     methodDeclaration
-        //                     .WithModifiers(methodModifiers)
-        //                     .WithTypeParameterList(cds.TypeParameterList)
-        //                     .WithParameterList(funcParams)
-        //                     .WithExpressionBody(methodBody)
-        //                     .WithSemicolonToken(SF.Token(SyntaxKind.SemicolonToken))
-        //                 )
-        //             )
-        //         );
-        //     }
-        // }
-
         static Maybe<TypeDeclarationSyntax> GenerateCaseClassCompanion(
             RecordAttribute attr, TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props
         ) {
@@ -1018,70 +929,25 @@ namespace IncrementalCompiler
                     );
         }
 
+        static string joinCommaSeparated<A>(IEnumerable<A> collection, Func<A, string> mapper) =>
+            collection
+            .Select(mapper)
+            .Aggregate((p1, p2) => p1 + ", " + p2);
+
         static Maybe<SyntaxList<MemberDeclarationSyntax>> GenerateStaticApply(
             RecordAttribute attr, TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props
         ) {
-            if (
-                !attr.GenerateStaticApply
-                || !attr.GenerateConstructor
-                || !props.Any()
-            )
+            if (!attr.GenerateStaticApply || !attr.GenerateConstructor || !props.Any())
                 return Maybe.MZero<SyntaxList<MemberDeclarationSyntax>>();
-            else
-            {
-                var methodModifiers = SF.TokenList(
-                    SF.Token(SyntaxKind.PublicKeyword),
-                    SF.Token(SyntaxKind.StaticKeyword)
-                );
+            else {
+                var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
+                var funcParamsStr = joinCommaSeparated(props, _ => _.type + " " + _.identifier.ValueText);
+                var funcArgs = joinCommaSeparated(props, _ => _.identifier.ValueText);
 
-                var funcParams =
-                    SF.ParameterList(SF.SeparatedList<ParameterSyntax>(
-                        CommaSeparatedNodesOrTokens(convertNodes(ToParams(props)))
-                    ));
-
-                var genericArgs =
-                    cds.TypeParameterList == null
-                    ? Maybe.MZero<SeparatedSyntaxList<TypeSyntax>>()
-                    : Maybe.Just(
-                            SF.SeparatedList(
-                                cds.TypeParameterList.Parameters.Select(x =>
-                                    SF.ParseTypeName(x.ToString())
-                            ))
-                    );
-
-                var returnTypeName =
-                    cds.TypeParameterList == null
-                    ? (SimpleNameSyntax) SF.IdentifierName(cds.Identifier.ValueText)
-                    : SF.GenericName(cds.Identifier.ValueText)
-                        .WithTypeArgumentList(SF.TypeArgumentList(genericArgs.FromJust));
-
-                var methodDeclaration = SF.MethodDeclaration(
-                    returnTypeName,
-                    SF.Identifier("a")
-                );
-
-                var methodBody = SF.ArrowExpressionClause(
-                    SF.ObjectCreationExpression(returnTypeName)
-                    .WithArgumentList(
-                        SF.ArgumentList(
-                            SF.SeparatedList<ArgumentSyntax>(
-                                CommaSeparatedNodesOrTokens(convertNodes(props.Select(_ =>
-                                    SF.Argument(SF.IdentifierName(_.identifier.ValueText)))))
-                            )
-                        )
-                    )
-                );
-
-                return Maybe.Just(
-                    SF.SingletonList<MemberDeclarationSyntax>(
-                        methodDeclaration
-                        .WithModifiers(methodModifiers)
-                        .WithTypeParameterList(cds.TypeParameterList)
-                        .WithParameterList(funcParams)
-                        .WithExpressionBody(methodBody)
-                        .WithSemicolonToken(SF.Token(SyntaxKind.SemicolonToken))
-                    )
-                );
+                return Maybe.Just(ParseClassMembers(
+                    $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +
+                    $"({funcParamsStr}) => new {cds.Identifier.ValueText}{genericArgsStr}({funcArgs});"
+                ));
             }
         }
 

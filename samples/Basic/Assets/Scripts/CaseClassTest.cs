@@ -6,13 +6,13 @@ using System.Collections.Generic;
 using GenerationAttributes;
 
 namespace Assets.Scripts {
-    struct DummyStruct {
-        public readonly int int1, int2;
+    // struct DummyStruct {
+    //     public readonly int int1, int2;
 
-        public string test() {
-            return Macros.className;
-        }
-    }
+    //     public string test() {
+    //         return Macros.className;
+    //     }
+    // }
 
     class Class { }
 
@@ -32,40 +32,36 @@ namespace Assets.Scripts {
     //     [PublicAccessor] public readonly Class _classRef;
     // }
     [Record(GenerateStaticApply = true)]
-    public partial struct CompanionasBeGenericu {
+    public partial struct CCCompanionWithoutGenerics {
         public readonly string name;
         public readonly Func<int, string> get;
         public readonly Func<double, int> nToA;
     }
 
     [Record(GenerateStaticApply = true)]
-    public partial struct VienasGenericArgumentas<A> {
+    public partial struct CCOneGenericArgument<A> {
         public readonly string name;
         public readonly Func<A, string> get;
     }
 
-    [Record(GenerateConstructor = false; GenerateStaticApply = true)]
-    public partial struct NegeneruotKonstruktoriaus<A> {
+    [Record(GenerateConstructor = false, GenerateStaticApply = true)]
+    public partial struct CCNoConstructor<A> {
         public readonly string name;
         public readonly Func<A, string> get;
     }
 
-    [Record(GenerateComparer = false; GenerateStaticApply = true)]
-    public partial struct KeliGenericArgumentai<A, N> {
+    [Record(GenerateComparer = false, GenerateStaticApply = true)]
+    public partial struct CCSeveralGenerics<A, N> {
         public readonly string name;
         public readonly Func<A, string> get;
         public readonly Func<N, A> nToA;
     }
 
     [Record]
-    public partial struct BeCompanionAtributo {
+    public partial struct CCNoStaticApply {
         public readonly string name;
         public readonly Func<int, string> get;
         public readonly Func<double, int> nToA;
-    }
-
-    [Record(GenerateStaticApply = true)]
-    public partial struct JokiuMemberiu {
     }
 
     #region evaldo testai
