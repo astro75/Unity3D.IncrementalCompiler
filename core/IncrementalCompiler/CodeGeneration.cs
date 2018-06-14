@@ -779,6 +779,8 @@ namespace IncrementalCompiler
 
             var fieldsAndProps = fields.Concat(properties).ToArray();
 
+            if (!fieldsAndProps.Any()) throw new Exception("The record has no fields and therefore cannot be created");
+
             var constructor = createIf(attr.GenerateConstructor, () =>
                 ImmutableList.Create((MemberDeclarationSyntax) SF.ConstructorDeclaration(cds.Identifier)
                 .WithModifiers(SF.TokenList(SF.Token(SyntaxKind.PublicKeyword)))
@@ -898,21 +900,25 @@ namespace IncrementalCompiler
             var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier));
             var companion = Maybe.MZero<TypeDeclarationSyntax>();
             if (attr.GenerateStaticApply) {
-                if (cds.TypeParameterList == null) {
-                    var applyOpt = GenerateStaticApply(attr, cds, propsAsStruct);
-                    if (applyOpt.IsJust)
-                        newMembers = newMembers.Concat(applyOpt.FromJust);
-                } else {
-                    companion = GenerateCaseClassCompanion(attr, cds, propsAsStruct);
+                if (!attr.GenerateConstructor)
+                    throw new Exception(
+                        "Couldn't generate static apply because the record " +
+                        "parameter GenerateConstructor is set to false."
+                    );
+                else {
+                    if (cds.TypeParameterList == null) {
+                        newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
+                    } else {
+                        companion = Maybe.Just(GenerateCaseClassCompanion(attr, cds, propsAsStruct));
+                    }
                 }
             }
 
             var caseclass = CreatePartial(cds, newMembers, baseList);
-
             return new CaseClass(caseclass, companion);
         }
 
-        static Maybe<TypeDeclarationSyntax> GenerateCaseClassCompanion(
+        static TypeDeclarationSyntax GenerateCaseClassCompanion(
             RecordAttribute attr, TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props
         ) {
             var classModifiers =
@@ -920,13 +926,10 @@ namespace IncrementalCompiler
                 .RemoveOfKind(SyntaxKind.ReadOnlyKeyword)
                 .Add(SyntaxKind.StaticKeyword);
 
-            return GenerateStaticApply(attr, cds, props)
-                    .Map(applyMethod =>
-                        (TypeDeclarationSyntax)
-                        SF.ClassDeclaration(cds.Identifier)
-                            .WithModifiers(classModifiers)
-                            .WithMembers(applyMethod)
-                    );
+            var applyMethod = GenerateStaticApply(cds, props);
+            return SF.ClassDeclaration(cds.Identifier)
+                    .WithModifiers(classModifiers)
+                    .WithMembers(applyMethod);
         }
 
         static string joinCommaSeparated<A>(IEnumerable<A> collection, Func<A, string> mapper) =>
@@ -934,21 +937,17 @@ namespace IncrementalCompiler
             .Select(mapper)
             .Aggregate((p1, p2) => p1 + ", " + p2);
 
-        static Maybe<SyntaxList<MemberDeclarationSyntax>> GenerateStaticApply(
-            RecordAttribute attr, TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props
+        static SyntaxList<MemberDeclarationSyntax> GenerateStaticApply(
+            TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props
         ) {
-            if (!attr.GenerateStaticApply || !attr.GenerateConstructor || !props.Any())
-                return Maybe.MZero<SyntaxList<MemberDeclarationSyntax>>();
-            else {
-                var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
-                var funcParamsStr = joinCommaSeparated(props, _ => _.type + " " + _.identifier.ValueText);
-                var funcArgs = joinCommaSeparated(props, _ => _.identifier.ValueText);
+            var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
+            var funcParamsStr = joinCommaSeparated(props, _ => _.type + " " + _.identifier.ValueText);
+            var funcArgs = joinCommaSeparated(props, _ => _.identifier.ValueText);
 
-                return Maybe.Just(ParseClassMembers(
-                    $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +
-                    $"({funcParamsStr}) => new {cds.Identifier.ValueText}{genericArgsStr}({funcArgs});"
-                ));
-            }
+            return ParseClassMembers(
+                $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +
+                $"({funcParamsStr}) => new {cds.Identifier.ValueText}{genericArgsStr}({funcArgs});"
+            );
         }
 
         private static TypeDeclarationSyntax CreatePartial(

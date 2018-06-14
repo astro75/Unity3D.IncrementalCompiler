@@ -44,7 +44,7 @@ namespace Assets.Scripts {
         public readonly Func<A, string> get;
     }
 
-    [Record(GenerateConstructor = false, GenerateStaticApply = true)]
+    [Record(GenerateConstructor = false)]
     public partial struct CCNoConstructor<A> {
         public readonly string name;
         public readonly Func<A, string> get;
@@ -62,6 +62,10 @@ namespace Assets.Scripts {
         public readonly string name;
         public readonly Func<int, string> get;
         public readonly Func<double, int> nToA;
+    }
+
+    [Record]
+    public partial struct EmptyRecord {
     }
 
     #region evaldo testai
