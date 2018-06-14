@@ -36,7 +36,6 @@ namespace Assets.Scripts
 
         public static bool operator ==(CompanionNoGenerics left, CompanionNoGenerics right) => left.Equals(right);
         public static bool operator !=(CompanionNoGenerics left, CompanionNoGenerics right) => !left.Equals(right);
-        public static CompanionNoGenerics a(string name, Func<int, string> get, Func<double, int> nToA) => new CompanionNoGenerics(name, get, nToA);
     }
 }
 
@@ -72,14 +71,6 @@ namespace Assets.Scripts
 
         public static bool operator ==(OneGenericArg<A> left, OneGenericArg<A> right) => left.Equals(right);
         public static bool operator !=(OneGenericArg<A> left, OneGenericArg<A> right) => !left.Equals(right);
-    }
-}
-
-namespace Assets.Scripts
-{
-    public partial static class OneGenericArg
-    {
-        public static OneGenericArg<A> a<A>(string name, Func<A, string> get) => new OneGenericArg<A>(name, get);
     }
 }
 
@@ -135,14 +126,6 @@ namespace Assets.Scripts
                 return hashCode;
             }
         }
-    }
-}
-
-namespace Assets.Scripts
-{
-    public partial static class SeveralGenericArgs
-    {
-        public static SeveralGenericArgs<A, N> a<A, N>(string name, Func<A, string> get, Func<N, A> nToA) => new SeveralGenericArgs<A, N>(name, get, nToA);
     }
 }
 

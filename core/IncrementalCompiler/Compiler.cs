@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using IncrementalCompiler.Analyzers;
 using IncrementalCompiler.SwitchAnalyzer;
 using IncrementalCompiler.SwitchEnum;
 using Microsoft.CodeAnalysis;
@@ -39,34 +40,44 @@ namespace IncrementalCompiler
         CompileResult previousResult;
 
         static ImmutableArray<DiagnosticAnalyzer> Analyzers() {
-            return ImmutableArray.Create<DiagnosticAnalyzer>(
-                new SwitchEnumAnalyzer()
-            );
-            // try {
-            //     var resolvedReferences = new List<AnalyzerFileReference>();
-            //
-            //     Directory.GetFiles(analyzersPath)
-            //         .Where(x => x.EndsWith(".dll"))
-            //         .ForEach(dll => {
-            //             var resolved = Assembly.Load(dll);
-            //
-            //             foreach (var type in resolved.GetExportedTypes()) {
-            //                 if (type == typeof(DiagnosticAnalyzer))
-            //                     Console.WriteLine("ANALIZE\n");
-            //             }
-            //         });
-            //     // var xxx = Assembly.LoadFrom(
-            //     //     "..\\..\\packages\\Microsoft.CodeAnalysis.Analyzers.2.6.0-beta2" +
-            //     //     "\\analyzers\\dotnet\\cs\\Microsoft.CodeAnalysis.Analyzers.dll"
-            //     // );
-            //
-            //     // var xxx = new AnalyzerFileReference();
-            //
-            //     Directory.GetFiles("./Compiler/IncrementalCompiler.exe"); // is sito kazkaip paimt reiketu
-            //
-            //     return new ImmutableArray<DiagnosticAnalyzer>();
-            // } catch (Exception _) { }
-            // return new ImmutableArray<DiagnosticAnalyzer>();
+            // return ImmutableArray.Create<DiagnosticAnalyzer>(
+            //     new SwitchEnumAnalyzer()
+            // );
+             try {
+                 var resolvedReferences = new List<AnalyzerFileReference>();
+
+                 // Directory
+                 //     .GetFiles(analyzersPath)
+                 //     .Where(x => x.EndsWith(".dll"))
+                 //     .ForEach(dll => {
+                 //         var resolved = Assembly.Load(dll);
+                 //
+                 //         foreach (var type in resolved.GetExportedTypes()) {
+                 //             if (type == typeof(DiagnosticAnalyzer))
+                 //                 Console.WriteLine("ANALIZE\n");
+                 //         }
+                 //     });
+                 // Console.WriteLine(Directory.GetCurrentDirectory());
+
+                 var analyzerDllPath = "..\\..\\packages\\Microsoft.CodeAnalysis.Analyzers.2.6.0-beta2" +
+                     "\\analyzers\\dotnet\\cs\\Microsoft.CodeAnalysis.Analyzers.dll";
+
+                 var switchEnumDll = analyzersPath + "/SwitchEnum.dll";
+
+                 // var aDlls= Assembly.LoadFrom(switchEnumDll);
+                 // var ICDlls = Assembly.LoadFrom("./Compiler/IncrementalCompiler.exe");
+
+                 var loader = new AnalyzerAssemblyLoader();
+                 var analyzers = new AnalyzerFileReference(switchEnumDll, loader);
+                 var csharpAnalyzers = analyzers.GetAssembly();
+                 var c = AppDomain.CurrentDomain.GetAssemblies();
+                 // AppDomain.CurrentDomain.AssemblyResolve +=
+
+                 return new ImmutableArray<DiagnosticAnalyzer>();
+             }
+             catch (Exception _) {
+                 return new ImmutableArray<DiagnosticAnalyzer>();
+             }
         }
 
         public CompileResult Build(CompileOptions options)
@@ -182,10 +193,11 @@ namespace IncrementalCompiler
             CompileResult result,
             ICollection<Diagnostic> diagnostic,
             CSharpCompilation compilation,
-            ImmutableArray<DiagnosticAnalyzer> analyzers = new ImmutableArray<DiagnosticAnalyzer>()
+            ImmutableArray<DiagnosticAnalyzer> analyzers
         ) {
-            if (analyzers.Length > 0)
-                diagnostic = diagnostic.Concat(AnalyzersDiagnostics(compilation, analyzers)).ToList();
+            if (analyzers != null)
+                if (analyzers.Length > 0)
+                    diagnostic = diagnostic.Concat(AnalyzersDiagnostics(compilation, analyzers)).ToList();
             Emit(result, diagnostic, compilation);
         }
 
