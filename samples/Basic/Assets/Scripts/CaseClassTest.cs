@@ -64,9 +64,10 @@ namespace Assets.Scripts {
         public readonly Func<double, int> nToA;
     }
 
-    [Record]
-    public partial struct EmptyRecord {
-    }
+    // throws exception because record has no fields
+    // [Record]
+    // public partial struct EmptyRecord {
+    // }
 
     #region evaldo testai
 
