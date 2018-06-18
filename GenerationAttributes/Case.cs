@@ -3,6 +3,13 @@ using System.Diagnostics;
 
 namespace GenerationAttributes
 {
+    public enum GeneratedContructor : byte
+    {
+        None,
+        Constructor,
+        ConstructorAndApply
+    }
+
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Struct)]
     [Conditional("CodeGeneration")]
     public class RecordAttribute : Attribute
@@ -10,8 +17,7 @@ namespace GenerationAttributes
         public bool GenerateToString { get; set; } = true;
         public bool GenerateComparer { get; set; } = true;
         public bool GenerateGetHashCode { get; set; } = true;
-        public bool GenerateConstructor { get; set; } = true;
-        public bool GenerateStaticApply { get; set; } = false;
+        public GeneratedContructor GenerateConstructor { get; set; } = GeneratedContructor.Constructor;
     }
 
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface)]

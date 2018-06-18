@@ -15,6 +15,22 @@ using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
 {
+    public static class GeneratedContructorExts
+    {
+        public static bool generateConstructor(this GeneratedContructor gc) {
+            switch (gc)
+            {
+                case GeneratedContructor.None:
+                    return false;
+                case GeneratedContructor.Constructor:
+                case GeneratedContructor.ConstructorAndApply:
+                    return true;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(gc), gc, null);
+            }
+        }
+    }
+    
     public static class CodeGeneration
     {
         public const string GENERATED_FOLDER = "Generated";
@@ -781,16 +797,18 @@ namespace IncrementalCompiler
 
             if (!fieldsAndProps.Any()) throw new Exception("The record has no fields and therefore cannot be created");
 
-            var constructor = createIf(attr.GenerateConstructor, () =>
-                ImmutableList.Create((MemberDeclarationSyntax) SF.ConstructorDeclaration(cds.Identifier)
-                .WithModifiers(SF.TokenList(SF.Token(SyntaxKind.PublicKeyword)))
-                .WithParameterList(SF.ParameterList(
-                    SF.SeparatedList(fieldsAndProps.Select(f =>
-                        SF.Parameter(f.Identifier).WithType(f.type)))))
-                .WithBody(SF.Block(fieldsAndProps.Select(f => SF.ExpressionStatement(SF.AssignmentExpression(
-                    SyntaxKind.SimpleAssignmentExpression,
-                    SF.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SF.ThisExpression(),
-                        SF.IdentifierName(f.Identifier)), SF.IdentifierName(f.Identifier)))))))
+            var constructor = createIf(
+                attr.GenerateConstructor.generateConstructor(), 
+                () =>
+                    ImmutableList.Create((MemberDeclarationSyntax) SF.ConstructorDeclaration(cds.Identifier)
+                    .WithModifiers(SF.TokenList(SF.Token(SyntaxKind.PublicKeyword)))
+                    .WithParameterList(SF.ParameterList(
+                        SF.SeparatedList(fieldsAndProps.Select(f =>
+                            SF.Parameter(f.Identifier).WithType(f.type)))))
+                    .WithBody(SF.Block(fieldsAndProps.Select(f => SF.ExpressionStatement(SF.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SF.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SF.ThisExpression(),
+                            SF.IdentifierName(f.Identifier)), SF.IdentifierName(f.Identifier)))))))
             );
 
             var paramsStr =
@@ -897,20 +915,13 @@ namespace IncrementalCompiler
 
             // static apply bellow
 
-            var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier));
+            var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier)).ToList();
             var companion = Maybe.MZero<TypeDeclarationSyntax>();
-            if (attr.GenerateStaticApply) {
-                if (!attr.GenerateConstructor)
-                    throw new Exception(
-                        "Couldn't generate static apply because the record " +
-                        "parameter GenerateConstructor is set to false."
-                    );
-                else {
-                    if (cds.TypeParameterList == null) {
-                        newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
-                    } else {
-                        companion = Maybe.Just(GenerateCaseClassCompanion(attr, cds, propsAsStruct));
-                    }
+            if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply) {
+                if (cds.TypeParameterList == null) {
+                    newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
+                } else {
+                    companion = Maybe.Just(GenerateCaseClassCompanion(cds, propsAsStruct));
                 }
             }
 
@@ -919,7 +930,7 @@ namespace IncrementalCompiler
         }
 
         static TypeDeclarationSyntax GenerateCaseClassCompanion(
-            RecordAttribute attr, TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props
+            TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
         ) {
             var classModifiers =
                 cds.Modifiers
@@ -938,7 +949,7 @@ namespace IncrementalCompiler
             .Aggregate((p1, p2) => p1 + ", " + p2);
 
         static SyntaxList<MemberDeclarationSyntax> GenerateStaticApply(
-            TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props
+            TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
         ) {
             var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
             var funcParamsStr = joinCommaSeparated(props, _ => _.type + " " + _.identifier.ValueText);
