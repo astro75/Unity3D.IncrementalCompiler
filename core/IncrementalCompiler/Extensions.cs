@@ -35,6 +35,21 @@ namespace IncrementalCompiler
         public static SyntaxTokenList Remove(this SyntaxTokenList tokens, SyntaxKind kind)
             => tokens.Remove(SF.Token(kind));
 
+        public static SyntaxTokenList RemoveOfKind(this SyntaxTokenList tokens, SyntaxKind kind) {
+            var i = tokens.IndexOfKind(kind);
+            return i != -1 ? tokens.RemoveAt(i) : tokens;
+        }
+
+        public static int IndexOfKind(this SyntaxTokenList tokens, SyntaxKind kind) {
+            var i = 0;
+            foreach (var t in tokens) {
+                if (t.IsKind(kind)) return i;
+                else i++;
+            }
+
+            return -1;
+        }
+
         public static SyntaxTokenList Add(this SyntaxTokenList modifiers, SyntaxKind kind)
             => modifiers.Any(m => m.IsKind(kind)) ? modifiers : modifiers.Add(SF.Token(kind));
 
@@ -66,10 +81,10 @@ namespace IncrementalCompiler
             return member;
         }
 
-        public static LiteralExpressionSyntax StringLiteral(this string value)
-            => SF.LiteralExpression(SyntaxKind.StringLiteralExpression, SF.Literal(value));
+        public static LiteralExpressionSyntax StringLiteral(this string value) => 
+            SF.LiteralExpression(SyntaxKind.StringLiteralExpression, SF.Literal(value));
 
-        public static BaseListSyntax EmptyBaseList = null;
+        public static readonly BaseListSyntax EmptyBaseList = null, NoTypeArguments = null;
         public static SyntaxList<AttributeListSyntax> EmptyAttributeList = SyntaxFactory.List<AttributeListSyntax>();
         public static SyntaxTriviaList EmptyTriviaList = SyntaxFactory.TriviaList();
     }

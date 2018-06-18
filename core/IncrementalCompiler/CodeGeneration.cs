@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -8,10 +9,28 @@ using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using MonadLib;
 using static System.String;
+using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
 {
+    public static class GeneratedContructorExts
+    {
+        public static bool generateConstructor(this GeneratedContructor gc) {
+            switch (gc)
+            {
+                case GeneratedContructor.None:
+                    return false;
+                case GeneratedContructor.Constructor:
+                case GeneratedContructor.ConstructorAndApply:
+                    return true;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(gc), gc, null);
+            }
+        }
+    }
+    
     public static class CodeGeneration
     {
         public const string GENERATED_FOLDER = "Generated";
@@ -250,12 +269,12 @@ namespace IncrementalCompiler
                         return mds
                             .WithBody(ParseBlock($"{returnStatement}{callStetement}{genericReturn}({arguments});"))
                             .WithExpressionBody(null)
-                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.None));
+                            .WithSemicolonToken(SF.Token(SyntaxKind.None));
                     case ConstructorDeclarationSyntax cds:
                         return cds
                             .WithBody(ParseBlock($"{returnStatement}{callStetement}({arguments});"))
                             .WithExpressionBody(null)
-                            .WithSemicolonToken(SyntaxFactory.Token(SyntaxKind.None));
+                            .WithSemicolonToken(SF.Token(SyntaxKind.None));
                 }
                 throw new Exception("Wrong syntax type: " + syntax.GetType());
             }
@@ -443,7 +462,12 @@ namespace IncrementalCompiler
                         if (attrClassName == caseType.FullName)
                         {
                             tryAttribute<RecordAttribute>(attr, instance => {
-                                newMembers = newMembers.Add(AddAncestors(tds, GenerateCaseClass(instance, model, tds), onlyNamespace: false));
+                                newMembers = newMembers.AddRange(
+                                    GenerateCaseClass(instance, model, tds)
+                                    .Select(generatedClass =>
+                                        AddAncestors(tds, generatedClass, onlyNamespace: false)
+                                    )
+                                );
                             });
                         }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
@@ -567,9 +591,9 @@ namespace IncrementalCompiler
                 if (newMembers.Any())
                 {
                     var nt = CSharpSyntaxTree.Create(
-                        SyntaxFactory.CompilationUnit()
+                        SF.CompilationUnit()
                             .WithUsings(cleanUsings(root.Usings))
-                            .WithMembers(SyntaxFactory.List(newMembers))
+                            .WithMembers(SF.List(newMembers))
                             .NormalizeWhitespace(),
                         path: Path.Combine(generatedProjectFilesDirectory, tree.FilePath),
                         options: parseOptions,
@@ -578,7 +602,6 @@ namespace IncrementalCompiler
                 }
                 return result.ToArray();
             }).ToArray();
-            //var newFiles = results.OfType<GeneratedFile>().ToArray();
             var csFiles = results.OfType<GeneratedCsFile>().ToArray();
             compilation = compilation.AddSyntaxTrees(csFiles.Select(_ => _.Tree));
             foreach (var file in csFiles)
@@ -721,7 +744,35 @@ namespace IncrementalCompiler
             return CreateStatic(tds, ParseClassMembers(VoidMatch() + Match()));
         }
 
-        private static MemberDeclarationSyntax GenerateCaseClass(RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds) {
+        struct TypeWithIdentifier {
+            public TypeSyntax type { get; }
+            public SyntaxToken identifier { get; }
+
+            public TypeWithIdentifier(TypeSyntax type, SyntaxToken identifier) {
+                this.type = type;
+                this.identifier = identifier;
+            }
+        }
+
+        public class CaseClass : IEnumerable<TypeDeclarationSyntax> {
+            readonly TypeDeclarationSyntax caseClass;
+            readonly Maybe<TypeDeclarationSyntax> companion;
+
+            public CaseClass(TypeDeclarationSyntax caseClass, Maybe<TypeDeclarationSyntax> companion) {
+                this.caseClass = caseClass;
+                this.companion = companion;
+            }
+
+            public IEnumerator<TypeDeclarationSyntax> GetEnumerator() {
+                yield return caseClass;
+                foreach (var c in companion.ToEnumerable()) yield return c;
+            }
+            IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+        }
+
+        private static CaseClass GenerateCaseClass(
+            RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds
+        ) {
             var properties = cds.Members.OfType<PropertyDeclarationSyntax>()
                 .Where(prop => prop.Modifiers.HasNot(SyntaxKind.StaticKeyword))
                 .Where(prop => prop.AccessorList?.Accessors.Any(ads =>
@@ -744,45 +795,36 @@ namespace IncrementalCompiler
 
             var fieldsAndProps = fields.Concat(properties).ToArray();
 
-            var constructor = createIf(attr.GenerateConstructor, () =>
-                ImmutableList.Create((MemberDeclarationSyntax) SyntaxFactory.ConstructorDeclaration(cds.Identifier)
-                .WithModifiers(SyntaxFactory.TokenList(SyntaxFactory.Token(SyntaxKind.PublicKeyword)))
-                .WithParameterList(SyntaxFactory.ParameterList(
-                    SyntaxFactory.SeparatedList(fieldsAndProps.Select(f =>
-                        SyntaxFactory.Parameter(f.Identifier).WithType(f.type)))))
-                .WithBody(SyntaxFactory.Block(fieldsAndProps.Select(f => SyntaxFactory.ExpressionStatement(SyntaxFactory.AssignmentExpression(
-                    SyntaxKind.SimpleAssignmentExpression,
-                    SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.ThisExpression(),
-                        SyntaxFactory.IdentifierName(f.Identifier)), SyntaxFactory.IdentifierName(f.Identifier)))))))
-            );
-            var paramsStr = Join(", ", fieldsAndProps.Select(f => f.Identifier.ValueText).Select(n => n + ": \" + " + n + " + \""));
+            if (!fieldsAndProps.Any()) throw new Exception("The record has no fields and therefore cannot be created");
 
-            IEnumerable<MemberDeclarationSyntax> createIf(bool condition, Func<IEnumerable<MemberDeclarationSyntax>> a) =>
-                condition ? a() : Enumerable.Empty<MemberDeclarationSyntax>();
+            var constructor = createIf(
+                attr.GenerateConstructor.generateConstructor(), 
+                () =>
+                    ImmutableList.Create((MemberDeclarationSyntax) SF.ConstructorDeclaration(cds.Identifier)
+                    .WithModifiers(SF.TokenList(SF.Token(SyntaxKind.PublicKeyword)))
+                    .WithParameterList(SF.ParameterList(
+                        SF.SeparatedList(fieldsAndProps.Select(f =>
+                            SF.Parameter(f.Identifier).WithType(f.type)))))
+                    .WithBody(SF.Block(fieldsAndProps.Select(f => SF.ExpressionStatement(SF.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SF.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SF.ThisExpression(),
+                            SF.IdentifierName(f.Identifier)), SF.IdentifierName(f.Identifier)))))))
+            );
+
+            var paramsStr =
+                Join(", ", fieldsAndProps
+                .Select(f => f.Identifier.ValueText)
+                .Select(n => n + ": \" + " + n + " + \""));
+
+            IEnumerable<MemberDeclarationSyntax> createIf(bool condition, Func<IEnumerable<MemberDeclarationSyntax>> a)
+                => condition ? a() : Enumerable.Empty<MemberDeclarationSyntax>();
 
             var toString = createIf(
                 attr.GenerateToString,
-                () => ParseClassMembers($"public override string ToString() => \"{cds.Identifier.ValueText}(\" + \"{paramsStr})\";")
+                () => ParseClassMembers(
+                    $"public override string ToString() => \"{cds.Identifier.ValueText}(\" + \"{paramsStr})\";"
+                )
             );
-
-            /*
-            public override int GetHashCode() {
-                unchecked {
-                    var hashCode = int1;
-                    hashCode = (hashCode * 397) ^ int2;
-                    hashCode = (hashCode * 397) ^ (str1 != null ? str1.GetHashCode() : 0);
-                    hashCode = (hashCode * 397) ^ (str2 != null ? str2.GetHashCode() : 0);
-                    hashCode = (hashCode * 397) ^ (int) uint1;
-                    hashCode = (hashCode * 397) ^ structWithHash.GetHashCode();
-                    hashCode = (hashCode * 397) ^ structNoHash.GetHashCode();
-                    hashCode = (hashCode * 397) ^ float1.GetHashCode();
-                    hashCode = (hashCode * 397) ^ double1.GetHashCode();
-                    hashCode = (hashCode * 397) ^ long1.GetHashCode();
-                    hashCode = (hashCode * 397) ^ bool1.GetHashCode();
-                    return hashCode;
-                }
-            }
-            */
 
             var getHashCode = createIf(attr.GenerateGetHashCode, () => {
                 var hashLines = Join("\n", fieldsAndProps.Select(f => {
@@ -819,50 +861,7 @@ namespace IncrementalCompiler
                 }}");
             });
 
-
             /*
-            // class
-            private bool Equals(ClassTest other) {
-                return int1 == other.int1
-                    && int2 == other.int2
-                    && string.Equals(str1, other.str1)
-                    && string.Equals(str2, other.str2)
-                    && uint1 == other.uint1
-                    && structWithHash.Equals(other.structWithHash)
-                    && structNoHash.Equals(other.structNoHash)
-                    && float1.Equals(other.float1)
-                    && double1.Equals(other.double1)
-                    && long1 == other.long1
-                    && bool1 == other.bool1
-                    && char1 == other.char1
-                    && byte1 == other.byte1
-                    && sbyte1 == other.sbyte1
-                    && short1 == other.short1
-                    && enum1 == other.enum1
-                    && byteEnum == other.byteEnum
-                    && longEnum == other.longEnum;
-            }
-
-            public override bool Equals(object obj) {
-                if (ReferenceEquals(null, obj)) return false;
-                if (ReferenceEquals(this, obj)) return true;
-                return obj is ClassTest && Equals((ClassTest) obj);
-            }
-
-            // struct
-            public bool Equals(StructTest other) {
-                return int1 == other.int1
-                    && int2 == other.int2
-                    && string.Equals(str1, other.str1)
-                    && string.Equals(str2, other.str2)
-                    && Equals(classRef, other.classRef);
-            }
-
-            public override bool Equals(object obj) {
-                if (ReferenceEquals(null, obj)) return false;
-                return obj is StructTest && Equals((StructTest) obj);
-            }
-
             TODO: generic fields
             EqualityComparer<B>.Default.GetHashCode(valClass);
             EqualityComparer<B>.Default.Equals(valClass, other.valClass);
@@ -906,49 +905,109 @@ namespace IncrementalCompiler
 
             var baseList = attr.GenerateComparer
                 // : IEquatable<TypeName>
-                ? SyntaxFactory.BaseList(SyntaxFactory.SingletonSeparatedList<BaseTypeSyntax>(SyntaxFactory.SimpleBaseType(SyntaxFactory.ParseTypeName($"System.IEquatable<{typeName}>"))))
+                ? SF.BaseList(
+                    SF.SingletonSeparatedList<BaseTypeSyntax>(
+                        SF.SimpleBaseType(
+                            SF.ParseTypeName($"System.IEquatable<{typeName}>")
+                )))
                 : Extensions.EmptyBaseList;
             var newMembers = constructor.Concat(toString).Concat(getHashCode).Concat(equals);
 
-            return CreatePartial(cds, newMembers, baseList);
+            #region Static apply method
+            var companion = Maybe.MZero<TypeDeclarationSyntax>();
+            {
+                var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier)).ToList();
+                if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply)
+                {
+                    if (cds.TypeParameterList == null)
+                    {
+                        newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
+                    }
+                    else
+                    {
+                        companion = Maybe.Just(GenerateCaseClassCompanion(cds, propsAsStruct));
+                    }
+                }
+            }
+            #endregion
+
+            var caseclass = CreatePartial(cds, newMembers, baseList);
+            return new CaseClass(caseclass, companion);
         }
 
-        private static TypeDeclarationSyntax CreatePartial(TypeDeclarationSyntax originalType, IEnumerable<MemberDeclarationSyntax> newMembers, BaseListSyntax baseList)
-            => CreateType(
+        static TypeDeclarationSyntax GenerateCaseClassCompanion(
+            TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
+        ) {
+            var classModifiers =
+                cds.Modifiers
+                .RemoveOfKind(SyntaxKind.ReadOnlyKeyword)
+                .Add(SyntaxKind.StaticKeyword);
+
+            var applyMethod = GenerateStaticApply(cds, props);
+            return SF.ClassDeclaration(cds.Identifier)
+                    .WithModifiers(classModifiers)
+                    .WithMembers(applyMethod);
+        }
+
+        static string joinCommaSeparated<A>(IEnumerable<A> collection, Func<A, string> mapper) =>
+            collection
+            .Select(mapper)
+            .Aggregate((p1, p2) => p1 + ", " + p2);
+
+        static SyntaxList<MemberDeclarationSyntax> GenerateStaticApply(
+            TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
+        ) {
+            var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
+            var funcParamsStr = joinCommaSeparated(props, _ => _.type + " " + _.identifier.ValueText);
+            var funcArgs = joinCommaSeparated(props, _ => _.identifier.ValueText);
+
+            return ParseClassMembers(
+                $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +
+                $"({funcParamsStr}) => new {cds.Identifier.ValueText}{genericArgsStr}({funcArgs});"
+            );
+        }
+
+        private static TypeDeclarationSyntax CreatePartial(
+            TypeDeclarationSyntax originalType, IEnumerable<MemberDeclarationSyntax> newMembers, BaseListSyntax baseList
+        ) =>
+            CreateType(
                 originalType.Kind(),
                 originalType.Identifier,
                 originalType.Modifiers.Add(SyntaxKind.PartialKeyword),
                 originalType.TypeParameterList,
-                SyntaxFactory.List(newMembers),
-                baseList);
+                SF.List(newMembers),
+                baseList
+            );
 
-        private static TypeDeclarationSyntax CreateStatic(TypeDeclarationSyntax originalType, IEnumerable<MemberDeclarationSyntax> newMembers)
-            => SyntaxFactory.ClassDeclaration(originalType.Identifier + "Matcher")
-                .WithModifiers(SyntaxFactory
-                    .TokenList(originalType.Modifiers.Where(k => kindsForExtensionClass.Contains(k.Kind())))
-                    .Add(SyntaxKind.StaticKeyword))
-                .WithMembers(SyntaxFactory.List(newMembers));
+        private static TypeDeclarationSyntax CreateStatic(
+            TypeDeclarationSyntax originalType, IEnumerable<MemberDeclarationSyntax> newMembers
+        ) =>
+            SF.ClassDeclaration(originalType.Identifier + "Matcher")
+            .WithModifiers(SF
+                .TokenList(originalType.Modifiers.Where(k => kindsForExtensionClass.Contains(k.Kind())))
+                .Add(SyntaxKind.StaticKeyword))
+            .WithMembers(SF.List(newMembers));
 
         public static TypeDeclarationSyntax CreateType(
             SyntaxKind kind, SyntaxToken identifier, SyntaxTokenList modifiers, TypeParameterListSyntax typeParams,
-            SyntaxList<MemberDeclarationSyntax> members, BaseListSyntax baseList)
-        {
+            SyntaxList<MemberDeclarationSyntax> members, BaseListSyntax baseList
+        ) {
             switch (kind)
             {
                 case SyntaxKind.ClassDeclaration:
-                    return SyntaxFactory.ClassDeclaration(identifier)
+                    return SF.ClassDeclaration(identifier)
                         .WithModifiers(modifiers)
                         .WithTypeParameterList(typeParams)
                         .WithMembers(members)
                         .WithBaseList(baseList);
                 case SyntaxKind.StructDeclaration:
-                    return SyntaxFactory.StructDeclaration(identifier)
+                    return SF.StructDeclaration(identifier)
                         .WithModifiers(modifiers)
                         .WithTypeParameterList(typeParams)
                         .WithMembers(members)
                         .WithBaseList(baseList);
                 case SyntaxKind.InterfaceDeclaration:
-                    return SyntaxFactory.InterfaceDeclaration(identifier)
+                    return SF.InterfaceDeclaration(identifier)
                         .WithModifiers(modifiers)
                         .WithTypeParameterList(typeParams)
                         .WithMembers(members)
@@ -958,8 +1017,13 @@ namespace IncrementalCompiler
             }
         }
 
+        /// <summary>
+        /// Copies namespace and class hierarchy from the original <see cref="memberNode"/>
+        /// </summary>
         // stolen from CodeGeneration.Roslyn
-        static MemberDeclarationSyntax AddAncestors(MemberDeclarationSyntax memberNode, MemberDeclarationSyntax generatedType, bool onlyNamespace)
+        static MemberDeclarationSyntax AddAncestors(
+            MemberDeclarationSyntax memberNode, MemberDeclarationSyntax generatedType, bool onlyNamespace
+        )
         {
             // Figure out ancestry for the generated type, including nesting types and namespaces.
             foreach (var ancestor in memberNode.Ancestors())
@@ -967,14 +1031,14 @@ namespace IncrementalCompiler
                 switch (ancestor)
                 {
                     case NamespaceDeclarationSyntax a:
-                        generatedType = SyntaxFactory.NamespaceDeclaration(a.Name)
+                        generatedType = SF.NamespaceDeclaration(a.Name)
                             .WithUsings(cleanUsings(a.Usings))
-                            .WithMembers(SyntaxFactory.SingletonList(generatedType));
+                            .WithMembers(SF.SingletonList(generatedType));
                         break;
                     case ClassDeclarationSyntax a:
                         if (onlyNamespace) break;
                         generatedType = a
-                            .WithMembers(SyntaxFactory.SingletonList(generatedType))
+                            .WithMembers(SF.SingletonList(generatedType))
                             .WithModifiers(a.Modifiers.Add(SyntaxKind.PartialKeyword))
                             .WithoutTrivia()
                             .WithCloseBraceToken(a.CloseBraceToken.WithoutTrivia())
@@ -984,7 +1048,7 @@ namespace IncrementalCompiler
                     case StructDeclarationSyntax a:
                         if (onlyNamespace) break;
                         generatedType = a
-                            .WithMembers(SyntaxFactory.SingletonList(generatedType))
+                            .WithMembers(SF.SingletonList(generatedType))
                             .WithModifiers(a.Modifiers.Add(SyntaxKind.PartialKeyword))
                             .WithoutTrivia()
                             .WithCloseBraceToken(a.CloseBraceToken.WithoutTrivia())
@@ -997,7 +1061,7 @@ namespace IncrementalCompiler
         }
 
         static SyntaxList<UsingDirectiveSyntax> cleanUsings(SyntaxList<UsingDirectiveSyntax> usings) =>
-            SyntaxFactory.List(usings.Select(u =>
+            SF.List(usings.Select(u =>
                 u.WithUsingKeyword(u.UsingKeyword.WithoutTrivia())
             ));
 
@@ -1014,7 +1078,7 @@ namespace IncrementalCompiler
         }
 
         static BlockSyntax ParseBlock(string syntax) {
-            return (BlockSyntax) SyntaxFactory.ParseStatement("{" + syntax + "}");
+            return (BlockSyntax) SF.ParseStatement("{" + syntax + "}");
         }
 
         public static string Quote(string s) => $"\"{s}\"";
