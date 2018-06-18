@@ -913,17 +913,23 @@ namespace IncrementalCompiler
                 : Extensions.EmptyBaseList;
             var newMembers = constructor.Concat(toString).Concat(getHashCode).Concat(equals);
 
-            // static apply bellow
-
-            var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier)).ToList();
+            #region Static apply method
             var companion = Maybe.MZero<TypeDeclarationSyntax>();
-            if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply) {
-                if (cds.TypeParameterList == null) {
-                    newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
-                } else {
-                    companion = Maybe.Just(GenerateCaseClassCompanion(cds, propsAsStruct));
+            {
+                var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier)).ToList();
+                if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply)
+                {
+                    if (cds.TypeParameterList == null)
+                    {
+                        newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
+                    }
+                    else
+                    {
+                        companion = Maybe.Just(GenerateCaseClassCompanion(cds, propsAsStruct));
+                    }
                 }
             }
+            #endregion
 
             var caseclass = CreatePartial(cds, newMembers, baseList);
             return new CaseClass(caseclass, companion);
@@ -1011,8 +1017,13 @@ namespace IncrementalCompiler
             }
         }
 
+        /// <summary>
+        /// Copies namespace and class hierarchy from the original <see cref="memberNode"/>
+        /// </summary>
         // stolen from CodeGeneration.Roslyn
-        static MemberDeclarationSyntax AddAncestors(MemberDeclarationSyntax memberNode, MemberDeclarationSyntax generatedType, bool onlyNamespace)
+        static MemberDeclarationSyntax AddAncestors(
+            MemberDeclarationSyntax memberNode, MemberDeclarationSyntax generatedType, bool onlyNamespace
+        )
         {
             // Figure out ancestry for the generated type, including nesting types and namespaces.
             foreach (var ancestor in memberNode.Ancestors())

@@ -1,6 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
+﻿using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -83,19 +81,10 @@ namespace IncrementalCompiler
             return member;
         }
 
-        public static void ForEach<T>(this IEnumerable<T> enumeration, Action<T> action)
-        {
-            foreach(T item in enumeration)
-            {
-                action(item);
-            }
-        }
+        public static LiteralExpressionSyntax StringLiteral(this string value) => 
+            SF.LiteralExpression(SyntaxKind.StringLiteralExpression, SF.Literal(value));
 
-        public static LiteralExpressionSyntax StringLiteral(this string value)
-            => SF.LiteralExpression(SyntaxKind.StringLiteralExpression, SF.Literal(value));
-
-        public static BaseListSyntax EmptyBaseList = null;
-        public static BaseListSyntax NoTypeArguments = null;
+        public static readonly BaseListSyntax EmptyBaseList = null, NoTypeArguments = null;
         public static SyntaxList<AttributeListSyntax> EmptyAttributeList = SyntaxFactory.List<AttributeListSyntax>();
         public static SyntaxTriviaList EmptyTriviaList = SyntaxFactory.TriviaList();
     }
