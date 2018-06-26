@@ -30,7 +30,7 @@ namespace IncrementalCompiler
             }
         }
     }
-    
+
     public static class CodeGeneration
     {
         public const string GENERATED_FOLDER = "Generated";
@@ -401,7 +401,7 @@ namespace IncrementalCompiler
             }
         }
 
-        public static (CSharpCompilation, ICollection<Diagnostic>) Run(
+        public static (CSharpCompilation, List<Diagnostic>) Run(
             bool incrementalRun,
             CSharpCompilation compilation,
             ImmutableArray<SyntaxTree> trees,
@@ -798,7 +798,7 @@ namespace IncrementalCompiler
             if (!fieldsAndProps.Any()) throw new Exception("The record has no fields and therefore cannot be created");
 
             var constructor = createIf(
-                attr.GenerateConstructor.generateConstructor(), 
+                attr.GenerateConstructor.generateConstructor(),
                 () =>
                     ImmutableList.Create((MemberDeclarationSyntax) SF.ConstructorDeclaration(cds.Identifier)
                     .WithModifiers(SF.TokenList(SF.Token(SyntaxKind.PublicKeyword)))

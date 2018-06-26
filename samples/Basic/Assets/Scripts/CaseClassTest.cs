@@ -25,30 +25,23 @@ namespace Assets.Scripts {
         lmfao
     }
 
-    [Record(GenerateStaticApply = true)]
+    [Record(GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
     public partial struct CCCompanionWithoutGenerics {
         public readonly string name;
         public readonly Func<int, string> get;
         public readonly Func<double, int> nToA;
     }
 
-    [Record(GenerateStaticApply = true)]
+    [Record(GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
     public partial struct CCOneGenericArgument<A> {
         public readonly string name;
         public readonly Func<A, string> get;
     }
 
-    [Record(GenerateConstructor = false)]
+    [Record(GenerateConstructor = GeneratedContructor.None)]
     public partial struct CCNoConstructor<A> {
         public readonly string name;
         public readonly Func<A, string> get;
-    }
-
-    [Record(GenerateComparer = false, GenerateStaticApply = true)]
-    public partial struct CCSeveralGenerics<A, N> {
-        public readonly string name;
-        public readonly Func<A, string> get;
-        public readonly Func<N, A> nToA;
     }
 
     [Record]
@@ -56,19 +49,7 @@ namespace Assets.Scripts {
         public readonly string name;
         public readonly Func<int, string> get;
         public readonly Func<double, int> nToA;
-
-    // throws exception because record has no fields
-    // [Record]
-    // public partial struct EmptyRecord {
-    // }
-                case testEnum.lol: 
-                    Console.WriteLine("enum: Lol");
-                    break;
-                case testEnum.lmfao: 
-                    Console.WriteLine("enum: lmfao");
-                    break;
-            }
-        }
+    }
 
     #region evaldo testai
 
