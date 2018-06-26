@@ -30,6 +30,15 @@ namespace Assets.Scripts {
         public readonly string name;
         public readonly Func<int, string> get;
         public readonly Func<double, int> nToA;
+
+        public void testSwitchEnumAnalyzer() {
+            var lol = testEnum.lol;
+            switch (lol) {
+                case testEnum.lmfao:
+                    Console.WriteLine("lmfao");
+                    break;
+            }
+        }
     }
 
     [Record(GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
@@ -44,7 +53,7 @@ namespace Assets.Scripts {
         public readonly Func<A, string> get;
     }
 
-    [Record]
+    [Record(GenerateComparer = false)]
     public partial struct CCNoStaticApply {
         public readonly string name;
         public readonly Func<int, string> get;

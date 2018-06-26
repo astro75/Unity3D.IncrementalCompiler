@@ -9,6 +9,7 @@ using System.Text;
 using System.Threading;
 using System.Threading.Tasks;
 using System.Xml.Linq;
+using Flinq;
 using IncrementalCompiler.Analyzers;
 using IncrementalCompiler.SwitchAnalyzer;
 using IncrementalCompiler.SwitchEnum;
@@ -39,45 +40,26 @@ namespace IncrementalCompiler
         const string analyzersPath = "./Compiler/Analyzers";
         CompileResult previousResult;
 
+        /// <summary>
+        /// analyzers can only use dependencies that are already in this project
+        /// dependency versions must match those of project dependencies
+        /// </summary>
         static ImmutableArray<DiagnosticAnalyzer> Analyzers() {
-            // return ImmutableArray.Create<DiagnosticAnalyzer>(
-            //     new SwitchEnumAnalyzer()
-            // );
-             try {
-                 var resolvedReferences = new List<AnalyzerFileReference>();
+            try {
+                var loader = new AnalyzerAssemblyLoader();
 
-                 // Directory
-                 //     .GetFiles(analyzersPath)
-                 //     .Where(x => x.EndsWith(".dll"))
-                 //     .ForEach(dll => {
-                 //         var resolved = Assembly.Load(dll);
-                 //
-                 //         foreach (var type in resolved.GetExportedTypes()) {
-                 //             if (type == typeof(DiagnosticAnalyzer))
-                 //                 Console.WriteLine("ANALIZE\n");
-                 //         }
-                 //     });
-                 // Console.WriteLine(Directory.GetCurrentDirectory());
-
-                 var analyzerDllPath = "..\\..\\packages\\Microsoft.CodeAnalysis.Analyzers.2.6.0-beta2" +
-                     "\\analyzers\\dotnet\\cs\\Microsoft.CodeAnalysis.Analyzers.dll";
-
-                 var switchEnumDll = analyzersPath + "/SwitchEnum.dll";
-
-                 // var aDlls= Assembly.LoadFrom(switchEnumDll);
-                 // var ICDlls = Assembly.LoadFrom("./Compiler/IncrementalCompiler.exe");
-
-                 var loader = new AnalyzerAssemblyLoader();
-                 var analyzers = new AnalyzerFileReference(switchEnumDll, loader);
-                 var csharpAnalyzers = analyzers.GetAssembly();
-                 var c = AppDomain.CurrentDomain.GetAssemblies();
-                 // AppDomain.CurrentDomain.AssemblyResolve +=
-
-                 return new ImmutableArray<DiagnosticAnalyzer>();
-             }
-             catch (Exception _) {
-                 return new ImmutableArray<DiagnosticAnalyzer>();
-             }
+                return Directory
+                    .GetFiles(analyzersPath)
+                    .Where(x => x.EndsWith(".dll"))
+                    .Select(dll => (new AnalyzerFileReference(dll, loader)).GetAnalyzers(LanguageNames.CSharp))
+                    .Aggregate(new List<DiagnosticAnalyzer>(), (list, analyzers) => {
+                        list.AddRange(analyzers);
+                        return list;
+                    })
+                    .ToImmutableArray();
+            } catch (Exception _) {
+                return new ImmutableArray<DiagnosticAnalyzer>();
+            }
         }
 
         public CompileResult Build(CompileOptions options)
