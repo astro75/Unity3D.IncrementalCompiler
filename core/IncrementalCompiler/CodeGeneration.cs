@@ -9,13 +9,28 @@ using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using Microsoft.CodeAnalysis.Diagnostics;
 using MonadLib;
 using static System.String;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
 {
+    public static class GeneratedContructorExts
+    {
+        public static bool generateConstructor(this GeneratedContructor gc) {
+            switch (gc)
+            {
+                case GeneratedContructor.None:
+                    return false;
+                case GeneratedContructor.Constructor:
+                case GeneratedContructor.ConstructorAndApply:
+                    return true;
+                default:
+                    throw new ArgumentOutOfRangeException(nameof(gc), gc, null);
+            }
+        }
+    }
+    
     public static class CodeGeneration
     {
         public const string GENERATED_FOLDER = "Generated";
@@ -386,7 +401,7 @@ namespace IncrementalCompiler
             }
         }
 
-        public static (CSharpCompilation, List<Diagnostic>) Run(
+        public static (CSharpCompilation, ICollection<Diagnostic>) Run(
             bool incrementalRun,
             CSharpCompilation compilation,
             ImmutableArray<SyntaxTree> trees,
@@ -588,26 +603,26 @@ namespace IncrementalCompiler
                 return result.ToArray();
             }).ToArray();
             var csFiles = results.OfType<GeneratedCsFile>().ToArray();
-
             compilation = compilation.AddSyntaxTrees(csFiles.Select(_ => _.Tree));
-
-            foreach (var file in csFiles) {
+            foreach (var file in csFiles)
+            {
                 sourceMap[file.FilePath] = file.Tree;
                 var generatedPath = file.FilePath;
                 Directory.CreateDirectory(Path.GetDirectoryName(generatedPath));
-                if (File.Exists(generatedPath)) {
+                if (File.Exists(generatedPath))
+                {
                     diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
-                        "ER0002", "Error",
-                        $"Could not generate file '{generatedPath}'. File already exists.",
-                        "Error", DiagnosticSeverity.Error, true
+                        "ER0002", "Error", $"Could not generate file '{generatedPath}'. File already exists.", "Error", DiagnosticSeverity.Error, true
                     ), file.Location));
-                } else {
+                }
+                else
+                {
                     File.WriteAllText(generatedPath, file.Contents);
                     filesMapping.add(file.SourcePath, generatedPath);
                 }
             }
-
-            foreach (var file in results.OfType<GeneratedJavaFile>()) {
+            foreach (var file in results.OfType<GeneratedJavaFile>())
+            {
                 if (!filesMapping.tryAddJavaFile(file.SourcePath, file.JavaFile))
                 {
                     diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
@@ -617,27 +632,14 @@ namespace IncrementalCompiler
             }
 
             compilation = MacroProcessor.EditTrees(
-                compilation,
-                sourceMap,
-                results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
+                compilation, sourceMap, results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
             );
-
-            compilation =
-                filesMapping
-                .updateCompilation(
-                    compilation,
-                    parseOptions,
-                    assemblyName: assemblyName,
-                    generatedFilesDir: generatedProjectFilesDirectory
-                );
-
+            compilation = filesMapping.updateCompilation(compilation, parseOptions, assemblyName: assemblyName, generatedFilesDir: generatedProjectFilesDirectory);
             File.WriteAllLines(
                 Path.Combine(GENERATED_FOLDER, $"Generated-files-{assemblyName}.txt"),
                 filesMapping.filesDict.Values
                     .SelectMany(_ => _)
-                    .Select(path => path.Replace("/", "\\"))
-            );
-
+                    .Select(path => path.Replace("/", "\\")));
             return (compilation, diagnostic);
         }
 
@@ -793,16 +795,20 @@ namespace IncrementalCompiler
 
             var fieldsAndProps = fields.Concat(properties).ToArray();
 
-            var constructor = createIf(attr.GenerateConstructor, () =>
-                ImmutableList.Create((MemberDeclarationSyntax) SF.ConstructorDeclaration(cds.Identifier)
-                .WithModifiers(SF.TokenList(SF.Token(SyntaxKind.PublicKeyword)))
-                .WithParameterList(SF.ParameterList(
-                    SF.SeparatedList(fieldsAndProps.Select(f =>
-                        SF.Parameter(f.Identifier).WithType(f.type)))))
-                .WithBody(SF.Block(fieldsAndProps.Select(f => SF.ExpressionStatement(SF.AssignmentExpression(
-                    SyntaxKind.SimpleAssignmentExpression,
-                    SF.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SF.ThisExpression(),
-                        SF.IdentifierName(f.Identifier)), SF.IdentifierName(f.Identifier)))))))
+            if (!fieldsAndProps.Any()) throw new Exception("The record has no fields and therefore cannot be created");
+
+            var constructor = createIf(
+                attr.GenerateConstructor.generateConstructor(), 
+                () =>
+                    ImmutableList.Create((MemberDeclarationSyntax) SF.ConstructorDeclaration(cds.Identifier)
+                    .WithModifiers(SF.TokenList(SF.Token(SyntaxKind.PublicKeyword)))
+                    .WithParameterList(SF.ParameterList(
+                        SF.SeparatedList(fieldsAndProps.Select(f =>
+                            SF.Parameter(f.Identifier).WithType(f.type)))))
+                    .WithBody(SF.Block(fieldsAndProps.Select(f => SF.ExpressionStatement(SF.AssignmentExpression(
+                        SyntaxKind.SimpleAssignmentExpression,
+                        SF.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SF.ThisExpression(),
+                            SF.IdentifierName(f.Identifier)), SF.IdentifierName(f.Identifier)))))))
             );
 
             var paramsStr =
@@ -907,127 +913,58 @@ namespace IncrementalCompiler
                 : Extensions.EmptyBaseList;
             var newMembers = constructor.Concat(toString).Concat(getHashCode).Concat(equals);
 
-            // static apply bellow
-
-            var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier));
+            #region Static apply method
             var companion = Maybe.MZero<TypeDeclarationSyntax>();
-            if (attr.GenerateStaticApply) {
-                if (cds.TypeParameterList == null) {
-                    var applyOpt = GenerateStaticApply(attr, cds, propsAsStruct);
-                    if (applyOpt.IsJust)
-                        newMembers = newMembers.Concat(applyOpt.FromJust);
-                } else {
-                    companion = GenerateCaseClassCompanion(attr, cds, propsAsStruct);
+            {
+                var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier)).ToList();
+                if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply)
+                {
+                    if (cds.TypeParameterList == null)
+                    {
+                        newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
+                    }
+                    else
+                    {
+                        companion = Maybe.Just(GenerateCaseClassCompanion(cds, propsAsStruct));
+                    }
                 }
             }
+            #endregion
 
             var caseclass = CreatePartial(cds, newMembers, baseList);
-
             return new CaseClass(caseclass, companion);
         }
 
-        static IEnumerable<ParameterSyntax> ToParams(IEnumerable<TypeWithIdentifier> props) =>
-            props.Select(prop =>
-                SF.Parameter(prop.identifier)
-                .WithType(prop.type)
-            );
-
-        static SyntaxNodeOrTokenList CommaSeparatedNodesOrTokens(IEnumerable<SyntaxNodeOrToken> tokensOrNodes) {
-            var separated = SF.NodeOrTokenList();
-            tokensOrNodes.ForEach(x =>
-                separated = separated.Add(x).Add(SF.Token(SyntaxKind.CommaToken))
-            );
-            return separated.RemoveAt(separated.Count - 1);
-        }
-
-        static IEnumerable<SyntaxNodeOrToken> convertNodes(IEnumerable<SyntaxNode> nodes) =>
-            nodes.Select<SyntaxNode, SyntaxNodeOrToken>(_ => _);
-
-        static IEnumerable<SyntaxNodeOrToken> convertTokens(IEnumerable<SyntaxToken> tokens) =>
-            tokens.Select<SyntaxToken, SyntaxNodeOrToken>(_ => _);
-
-        static Maybe<TypeDeclarationSyntax> GenerateCaseClassCompanion(
-            RecordAttribute attr, TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props
+        static TypeDeclarationSyntax GenerateCaseClassCompanion(
+            TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
         ) {
             var classModifiers =
                 cds.Modifiers
                 .RemoveOfKind(SyntaxKind.ReadOnlyKeyword)
                 .Add(SyntaxKind.StaticKeyword);
 
-            return GenerateStaticApply(attr, cds, props)
-                    .Map(applyMethod =>
-                        (TypeDeclarationSyntax)
-                        SF.ClassDeclaration(cds.Identifier)
-                            .WithModifiers(classModifiers)
-                            .WithMembers(applyMethod)
-                    );
+            var applyMethod = GenerateStaticApply(cds, props);
+            return SF.ClassDeclaration(cds.Identifier)
+                    .WithModifiers(classModifiers)
+                    .WithMembers(applyMethod);
         }
 
-        static Maybe<SyntaxList<MemberDeclarationSyntax>> GenerateStaticApply(
-            RecordAttribute attr, TypeDeclarationSyntax cds, IEnumerable<TypeWithIdentifier> props
+        static string joinCommaSeparated<A>(IEnumerable<A> collection, Func<A, string> mapper) =>
+            collection
+            .Select(mapper)
+            .Aggregate((p1, p2) => p1 + ", " + p2);
+
+        static SyntaxList<MemberDeclarationSyntax> GenerateStaticApply(
+            TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
         ) {
-            if (
-                !attr.GenerateStaticApply
-                || !attr.GenerateConstructor
-                || !props.Any()
-            )
-                return Maybe.MZero<SyntaxList<MemberDeclarationSyntax>>();
-            else
-            {
-                var methodModifiers = SF.TokenList(
-                    SF.Token(SyntaxKind.PublicKeyword),
-                    SF.Token(SyntaxKind.StaticKeyword)
-                );
+            var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
+            var funcParamsStr = joinCommaSeparated(props, _ => _.type + " " + _.identifier.ValueText);
+            var funcArgs = joinCommaSeparated(props, _ => _.identifier.ValueText);
 
-                var funcParams =
-                    SF.ParameterList(SF.SeparatedList<ParameterSyntax>(
-                        CommaSeparatedNodesOrTokens(convertNodes(ToParams(props)))
-                    ));
-
-                var genericArgs =
-                    cds.TypeParameterList == null
-                    ? Maybe.MZero<SeparatedSyntaxList<TypeSyntax>>()
-                    : Maybe.Just(
-                            SF.SeparatedList(
-                                cds.TypeParameterList.Parameters.Select(x =>
-                                    SF.ParseTypeName(x.ToString())
-                            ))
-                    );
-
-                var returnTypeName =
-                    cds.TypeParameterList == null
-                    ? (SimpleNameSyntax) SF.IdentifierName(cds.Identifier.ValueText)
-                    : SF.GenericName(cds.Identifier.ValueText)
-                        .WithTypeArgumentList(SF.TypeArgumentList(genericArgs.FromJust));
-
-                var methodDeclaration = SF.MethodDeclaration(
-                    returnTypeName,
-                    SF.Identifier("a")
-                );
-
-                var methodBody = SF.ArrowExpressionClause(
-                    SF.ObjectCreationExpression(returnTypeName)
-                    .WithArgumentList(
-                        SF.ArgumentList(
-                            SF.SeparatedList<ArgumentSyntax>(
-                                CommaSeparatedNodesOrTokens(convertNodes(props.Select(_ =>
-                                    SF.Argument(SF.IdentifierName(_.identifier.ValueText)))))
-                            )
-                        )
-                    )
-                );
-
-                return Maybe.Just(
-                    SF.SingletonList<MemberDeclarationSyntax>(
-                        methodDeclaration
-                        .WithModifiers(methodModifiers)
-                        .WithTypeParameterList(cds.TypeParameterList)
-                        .WithParameterList(funcParams)
-                        .WithExpressionBody(methodBody)
-                        .WithSemicolonToken(SF.Token(SyntaxKind.SemicolonToken))
-                    )
-                );
-            }
+            return ParseClassMembers(
+                $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +
+                $"({funcParamsStr}) => new {cds.Identifier.ValueText}{genericArgsStr}({funcArgs});"
+            );
         }
 
         private static TypeDeclarationSyntax CreatePartial(
@@ -1080,8 +1017,13 @@ namespace IncrementalCompiler
             }
         }
 
+        /// <summary>
+        /// Copies namespace and class hierarchy from the original <see cref="memberNode"/>
+        /// </summary>
         // stolen from CodeGeneration.Roslyn
-        static MemberDeclarationSyntax AddAncestors(MemberDeclarationSyntax memberNode, MemberDeclarationSyntax generatedType, bool onlyNamespace)
+        static MemberDeclarationSyntax AddAncestors(
+            MemberDeclarationSyntax memberNode, MemberDeclarationSyntax generatedType, bool onlyNamespace
+        )
         {
             // Figure out ancestry for the generated type, including nesting types and namespaces.
             foreach (var ancestor in memberNode.Ancestors())

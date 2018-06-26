@@ -6,13 +6,13 @@ using System.Collections.Generic;
 using GenerationAttributes;
 
 namespace Assets.Scripts {
-    struct DummyStruct {
-        public readonly int int1, int2;
+    // struct DummyStruct {
+    //     public readonly int int1, int2;
 
-        public string test() {
-            return Macros.className;
-        }
-    }
+    //     public string test() {
+    //         return Macros.className;
+    //     }
+    // }
 
     class Class { }
 
@@ -26,41 +26,41 @@ namespace Assets.Scripts {
     }
 
     [Record(GenerateStaticApply = true)]
-    public partial struct CompanionNoGenerics {
+    public partial struct CCCompanionWithoutGenerics {
         public readonly string name;
         public readonly Func<int, string> get;
         public readonly Func<double, int> nToA;
     }
 
     [Record(GenerateStaticApply = true)]
-    public partial struct OneGenericArg<A> {
+    public partial struct CCOneGenericArgument<A> {
         public readonly string name;
         public readonly Func<A, string> get;
     }
 
-    [Record(GenerateConstructor = false, GenerateStaticApply = true)]
-    public partial struct NoConstructor<A> {
+    [Record(GenerateConstructor = false)]
+    public partial struct CCNoConstructor<A> {
         public readonly string name;
         public readonly Func<A, string> get;
     }
 
     [Record(GenerateComparer = false, GenerateStaticApply = true)]
-    public partial struct SeveralGenericArgs<A, N> {
+    public partial struct CCSeveralGenerics<A, N> {
         public readonly string name;
         public readonly Func<A, string> get;
         public readonly Func<N, A> nToA;
     }
 
     [Record]
-    public partial struct NoCompanionAttribute {
+    public partial struct CCNoStaticApply {
         public readonly string name;
         public readonly Func<int, string> get;
         public readonly Func<double, int> nToA;
 
-        public void lolxd() {
-            var xd = testEnum.xd;
-
-            switch (xd) {
+    // throws exception because record has no fields
+    // [Record]
+    // public partial struct EmptyRecord {
+    // }
                 case testEnum.lol: 
                     Console.WriteLine("enum: Lol");
                     break;
@@ -69,7 +69,6 @@ namespace Assets.Scripts {
                     break;
             }
         }
-    }
 
     #region evaldo testai
 
