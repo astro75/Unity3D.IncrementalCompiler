@@ -3,13 +3,12 @@
   <component name="ChangeListManager">
     <list default="true" id="0e071673-8ef7-47ae-bf32-afa733b6b1da" name="Default" comment="">
       <change beforePath="$PROJECT_DIR$/../../.idea/.idea.IncrementalCompiler/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/../../.idea/.idea.IncrementalCompiler/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../core/IncrementalCompiler/Compiler.cs" beforeDir="false" afterPath="$PROJECT_DIR$/../../core/IncrementalCompiler/Compiler.cs" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/../../core/IncrementalCompiler/IncrementalCompiler.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/../../core/IncrementalCompiler/IncrementalCompiler.csproj" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../core/IncrementalCompiler/packages.config" beforeDir="false" afterPath="$PROJECT_DIR$/../../core/IncrementalCompiler/packages.config" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../core/RoslynMdbWriter/RoslynMdbWriter.csproj" beforeDir="false" afterPath="$PROJECT_DIR$/../../core/RoslynMdbWriter/RoslynMdbWriter.csproj" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/../../core/RoslynMdbWriter/packages.config" beforeDir="false" afterPath="$PROJECT_DIR$/../../core/RoslynMdbWriter/packages.config" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/.idea/.idea.Basic/.idea/workspace.xml" beforeDir="false" afterPath="$PROJECT_DIR$/.idea/.idea.Basic/.idea/workspace.xml" afterDir="false" />
-      <change beforePath="$PROJECT_DIR$/Assets/Scripts/CaseClassTest.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Scripts/CaseClassTest.cs" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/CSharp vNext Support/Editor/CSharpVNextSupport.dll" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/CSharp vNext Support/Editor/CSharpVNextSupport.dll" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Libs/GenerationAttributes.dll" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Libs/GenerationAttributes.dll" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Libs/GenerationAttributes.pdb" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Libs/GenerationAttributes.pdb" afterDir="false" />
+      <change beforePath="$PROJECT_DIR$/Assets/Plugins/Incremental Compiler/GenerationAttributes.dll" beforeDir="false" afterPath="$PROJECT_DIR$/Assets/Plugins/Incremental Compiler/GenerationAttributes.dll" afterDir="false" />
       <change beforePath="$PROJECT_DIR$/Generated/Assembly-CSharp/Assets/Scripts/CaseClassTest.cs" beforeDir="false" afterPath="$PROJECT_DIR$/Generated/Assembly-CSharp/Assets/Scripts/CaseClassTest.cs" afterDir="false" />
     </list>
     <option name="EXCLUDED_CONVERTED_TO_IGNORED" value="true" />
@@ -21,52 +20,42 @@
   </component>
   <component name="FileEditorManager">
     <leaf SIDE_TABS_SIZE_LIMIT_KEY="300">
-      <file leaf-file-name="CaseClassTest.cs" pinned="false" current-in-tab="true">
+      <file leaf-file-name="CaseClassTest.cs" pinned="false" current-in-tab="false">
         <entry file="file://$PROJECT_DIR$/Assets/Scripts/CaseClassTest.cs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="616">
-              <caret line="36" column="36" lean-forward="true" selection-start-line="36" selection-start-column="36" selection-end-line="36" selection-end-column="36" />
+            <state relative-caret-position="264">
+              <caret line="41" selection-start-line="41" selection-end-line="41" />
               <folding>
-                <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-                <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-                <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-                <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-                <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-                <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-                <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-                <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-                <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-                <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-                <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-                <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-                <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+                <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+                <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+                <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+                <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+                <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+                <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+                <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+                <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+                <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
               </folding>
             </state>
           </provider>
         </entry>
       </file>
       <file leaf-file-name="RecordAttribute.cs" pinned="false" current-in-tab="false">
-        <entry file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/2A863E53-0F35-446F-9D01-3215D308E6D3/18/941311a1/RecordAttribute.cs">
+        <entry file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/766F95E6-D6FD-468A-B99F-931CFB1E1EF8/8f/7538f23a/RecordAttribute.cs">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="264">
-              <caret line="13" column="15" selection-start-line="13" selection-start-column="15" selection-end-line="13" selection-end-column="15" />
-              <folding>
-                <marker date="1528973328163" expanded="true" signature="0:359" ph="/* Decompiled with JetBrains decompiler ... */" />
-                <marker date="1528973328163" expanded="false" signature="367:400" ph="..." />
-                <marker date="1528973328163" expanded="true" signature="432:819" ph="{...}" />
-                <marker date="1528973328163" expanded="true" signature="580:817" ph="{...}" />
-              </folding>
+            <state relative-caret-position="328">
+              <caret line="21" column="31" selection-start-line="21" selection-start-column="31" selection-end-line="21" selection-end-column="31" />
             </state>
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="CompilerSettings.cs" pinned="false" current-in-tab="false">
+      <file leaf-file-name="CompilerSettings.cs" pinned="false" current-in-tab="true">
         <entry file="file://$PROJECT_DIR$/Assets/CSharp vNext Support/Editor/CompilerSettings.cs">
           <provider selected="true" editor-type-id="text-editor">
-            <state>
-              <caret column="6" selection-start-column="6" selection-end-column="6" />
+            <state relative-caret-position="175">
+              <caret line="121" column="44" selection-start-line="121" selection-start-column="44" selection-end-line="121" selection-end-column="44" />
               <folding>
-                <marker date="1528206767536" expanded="true" signature="6:194" ph="..." />
+                <marker date="1528206767536" expanded="false" signature="6:194" ph="..." />
                 <marker date="1528206767536" expanded="true" signature="240:12418" ph="{...}" />
                 <marker date="1528206767536" expanded="true" signature="271:384" ph="{...}" />
                 <marker date="1528206767536" expanded="true" signature="429:479" ph="{...}" />
@@ -137,11 +126,34 @@
           </provider>
         </entry>
       </file>
-      <file leaf-file-name="PublicAccessor.cs" pinned="false" current-in-tab="false">
-        <entry file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/660FDB64-1262-4BF1-BE59-1D682C770844/1e/04f825bf/PublicAccessor.cs">
+      <file leaf-file-name="GenerationAttributes.xml" pinned="false" current-in-tab="false">
+        <entry file="file://$PROJECT_DIR$/Assets/Plugins/Incremental Compiler/GenerationAttributes.xml">
           <provider selected="true" editor-type-id="text-editor">
-            <state relative-caret-position="264">
-              <caret line="12" column="33" selection-start-line="12" selection-start-column="33" selection-end-line="12" selection-end-column="33" />
+            <state relative-caret-position="198">
+              <caret line="9" column="32" selection-start-line="9" selection-start-column="32" selection-end-line="9" selection-end-column="32" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="RecordAttribute.cs" pinned="false" current-in-tab="false">
+        <entry file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/B3CA6121-F451-4653-8120-D124561A24CD/bf/ae26d688/RecordAttribute.cs">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="462">
+              <caret line="21" column="31" selection-start-line="21" selection-start-column="31" selection-end-line="21" selection-end-column="31" />
+            </state>
+          </provider>
+        </entry>
+      </file>
+      <file leaf-file-name="GeneratedContructor.cs" pinned="false" current-in-tab="false">
+        <entry file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/B3CA6121-F451-4653-8120-D124561A24CD/e6/7bbd368f/GeneratedContructor.cs">
+          <provider selected="true" editor-type-id="text-editor">
+            <state relative-caret-position="176">
+              <caret line="8" column="14" selection-start-line="8" selection-start-column="14" selection-end-line="8" selection-end-column="14" />
+              <folding>
+                <marker date="1530024467855" expanded="true" signature="0:363" ph="/* Decompiled with JetBrains decompiler ... */" />
+                <marker date="1530024467855" expanded="true" signature="395:500" ph="{...}" />
+                <marker date="1530024467855" expanded="true" signature="438:498" ph="{...}" />
+              </folding>
             </state>
           </provider>
         </entry>
@@ -154,9 +166,11 @@
   <component name="HighlightingSettingsPerFile">
     <setting file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/660FDB64-1262-4BF1-BE59-1D682C770844/1e/04f825bf/PublicAccessor.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/2A863E53-0F35-446F-9D01-3215D308E6D3/18/941311a1/RecordAttribute.cs" root0="FORCE_HIGHLIGHTING" />
-    <setting file="file://$PROJECT_DIR$/Generated/Assembly-CSharp/Assets/Scripts/CaseClassTest.cs" root0="FORCE_HIGHLIGHTING" />
     <setting file="file://$PROJECT_DIR$/Assets/Scripts/CaseClassTest.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/B3CA6121-F451-4653-8120-D124561A24CD/bf/ae26d688/RecordAttribute.cs" root0="SKIP_INSPECTION" />
+    <setting file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/B3CA6121-F451-4653-8120-D124561A24CD/e6/7bbd368f/GeneratedContructor.cs" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/Assets/CSharp vNext Support/Editor/CompilerSettings.cs" root0="FORCE_HIGHLIGHTING" />
+    <setting file="file://$APPLICATION_CONFIG_DIR$/resharper-host/DecompilerCache/decompiler/766F95E6-D6FD-468A-B99F-931CFB1E1EF8/8f/7538f23a/RecordAttribute.cs" root0="SKIP_INSPECTION" />
     <setting file="file://$PROJECT_DIR$/../../GenerationAttributes/Case.cs" root0="FORCE_HIGHLIGHTING" />
   </component>
   <component name="IdeDocumentHistory">
@@ -258,7 +272,7 @@
     <servers />
   </component>
   <component name="TimeTrackingManager">
-    <option name="totallyTimeSpent" value="19189000" />
+    <option name="totallyTimeSpent" value="19190000" />
   </component>
   <component name="TodoView">
     <todo-panel id="selected-file">
@@ -285,17 +299,31 @@
       <window_info anchor="bottom" id="Docker" order="7" show_stripe_button="false" />
       <window_info anchor="bottom" id="Unity" order="7" />
       <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
-      <window_info anchor="bottom" id="Debug" order="3" weight="0.4" />
+      <window_info anchor="bottom" id="Debug" order="3" weight="0.39978212" />
       <window_info id="Favorites" order="2" side_tool="true" />
       <window_info anchor="bottom" id="NuGet" order="7" />
       <window_info anchor="right" content_ui="combo" id="Hierarchy" order="2" weight="0.25" />
+      <window_info anchor="bottom" id="Docker" order="7" show_stripe_button="false" />
       <window_info anchor="bottom" id="Inspection" order="5" weight="0.4" />
+      <window_info anchor="bottom" id="Unity" order="7" />
+      <window_info active="true" content_ui="combo" id="Project" order="0" visible="true" weight="0.26332623" />
+      <window_info id="Structure" order="1" side_tool="true" weight="0.25" />
       <window_info anchor="right" id="Commander" internal_type="SLIDING" order="0" type="SLIDING" weight="0.4" />
       <window_info anchor="right" id="Ant Build" order="1" weight="0.25" />
+      <window_info anchor="bottom" id="TODO" order="6" />
+      <window_info anchor="bottom" id="Version Control" order="7" />
+      <window_info anchor="bottom" id="Run" order="2" />
+      <window_info anchor="bottom" id="Unit Tests" order="7" />
+      <window_info anchor="bottom" id="Database Changes" order="7" show_stripe_button="false" />
+      <window_info anchor="right" id="Errors In Solution" order="3" />
       <window_info anchor="right" id="Database" order="3" />
       <window_info anchor="bottom" id="Message" order="0" />
+      <window_info anchor="bottom" id="Event Log" order="7" side_tool="true" />
       <window_info anchor="bottom" id="Cvs" order="4" weight="0.25" />
+      <window_info anchor="bottom" id="Debug" order="3" weight="0.4" />
       <window_info anchor="bottom" id="Find" order="1" />
+      <window_info anchor="bottom" id="Terminal" order="7" />
+      <window_info id="Favorites" order="2" side_tool="true" />
     </layout>
   </component>
   <component name="TypeScriptGeneratedFilesManager">
@@ -318,19 +346,15 @@
         <state relative-caret-position="726">
           <caret line="33" column="29" selection-start-line="33" selection-start-column="12" selection-end-line="33" selection-end-column="29" />
           <folding>
-            <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-            <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-            <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-            <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-            <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-            <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+            <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+            <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+            <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+            <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
           </folding>
         </state>
       </provider>
@@ -340,7 +364,7 @@
         <state>
           <caret column="6" selection-start-column="6" selection-end-column="6" />
           <folding>
-            <marker date="1528206767536" expanded="true" signature="6:194" ph="..." />
+            <marker date="1528206767536" expanded="false" signature="6:194" ph="..." />
             <marker date="1528206767536" expanded="true" signature="240:12418" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="271:384" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="429:479" ph="{...}" />
@@ -422,19 +446,15 @@
         <state relative-caret-position="2134">
           <caret line="99" column="31" selection-start-line="99" selection-start-column="31" selection-end-line="99" selection-end-column="31" />
           <folding>
-            <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-            <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-            <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-            <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-            <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-            <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+            <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+            <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+            <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+            <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
           </folding>
         </state>
       </provider>
@@ -451,19 +471,15 @@
         <state relative-caret-position="704">
           <caret line="34" column="4" selection-start-line="34" selection-start-column="4" selection-end-line="60" selection-end-column="5" />
           <folding>
-            <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-            <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-            <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-            <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-            <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-            <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+            <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+            <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+            <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+            <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
           </folding>
         </state>
       </provider>
@@ -473,7 +489,7 @@
         <state>
           <caret column="6" selection-start-column="6" selection-end-column="6" />
           <folding>
-            <marker date="1528206767536" expanded="true" signature="6:194" ph="..." />
+            <marker date="1528206767536" expanded="false" signature="6:194" ph="..." />
             <marker date="1528206767536" expanded="true" signature="240:12418" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="271:384" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="429:479" ph="{...}" />
@@ -568,7 +584,7 @@
         <state>
           <caret column="6" selection-start-column="6" selection-end-column="6" />
           <folding>
-            <marker date="1528206767536" expanded="true" signature="6:194" ph="..." />
+            <marker date="1528206767536" expanded="false" signature="6:194" ph="..." />
             <marker date="1528206767536" expanded="true" signature="240:12418" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="271:384" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="429:479" ph="{...}" />
@@ -644,19 +660,15 @@
         <state relative-caret-position="702">
           <caret line="32" column="29" selection-start-line="32" selection-start-column="29" selection-end-line="32" selection-end-column="29" />
           <folding>
-            <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-            <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-            <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-            <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-            <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-            <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+            <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+            <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+            <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+            <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
           </folding>
         </state>
       </provider>
@@ -666,19 +678,15 @@
         <state relative-caret-position="726">
           <caret line="33" column="29" selection-start-line="33" selection-start-column="12" selection-end-line="33" selection-end-column="29" />
           <folding>
-            <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-            <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-            <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-            <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-            <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-            <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+            <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+            <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+            <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+            <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
           </folding>
         </state>
       </provider>
@@ -688,7 +696,7 @@
         <state>
           <caret column="6" selection-start-column="6" selection-end-column="6" />
           <folding>
-            <marker date="1528206767536" expanded="true" signature="6:194" ph="..." />
+            <marker date="1528206767536" expanded="false" signature="6:194" ph="..." />
             <marker date="1528206767536" expanded="true" signature="240:12418" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="271:384" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="429:479" ph="{...}" />
@@ -770,19 +778,15 @@
         <state relative-caret-position="2134">
           <caret line="99" column="31" selection-start-line="99" selection-start-column="31" selection-end-line="99" selection-end-column="31" />
           <folding>
-            <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-            <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-            <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-            <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-            <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-            <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+            <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+            <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+            <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+            <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
           </folding>
         </state>
       </provider>
@@ -799,19 +803,15 @@
         <state relative-caret-position="704">
           <caret line="34" column="4" selection-start-line="34" selection-start-column="4" selection-end-line="60" selection-end-column="5" />
           <folding>
-            <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-            <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-            <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-            <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-            <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-            <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+            <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+            <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+            <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+            <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
           </folding>
         </state>
       </provider>
@@ -821,7 +821,7 @@
         <state>
           <caret column="6" selection-start-column="6" selection-end-column="6" />
           <folding>
-            <marker date="1528206767536" expanded="true" signature="6:194" ph="..." />
+            <marker date="1528206767536" expanded="false" signature="6:194" ph="..." />
             <marker date="1528206767536" expanded="true" signature="240:12418" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="271:384" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="429:479" ph="{...}" />
@@ -916,7 +916,7 @@
         <state>
           <caret column="6" selection-start-column="6" selection-end-column="6" />
           <folding>
-            <marker date="1528206767536" expanded="true" signature="6:194" ph="..." />
+            <marker date="1528206767536" expanded="false" signature="6:194" ph="..." />
             <marker date="1528206767536" expanded="true" signature="240:12418" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="271:384" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="429:479" ph="{...}" />
@@ -991,19 +991,15 @@
         <state relative-caret-position="660">
           <caret line="30" column="6" selection-start-line="30" selection-start-column="6" selection-end-line="30" selection-end-column="6" />
           <folding>
-            <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-            <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-            <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-            <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-            <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-            <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+            <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+            <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+            <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+            <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
           </folding>
         </state>
       </provider>
@@ -1013,19 +1009,15 @@
         <state relative-caret-position="2134">
           <caret line="99" column="31" selection-start-line="99" selection-start-column="31" selection-end-line="99" selection-end-column="31" />
           <folding>
-            <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-            <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-            <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-            <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-            <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-            <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+            <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+            <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+            <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+            <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
           </folding>
         </state>
       </provider>
@@ -1042,19 +1034,15 @@
         <state relative-caret-position="704">
           <caret line="34" column="4" selection-start-line="34" selection-start-column="4" selection-end-line="60" selection-end-column="5" />
           <folding>
-            <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-            <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-            <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-            <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-            <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-            <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+            <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+            <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+            <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+            <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
           </folding>
         </state>
       </provider>
@@ -1064,7 +1052,7 @@
         <state>
           <caret column="6" selection-start-column="6" selection-end-column="6" />
           <folding>
-            <marker date="1528206767536" expanded="true" signature="6:194" ph="..." />
+            <marker date="1528206767536" expanded="false" signature="6:194" ph="..." />
             <marker date="1528206767536" expanded="true" signature="240:12418" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="271:384" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="429:479" ph="{...}" />
@@ -1169,10 +1157,10 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/Assets/CSharp vNext Support/Editor/CompilerSettings.cs">
       <provider selected="true" editor-type-id="text-editor">
-        <state>
-          <caret column="6" selection-start-column="6" selection-end-column="6" />
+        <state relative-caret-position="175">
+          <caret line="121" column="44" selection-start-line="121" selection-start-column="44" selection-end-line="121" selection-end-column="44" />
           <folding>
-            <marker date="1528206767536" expanded="true" signature="6:194" ph="..." />
+            <marker date="1528206767536" expanded="false" signature="6:194" ph="..." />
             <marker date="1528206767536" expanded="true" signature="240:12418" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="271:384" ph="{...}" />
             <marker date="1528206767536" expanded="true" signature="429:479" ph="{...}" />
@@ -1244,22 +1232,18 @@
     </entry>
     <entry file="file://$PROJECT_DIR$/Assets/Scripts/CaseClassTest.cs">
       <provider selected="true" editor-type-id="text-editor">
-        <state relative-caret-position="616">
-          <caret line="36" column="36" lean-forward="true" selection-start-line="36" selection-start-column="36" selection-end-line="36" selection-end-column="36" />
+        <state relative-caret-position="264">
+          <caret line="41" selection-start-line="41" selection-end-line="41" />
           <folding>
-            <marker date="1530012291602" expanded="false" signature="20:89" ph="..." />
-            <marker date="1530012291602" expanded="true" signature="116:5082" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="122:285" ph="/* struct DummyStruct { ... */" />
-            <marker date="1530012291602" expanded="true" signature="432:478" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="609:995" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="789:989" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="852:979" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1123:1212" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1320:1409" ph="{...}" />
-            <marker date="1530012291602" expanded="true" signature="1466:1605" ph="{...}" />
-            <marker date="1530012291602" expanded="false" signature="1611:5080" ph="evaldo testai" />
-            <marker date="1530012291602" expanded="true" signature="1634:4008" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
-            <marker date="1530012291602" expanded="true" signature="4011:5065" ph="/* [Matcher] ... */" />
+            <marker date="1530091679762" expanded="false" signature="20:89" ph="..." />
+            <marker date="1530091679762" expanded="true" signature="116:5048" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="263:309" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="316:1152" ph="/* [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="1260:1349" ph="{...}" />
+            <marker date="1530091679762" expanded="true" signature="1432:1571" ph="{...}" />
+            <marker date="1530091679762" expanded="false" signature="1577:5046" ph="evaldo testai" />
+            <marker date="1530091679762" expanded="true" signature="1600:3974" ph="/* [Record(GenerateToString = false, GenerateComparer = false)] ... */" />
+            <marker date="1530091679762" expanded="true" signature="3977:5031" ph="/* [Matcher] ... */" />
           </folding>
         </state>
       </provider>
