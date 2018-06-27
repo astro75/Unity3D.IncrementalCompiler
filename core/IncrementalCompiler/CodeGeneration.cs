@@ -401,7 +401,7 @@ namespace IncrementalCompiler
             }
         }
 
-        public static (CSharpCompilation, ICollection<Diagnostic>) Run(
+        public static (CSharpCompilation, List<Diagnostic>) Run(
             bool incrementalRun,
             CSharpCompilation compilation,
             ImmutableArray<SyntaxTree> trees,

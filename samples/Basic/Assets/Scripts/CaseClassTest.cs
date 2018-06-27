@@ -6,70 +6,53 @@ using System.Collections.Generic;
 using GenerationAttributes;
 
 namespace Assets.Scripts {
-    // struct DummyStruct {
-    //     public readonly int int1, int2;
+   class Class { }
 
-    //     public string test() {
-    //         return Macros.className;
-    //     }
-    // }
+   enum Enum { A, B, C }
+   enum ByteEnum : byte { A, B, C }
+   enum LongEnum : long { A, B, C }
+   enum testEnum : int {
+       lol,
+       xd,
+       lmfao
+   }
 
-    class Class { }
-
-    enum Enum { A, B, C }
-    enum ByteEnum : byte { A, B, C }
-    enum LongEnum : long { A, B, C }
-
-    // [Record(GenerateToString = false, GenerateStaticApply = true)]
-    // public partial class ClassWithCompanion {
-    //     public readonly int int1, int2;
-    //     public readonly StructTest structWithHash;
-    //     [PublicAccessor] public readonly Class _classRef;
-    // }
-    //
-    // sealed partial class ClassNoCompanion {
-    //     public readonly int int2;
-    //     [PublicAccessor] public readonly Class _classRef;
-    // }
-    [Record(GenerateStaticApply = true)]
-    public partial struct CCCompanionWithoutGenerics {
-        public readonly string name;
-        public readonly Func<int, string> get;
-        public readonly Func<double, int> nToA;
-    }
-
-    [Record(GenerateStaticApply = true)]
+     [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
+     public partial struct CCCompanionWithoutGenerics {
+         public readonly string name;
+         public readonly Func<int, string> get;
+         public readonly Func<double, int> nToA;
+   
+         public void testSwitchEnumAnalyzer() {
+             var lol = testEnum.lol;
+             switch (lol) {
+                 case testEnum.lmfao:
+                     Console.WriteLine("lmfao");
+                     break;
+             }
+         }
+     }
+   
+    [Record(GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
     public partial struct CCOneGenericArgument<A> {
         public readonly string name;
         public readonly Func<A, string> get;
     }
 
-    [Record(GenerateConstructor = false)]
-    public partial struct CCNoConstructor<A> {
-        public readonly string name;
-        public readonly Func<A, string> get;
-    }
+   [Record(GenerateConstructor = GeneratedContructor.None)]
+   public partial struct CCNoConstructor<A> {
+       public readonly string name;
+       public readonly Func<A, string> get;
+   }
 
-    [Record(GenerateComparer = false, GenerateStaticApply = true)]
-    public partial struct CCSeveralGenerics<A, N> {
-        public readonly string name;
-        public readonly Func<A, string> get;
-        public readonly Func<N, A> nToA;
-    }
+   [Record(GenerateComparer = false)]
+   public partial struct CCNoStaticApply {
+       public readonly string name;
+       public readonly Func<int, string> get;
+       public readonly Func<double, int> nToA;
+   }
 
-    [Record]
-    public partial struct CCNoStaticApply {
-        public readonly string name;
-        public readonly Func<int, string> get;
-        public readonly Func<double, int> nToA;
-    }
-
-    // throws exception because record has no fields
-    // [Record]
-    // public partial struct EmptyRecord {
-    // }
-
-    #region evaldo testai
+   #region evaldo testai
 
 //     [Record(GenerateToString = false, GenerateComparer = false)]
 //     sealed partial class ClassTest {
