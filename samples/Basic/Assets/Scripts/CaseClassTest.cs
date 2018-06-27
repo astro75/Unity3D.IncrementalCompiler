@@ -17,27 +17,27 @@ namespace Assets.Scripts {
         lmfao
     }
 
-     // [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
-     // public partial struct CCCompanionWithoutGenerics {
-     //     public readonly string name;
-     //     public readonly Func<int, string> get;
-     //     public readonly Func<double, int> nToA;
-     //
-     //     public void testSwitchEnumAnalyzer() {
-     //         var lol = testEnum.lol;
-     //         switch (lol) {
-     //             case testEnum.lmfao:
-     //                 Console.WriteLine("lmfao");
-     //                 break;
-     //         }
-     //     }
-     // }
-    //
-    // [Record(GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
-    // public partial struct CCOneGenericArgument<A> {
-    //     public readonly string name;
-    //     public readonly Func<A, string> get;
-    // }
+      [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
+      public partial struct CCCompanionWithoutGenerics {
+          public readonly string name;
+          public readonly Func<int, string> get;
+          public readonly Func<double, int> nToA;
+
+          public void testSwitchEnumAnalyzer() {
+              var lol = testEnum.lol;
+              switch (lol) {
+                  case testEnum.lmfao:
+                      Console.WriteLine("lmfao");
+                      break;
+              }
+          }
+      }
+
+     [Record(GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
+     public partial struct CCOneGenericArgument<A> {
+         public readonly string name;
+         public readonly Func<A, string> get;
+     }
 
     [Record(GenerateConstructor = GeneratedContructor.None)]
     public partial struct CCNoConstructor<A> {

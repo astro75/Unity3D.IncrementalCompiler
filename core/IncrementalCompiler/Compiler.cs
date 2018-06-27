@@ -44,15 +44,25 @@ namespace IncrementalCompiler
         /// analyzers can only use dependencies that are already in this project
         /// dependency versions must match those of project dependencies
         /// </summary>
-        static ImmutableArray<DiagnosticAnalyzer> Analyzers() {
+        ImmutableArray<DiagnosticAnalyzer> Analyzers() {
             try {
                 var loader = new AnalyzerAssemblyLoader();
 
+                _logger.Info("Analyzers:");
                 return Directory
                     .GetFiles(analyzersPath)
                     .Where(x => x.EndsWith(".dll"))
-                    .Select(dll => (new AnalyzerFileReference(dll, loader)).GetAnalyzers(LanguageNames.CSharp))
+                    // .Select(dll => (new AnalyzerFileReference(dll, loader)).GetAnalyzers(LanguageNames.CSharp))
+                    .Select(dll => {
+                        var xxx = new AnalyzerFileReference(dll, loader);
+                        var csh = xxx.GetAnalyzers(LanguageNames.CSharp);
+                        var all = xxx.GetAnalyzersForAllLanguages();
+                        _logger.Info("csharp: " + csh.Length);
+                        _logger.Info("all: " + all.Length);
+                        return csh;
+                    })
                     .Aggregate(new List<DiagnosticAnalyzer>(), (list, analyzers) => {
+                        analyzers.ForEach(_logger.Info);
                         list.AddRange(analyzers);
                         return list;
                     })
@@ -177,20 +187,20 @@ namespace IncrementalCompiler
             CSharpCompilation compilation,
             ImmutableArray<DiagnosticAnalyzer> analyzers
         ) {
-            if (analyzers != null)
-                if (analyzers.Length > 0)
-                    diagnostic = diagnostic.Concat(AnalyzersDiagnostics(compilation, analyzers)).ToList();
+            diagnostic = diagnostic.Concat(AnalyzersDiagnostics(compilation, analyzers)).ToList();
             Emit(result, diagnostic, compilation);
         }
 
         static ImmutableArray<Diagnostic> AnalyzersDiagnostics(
             CSharpCompilation comp, ImmutableArray<DiagnosticAnalyzer> analyzers
         ) =>
-            comp
-            .WithAnalyzers(analyzers)
-            .GetAnalysisResultAsync(new CancellationToken())
-            .Result
-            .GetAllDiagnostics();
+            analyzers != null && analyzers.Any()
+            ? comp
+                .WithAnalyzers(analyzers)
+                .GetAnalysisResultAsync(new CancellationToken())
+                .Result
+                .GetAllDiagnostics()
+            : ImmutableArray<Diagnostic>.Empty;
 
         CompileResult BuildIncremental(CompileOptions options)
         {
