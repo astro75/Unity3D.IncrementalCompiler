@@ -426,7 +426,12 @@ namespace IncrementalCompiler
                 }
                 catch (Exception e) {
                     diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
-                        "ER0001", "Error", $"Compiler error for attribute {typeof(A).Name}: {e.Message}({e.Source}) at {e.StackTrace}", "Error", DiagnosticSeverity.Error, true
+                        "ER0001",
+                        "Error",
+                        $"Compiler error for attribute {typeof(A).Name}: {e.Message}({e.Source}) at {e.StackTrace}",
+                        "Error",
+                        DiagnosticSeverity.Error,
+                        true
                     ), attrLocation(attr)));
                 }
             }
@@ -655,7 +660,7 @@ namespace IncrementalCompiler
             }
         }
 
-        static A CreateAttributeByReflection<A>(AttributeData attributeData) where A : Attribute{
+        static A CreateAttributeByReflection<A>(AttributeData attributeData) where A : Attribute {
             var type = typeof(A);
             var arguments = attributeData.ConstructorArguments;
             var ctor = type.GetConstructors().First(ci => ci.GetParameters().Length == arguments.Length);
@@ -914,21 +919,18 @@ namespace IncrementalCompiler
             var newMembers = constructor.Concat(toString).Concat(getHashCode).Concat(equals);
 
             #region Static apply method
+
             var companion = Maybe.MZero<TypeDeclarationSyntax>();
+            var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier)).ToList();
+            if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply)
             {
-                var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier)).ToList();
-                if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply)
-                {
-                    if (cds.TypeParameterList == null)
-                    {
-                        newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
-                    }
-                    else
-                    {
-                        companion = Maybe.Just(GenerateCaseClassCompanion(cds, propsAsStruct));
-                    }
+                if (cds.TypeParameterList == null) {
+                    newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
+                } else {
+                    companion = Maybe.Just(GenerateCaseClassCompanion(cds, propsAsStruct));
                 }
             }
+
             #endregion
 
             var caseclass = CreatePartial(cds, newMembers, baseList);
