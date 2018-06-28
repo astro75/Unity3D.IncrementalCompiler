@@ -1,2 +1,2 @@
-XCOPY ..\..\core\IncrementalCompiler\bin\Release\* .\Compiler\ /S /Y 
+XCOPY ..\..\bin\UnityCompiler\* /S /Y 
 PAUSE.

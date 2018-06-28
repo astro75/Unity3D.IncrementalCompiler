@@ -133,12 +133,12 @@ namespace IncrementalCompiler
                     foreach (var warning in result.Warnings)
                     {
                         logger.Info(warning);
-                        Console.Error.WriteLine(warning);
+                        Console.Error.WriteLine(warning.Replace("\n", " ~~ "));
                     }
                     foreach (var error in result.Errors)
                     {
                         logger.Info(error);
-                        Console.Error.WriteLine(error);
+                        Console.Error.WriteLine(error.Replace("\n", " ~~ "));
                     }
                     return result.Succeeded ? 0 : 1;
                 }

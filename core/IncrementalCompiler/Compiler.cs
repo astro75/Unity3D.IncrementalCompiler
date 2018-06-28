@@ -2,6 +2,7 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -52,19 +53,12 @@ namespace IncrementalCompiler
                 return Directory
                     .GetFiles(analyzersPath)
                     .Where(x => x.EndsWith(".dll"))
-                    // .Select(dll => (new AnalyzerFileReference(dll, loader)).GetAnalyzers(LanguageNames.CSharp))
                     .Select(dll => {
-                        var anRef = new AnalyzerFileReference(dll, loader);
-                        var csh = anRef.GetAnalyzers(LanguageNames.CSharp);
-                        var all = anRef.GetAnalyzersForAllLanguages();
-                        var a = anRef.GetAssembly();
+                        var _ref = new AnalyzerFileReference(dll, loader);
+                        _ref.AnalyzerLoadFailed += (object _, AnalyzerLoadFailureEventArgs e) =>
+                            _logger.Info("failed to load analyzer: " + e.TypeName + "; "+ e.Message);
 
-                        Console.WriteLine("exportedTypes: " + a.ExportedTypes);
-
-                        _logger.Info("csharp: " + csh.Length);
-                        _logger.Info("all: " + all.Length);
-                        _logger.Info("Assembly: " + a);
-                        return csh;
+                        return _ref.GetAnalyzers(LanguageNames.CSharp);;
                     })
                     .Aggregate(new List<DiagnosticAnalyzer>(), (list, analyzers) => {
                         analyzers.ForEach(_logger.Info);
@@ -73,8 +67,7 @@ namespace IncrementalCompiler
                     })
                     .ToImmutableArray();
             } catch (Exception e) {
-                if (e.GetType() == typeof(FileNotFoundException)) _logger.Info(e);
-                _logger.Info("Something went wrong and analyzers weren't loaded successfully");
+                _logger.Info(e);
                 return new ImmutableArray<DiagnosticAnalyzer>();
             }
         }
@@ -389,12 +382,12 @@ namespace IncrementalCompiler
 
             // gather result
 
-            foreach (var d in diagnostic.Concat(r.Diagnostics))
-            {
+            var formatter = new DiagnosticFormatter();
+            foreach (var d in diagnostic.Concat(r.Diagnostics)) {
                 if (d.Severity == DiagnosticSeverity.Warning && d.IsWarningAsError == false)
-                    result.Warnings.Add(GetDiagnosticString(d, "warning"));
+                    result.Warnings.Add(formatter.Format(d, CultureInfo.InvariantCulture));
                 else if (d.Severity == DiagnosticSeverity.Error || d.IsWarningAsError)
-                    result.Errors.Add(GetDiagnosticString(d, "error"));
+                    result.Errors.Add(formatter.Format(d, CultureInfo.InvariantCulture));
             }
 
             result.Succeeded = r.Success;
@@ -453,7 +446,9 @@ namespace IncrementalCompiler
                 ? line.Path.Substring(_options.WorkDirectory.Length + 1)
                 : line.Path;
 
-            return $"{path}({line.StartLinePosition.Line + 1},{line.StartLinePosition.Character + 1}): " + $"{type} {diagnostic.Id}: {diagnostic.GetMessage()}";
+            var msg = diagnostic.GetMessage();
+            return $"{path}({line.StartLinePosition.Line + 1},{line.StartLinePosition.Character + 1}): "
+                + $"{type} {diagnostic.Id}: {msg}";
         }
 
         public static int ConvertPdb2Mdb(string dllFile, Logger logger, List<string> resultErrors)
