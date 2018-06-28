@@ -54,11 +54,16 @@ namespace IncrementalCompiler
                     .Where(x => x.EndsWith(".dll"))
                     // .Select(dll => (new AnalyzerFileReference(dll, loader)).GetAnalyzers(LanguageNames.CSharp))
                     .Select(dll => {
-                        var xxx = new AnalyzerFileReference(dll, loader);
-                        var csh = xxx.GetAnalyzers(LanguageNames.CSharp);
-                        var all = xxx.GetAnalyzersForAllLanguages();
+                        var anRef = new AnalyzerFileReference(dll, loader);
+                        var csh = anRef.GetAnalyzers(LanguageNames.CSharp);
+                        var all = anRef.GetAnalyzersForAllLanguages();
+                        var a = anRef.GetAssembly();
+
+                        Console.WriteLine("exportedTypes: " + a.ExportedTypes);
+
                         _logger.Info("csharp: " + csh.Length);
                         _logger.Info("all: " + all.Length);
+                        _logger.Info("Assembly: " + a);
                         return csh;
                     })
                     .Aggregate(new List<DiagnosticAnalyzer>(), (list, analyzers) => {
@@ -67,7 +72,9 @@ namespace IncrementalCompiler
                         return list;
                     })
                     .ToImmutableArray();
-            } catch (Exception _) {
+            } catch (Exception e) {
+                if (e.GetType() == typeof(FileNotFoundException)) _logger.Info(e);
+                _logger.Info("Something went wrong and analyzers weren't loaded successfully");
                 return new ImmutableArray<DiagnosticAnalyzer>();
             }
         }
