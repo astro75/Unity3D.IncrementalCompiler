@@ -32,8 +32,6 @@ artifacts/
 *.vspx
 
 # Intellij IDEA
-/samples/Basic/.idea
-/.idea
 .idea
 *.iml
 
