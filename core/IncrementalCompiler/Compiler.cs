@@ -18,6 +18,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Text;
 using Mono.CompilerServices.SymbolWriter;
 using NLog;
 
@@ -45,30 +46,58 @@ namespace IncrementalCompiler
         /// analyzers can only use dependencies that are already in this project
         /// dependency versions must match those of project dependencies
         /// </summary>
-        ImmutableArray<DiagnosticAnalyzer> Analyzers() {
+        Tuple<ImmutableArray<DiagnosticAnalyzer>, List<Diagnostic>> Analyzers() {
+            // if Location.None is used instead, unity doesnt print the error to console.
+            var defaultPos = Location.Create(
+                "Compiler/Analyzers", TextSpan.FromBounds(0, 0), new LinePositionSpan()
+            );
+
             try {
                 var loader = new AnalyzerAssemblyLoader();
+                var diagnostic = new List<Diagnostic>();
 
                 _logger.Info("Analyzers:");
-                return Directory
+                var analyzers = Directory
                     .GetFiles(analyzersPath)
                     .Where(x => x.EndsWith(".dll"))
                     .Select(dll => {
                         var _ref = new AnalyzerFileReference(dll, loader);
-                        _ref.AnalyzerLoadFailed += (object _, AnalyzerLoadFailureEventArgs e) =>
-                            _logger.Info("failed to load analyzer: " + e.TypeName + "; "+ e.Message);
+                        _ref.AnalyzerLoadFailed += (_, e) => {
+                            _logger.Warn("failed to load analyzer: " + e.TypeName + "; " + e.Message);
+                            diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                                "A01",
+                                "Warning",
+                                "Compiler couldn't load provided code analyzer: " + e.TypeName +
+                                ". Some of compiler's custom error reporting will be missing. More info in compiler log.",
+                                "Warning",
+                                DiagnosticSeverity.Warning,
+                                true
+                            ), defaultPos));
+                        };
 
                         return _ref.GetAnalyzers(LanguageNames.CSharp);;
                     })
-                    .Aggregate(new List<DiagnosticAnalyzer>(), (list, analyzers) => {
-                        analyzers.ForEach(_logger.Info);
-                        list.AddRange(analyzers);
+                    .Aggregate(new List<DiagnosticAnalyzer>(), (list, a) => {
+                        a.ForEach(_logger.Info);
+                        list.AddRange(a);
                         return list;
                     })
                     .ToImmutableArray();
+
+                return Tuple.Create(analyzers, diagnostic);
             } catch (Exception e) {
-                _logger.Info(e);
-                return new ImmutableArray<DiagnosticAnalyzer>();
+                _logger.Error(e);
+                return Tuple.Create(
+                    new ImmutableArray<DiagnosticAnalyzer>(),
+                    new List<Diagnostic> {Diagnostic.Create(new DiagnosticDescriptor(
+                        "A02",
+                        "Warning",
+                        "Exception was thrown when loading analyzers: " + e.Message,
+                        "Warning",
+                        DiagnosticSeverity.Warning,
+                        true
+                    ), defaultPos)}
+                );
             }
         }
 
@@ -152,17 +181,23 @@ namespace IncrementalCompiler
             );
             logTime("Compilation created");
 
-            analyzers = Analyzers();
-
             List<Diagnostic> diagnostic;
-            (compilation, diagnostic) = CodeGeneration.Run(
+
+            (analyzers, diagnostic) = Analyzers();
+
+            compilation = CodeGeneration.Run(
                 false,
                 compilation,
                 compilation.SyntaxTrees,
                 parseOptions,
                 assemblyNameNoExtension,
                 ref _filesMapping, _sourceMap
-            );
+            ).fold((comp, diag) => {
+                // diag.ForEach(Debug.Log());
+                diagnostic.AddRange(diag);
+                return comp;
+            });
+
             logTime("Code generated");
 
             compilation = MacroProcessor.Run(
@@ -384,7 +419,7 @@ namespace IncrementalCompiler
 
             var formatter = new DiagnosticFormatter();
             foreach (var d in diagnostic.Concat(r.Diagnostics)) {
-                if (d.Severity == DiagnosticSeverity.Warning && d.IsWarningAsError == false)
+                if (d.Severity == DiagnosticSeverity.Warning && !d.IsWarningAsError)
                     result.Warnings.Add(formatter.Format(d, CultureInfo.InvariantCulture));
                 else if (d.Severity == DiagnosticSeverity.Error || d.IsWarningAsError)
                     result.Errors.Add(formatter.Format(d, CultureInfo.InvariantCulture));

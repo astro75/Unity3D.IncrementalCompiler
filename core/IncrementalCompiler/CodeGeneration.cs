@@ -401,7 +401,7 @@ namespace IncrementalCompiler
             }
         }
 
-        public static (CSharpCompilation, List<Diagnostic>) Run(
+        public static Tuple<CSharpCompilation, List<Diagnostic>> Run(
             bool incrementalRun,
             CSharpCompilation compilation,
             ImmutableArray<SyntaxTree> trees,
@@ -645,7 +645,7 @@ namespace IncrementalCompiler
                 filesMapping.filesDict.Values
                     .SelectMany(_ => _)
                     .Select(path => path.Replace("/", "\\")));
-            return (compilation, diagnostic);
+            return Tuple.Create(compilation, diagnostic);
         }
 
         static Location attrLocation(AttributeData attr) => attr.ApplicationSyntaxReference.GetSyntax().GetLocation();

@@ -1,7 +1,9 @@
-﻿using System.Linq;
+﻿using System;
+using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using NLog;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
@@ -81,11 +83,17 @@ namespace IncrementalCompiler
             return member;
         }
 
-        public static LiteralExpressionSyntax StringLiteral(this string value) => 
+        public static LiteralExpressionSyntax StringLiteral(this string value) =>
             SF.LiteralExpression(SyntaxKind.StringLiteralExpression, SF.Literal(value));
 
         public static readonly BaseListSyntax EmptyBaseList = null, NoTypeArguments = null;
         public static SyntaxList<AttributeListSyntax> EmptyAttributeList = SyntaxFactory.List<AttributeListSyntax>();
         public static SyntaxTriviaList EmptyTriviaList = SyntaxFactory.TriviaList();
+
+        public static Tuple<C, D> flatMap<A, B, C, D>(this Tuple<A, B> tuple, Func<A, B, Tuple<C, D>> mapper) =>
+            mapper(tuple.Item1, tuple.Item2);
+
+        public static C fold<A, B, C>(this Tuple<A, B> tuple, Func<A, B, C> folder) =>
+            folder(tuple.Item1, tuple.Item2);
     }
 }
