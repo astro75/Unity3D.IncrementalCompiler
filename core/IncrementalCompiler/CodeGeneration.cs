@@ -401,7 +401,7 @@ namespace IncrementalCompiler
             }
         }
 
-        public static Tuple<CSharpCompilation, List<Diagnostic>> Run(
+        public static (CSharpCompilation, List<Diagnostic>) Run(
             bool incrementalRun,
             CSharpCompilation compilation,
             ImmutableArray<SyntaxTree> trees,
@@ -645,7 +645,7 @@ namespace IncrementalCompiler
                 filesMapping.filesDict.Values
                     .SelectMany(_ => _)
                     .Select(path => path.Replace("/", "\\")));
-            return Tuple.Create(compilation, diagnostic);
+            return (compilation, diagnostic);
         }
 
         static Location attrLocation(AttributeData attr) => attr.ApplicationSyntaxReference.GetSyntax().GetLocation();
@@ -921,13 +921,15 @@ namespace IncrementalCompiler
             #region Static apply method
 
             var companion = Maybe.MZero<TypeDeclarationSyntax>();
-            var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier)).ToList();
-            if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply)
             {
-                if (cds.TypeParameterList == null) {
-                    newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
-                } else {
-                    companion = Maybe.Just(GenerateCaseClassCompanion(cds, propsAsStruct));
+                var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier)).ToList();
+                if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply) {
+                    if (cds.TypeParameterList == null) {
+                        newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
+                    }
+                    else {
+                        companion = Maybe.Just(GenerateCaseClassCompanion(cds, propsAsStruct));
+                    }
                 }
             }
 

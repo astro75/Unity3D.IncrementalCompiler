@@ -199,8 +199,6 @@
     <Compile Include="Program.Dev.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
     <Compile Include="Settings.cs" />
-    <Compile Include="SwitchEnum\SwitchEnumAnalyzer.cs" />
-    <Compile Include="SwitchEnum\SwitchInformation.cs" />
   </ItemGroup>
   <ItemGroup>
     <None Include="App.config" />
@@ -222,7 +220,6 @@
     </ProjectReference>
   </ItemGroup>
   <ItemGroup>
-    <Content Include="Analyzers\SwitchEnum.dll" />
     <Content Include="IncrementalCompiler.xml">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>

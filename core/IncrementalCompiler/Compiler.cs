@@ -46,10 +46,10 @@ namespace IncrementalCompiler
         /// analyzers can only use dependencies that are already in this project
         /// dependency versions must match those of project dependencies
         /// </summary>
-        Tuple<ImmutableArray<DiagnosticAnalyzer>, List<Diagnostic>> Analyzers() {
+        (ImmutableArray<DiagnosticAnalyzer>, List<Diagnostic>) Analyzers() {
             // if Location.None is used instead, unity doesnt print the error to console.
             var defaultPos = Location.Create(
-                "Compiler/Analyzers", TextSpan.FromBounds(0, 0), new LinePositionSpan()
+                "/Analyzers", TextSpan.FromBounds(0, 0), new LinePositionSpan()
             );
 
             try {
@@ -63,14 +63,14 @@ namespace IncrementalCompiler
                     .Select(dll => {
                         var _ref = new AnalyzerFileReference(dll, loader);
                         _ref.AnalyzerLoadFailed += (_, e) => {
-                            _logger.Warn("failed to load analyzer: " + e.TypeName + "; " + e.Message);
+                            _logger.Error("failed to load analyzer: " + e.TypeName + "; " + e.Message);
                             diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
                                 "A01",
-                                "Warning",
+                                "Error",
                                 "Compiler couldn't load provided code analyzer: " + e.TypeName +
                                 ". Some of compiler's custom error reporting will be missing. More info in compiler log.",
-                                "Warning",
-                                DiagnosticSeverity.Warning,
+                                "Error",
+                                DiagnosticSeverity.Error,
                                 true
                             ), defaultPos));
                         };
@@ -84,11 +84,11 @@ namespace IncrementalCompiler
                     })
                     .ToImmutableArray();
 
-                return Tuple.Create(analyzers, diagnostic);
+                return (analyzers, diagnostic);
             } catch (Exception e) {
                 _logger.Error(e);
-                return Tuple.Create(
-                    new ImmutableArray<DiagnosticAnalyzer>(),
+                return (
+                    ImmutableArray<DiagnosticAnalyzer>.Empty,
                     new List<Diagnostic> {Diagnostic.Create(new DiagnosticDescriptor(
                         "A02",
                         "Warning",
@@ -192,10 +192,9 @@ namespace IncrementalCompiler
                 parseOptions,
                 assemblyNameNoExtension,
                 ref _filesMapping, _sourceMap
-            ).fold((comp, diag) => {
-                // diag.ForEach(Debug.Log());
-                diagnostic.AddRange(diag);
-                return comp;
+            ).tap((compAndDiag) => {
+                diagnostic.AddRange(compAndDiag.Item2);
+                return compAndDiag.Item1;
             });
 
             logTime("Code generated");
@@ -229,7 +228,7 @@ namespace IncrementalCompiler
         static ImmutableArray<Diagnostic> AnalyzersDiagnostics(
             CSharpCompilation comp, ImmutableArray<DiagnosticAnalyzer> analyzers
         ) =>
-            analyzers != null && analyzers.Any()
+            analyzers.Any()
             ? comp
                 .WithAnalyzers(analyzers)
                 .GetAnalysisResultAsync(new CancellationToken())

@@ -10,14 +10,11 @@ using System.Threading;
 using Microsoft.CodeAnalysis;
 
 namespace IncrementalCompiler.Analyzers {
+    /// <summary>
+    /// Copied from
+    /// https://github.com/dotnet/roslyn/blob/master/src/Compilers/Core/Portable/DiagnosticAnalyzer/AnalyzerAssemblyLoader.cs
+    /// </summary>
     public class AnalyzerAssemblyLoader : IAnalyzerAssemblyLoader {
-        // public static AnalyzerAssemblyLoader Instance = new AnalyzerAssemblyLoader();
-        //
-        // public Assembly LoadFromPath(string fullPath) { return Assembly.LoadFrom(fullPath); }
-        //
-        // public void AddDependencyLocation(string fullPath) {
-        //
-        // }
         private int _hookedAssemblyResolve;
         private readonly object _guard = new object();
 
