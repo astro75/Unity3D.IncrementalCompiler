@@ -6,53 +6,46 @@ using System.Collections.Generic;
 using GenerationAttributes;
 
 namespace Assets.Scripts {
-    class Class { }
+   class Class { }
 
-    enum Enum { A, B, C }
-    enum ByteEnum : byte { A, B, C }
-    enum LongEnum : long { A, B, C }
-    enum testEnum : int {
-        lol,
-        xd,
-        lmfao
-    }
+   enum Enum { A, B, C }
+   enum ByteEnum : byte { A, B, C }
+   enum LongEnum : long { A, B, C }
+   enum testEnum : int {
+       lol,
+       xd,
+       lmfao
+   }
 
-      [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
-      public partial struct CCCompanionWithoutGenerics {
-          public readonly string name;
-          public readonly Func<int, string> get;
-          public readonly Func<double, int> nToA;
-
-          public void testSwitchEnumAnalyzer() {
-              var lol = testEnum.lol;
-              switch (lol) {
-                  case testEnum.lmfao:
-                      Console.WriteLine("lmfao");
-                      break;
-              }
-          }
-      }
-
-     [Record(GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
+     [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
+     public partial struct CCCompanionWithoutGenerics {
+         public readonly string name;
+         public readonly Func<int, string> get;
+         public readonly Func<double, int> nToA;
+   
+         public void testSwitchEnumAnalyzer() {
+             var lol = testEnum.lol;
+             switch (lol) {
+                 case testEnum.lmfao:
+                     Console.WriteLine("lmfao");
+                     break;
+             }
+         }
+     }
+   
+    [Record(GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
      public partial struct CCOneGenericArgument<A> {
          public readonly string name;
          public readonly Func<A, string> get;
      }
 
-    [Record(GenerateConstructor = GeneratedContructor.None)]
-    public partial struct CCNoConstructor<A> {
-        public readonly string name;
-        public readonly Func<A, string> get;
-    }
+   [Record(GenerateConstructor = GeneratedContructor.None)]
+   public partial struct CCNoConstructor<A> {
+       public readonly string name;
+       public readonly Func<A, string> get;
+   }
 
-    [Record(GenerateComparer = false)]
-    public partial struct CCNoStaticApply {
-        public readonly string name;
-        public readonly Func<int, string> get;
-        public readonly Func<double, int> nToA;
-    }
-
-    #region evaldo testai
+   #region evaldo testai
 
 //     [Record(GenerateToString = false, GenerateComparer = false)]
 //     sealed partial class ClassTest {
