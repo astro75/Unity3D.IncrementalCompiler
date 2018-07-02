@@ -12,8 +12,6 @@ using System.Threading.Tasks;
 using System.Xml.Linq;
 using Flinq;
 using IncrementalCompiler.Analyzers;
-using IncrementalCompiler.SwitchAnalyzer;
-using IncrementalCompiler.SwitchEnum;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
@@ -68,7 +66,7 @@ namespace IncrementalCompiler
                                 "A01",
                                 "Error",
                                 "Compiler couldn't load provided code analyzer: " + e.TypeName +
-                                ". Some of compiler's custom error reporting will be missing. More info in compiler log.",
+                                ". Please fix or remove from /Analyzers directory. More info in compiler log.",
                                 "Error",
                                 DiagnosticSeverity.Error,
                                 true
