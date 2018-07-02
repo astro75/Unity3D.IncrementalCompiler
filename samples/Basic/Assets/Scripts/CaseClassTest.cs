@@ -34,22 +34,15 @@ namespace Assets.Scripts {
      }
    
     [Record(GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
-    public partial struct CCOneGenericArgument<A> {
-        public readonly string name;
-        public readonly Func<A, string> get;
-    }
+     public partial struct CCOneGenericArgument<A> {
+         public readonly string name;
+         public readonly Func<A, string> get;
+     }
 
    [Record(GenerateConstructor = GeneratedContructor.None)]
    public partial struct CCNoConstructor<A> {
        public readonly string name;
        public readonly Func<A, string> get;
-   }
-
-   [Record(GenerateComparer = false)]
-   public partial struct CCNoStaticApply {
-       public readonly string name;
-       public readonly Func<int, string> get;
-       public readonly Func<double, int> nToA;
    }
 
    #region evaldo testai

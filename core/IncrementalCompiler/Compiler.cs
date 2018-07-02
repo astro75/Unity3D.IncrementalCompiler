@@ -2,12 +2,21 @@
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
+using System.Threading;
+using System.Threading.Tasks;
+using System.Xml.Linq;
+using Flinq;
+using IncrementalCompiler.Analyzers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
+using Microsoft.CodeAnalysis.CSharp.Syntax;
+using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Text;
 using Mono.CompilerServices.SymbolWriter;
 using NLog;
 
@@ -27,8 +36,68 @@ namespace IncrementalCompiler
         string assemblyNameNoExtension;
         CSharpParseOptions parseOptions;
         CodeGeneration.GeneratedFilesMapping _filesMapping;
-
+        ImmutableArray<DiagnosticAnalyzer> analyzers;
+        const string analyzersPath = "./Analyzers";
         CompileResult previousResult;
+
+        /// <summary>
+        /// analyzers can only use dependencies that are already in this project
+        /// dependency versions must match those of project dependencies
+        /// </summary>
+        (ImmutableArray<DiagnosticAnalyzer>, List<Diagnostic>) Analyzers() {
+            // if Location.None is used instead, unity doesnt print the error to console.
+            var defaultPos = Location.Create(
+                "/Analyzers", TextSpan.FromBounds(0, 0), new LinePositionSpan()
+            );
+
+            try {
+                var loader = new AnalyzerAssemblyLoader();
+                var diagnostic = new List<Diagnostic>();
+
+                _logger.Info("Analyzers:");
+                var analyzers = Directory
+                    .GetFiles(analyzersPath)
+                    .Where(x => x.EndsWith(".dll"))
+                    .Select(dll => {
+                        var _ref = new AnalyzerFileReference(dll, loader);
+                        _ref.AnalyzerLoadFailed += (_, e) => {
+                            _logger.Error("failed to load analyzer: " + e.TypeName + "; " + e.Message);
+                            diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                                "A01",
+                                "Error",
+                                "Compiler couldn't load provided code analyzer: " + e.TypeName +
+                                ". Please fix or remove from /Analyzers directory. More info in compiler log.",
+                                "Error",
+                                DiagnosticSeverity.Error,
+                                true
+                            ), defaultPos));
+                        };
+
+                        return _ref.GetAnalyzers(LanguageNames.CSharp);;
+                    })
+                    .Aggregate(new List<DiagnosticAnalyzer>(), (list, a) => {
+                        a.ForEach(_logger.Info);
+                        list.AddRange(a);
+                        return list;
+                    })
+                    .ToImmutableArray();
+
+                return (analyzers, diagnostic);
+            } catch (Exception e) {
+                _logger.Error(e);
+                return (
+                    ImmutableArray<DiagnosticAnalyzer>.Empty,
+                    new List<Diagnostic> {Diagnostic.Create(new DiagnosticDescriptor(
+                        "A02",
+                        "Warning",
+                        "Exception was thrown when loading analyzers: " + e.Message,
+                        "Warning",
+                        DiagnosticSeverity.Warning,
+                        true
+                    ), defaultPos)}
+                );
+            }
+        }
 
         public CompileResult Build(CompileOptions options)
         {
@@ -90,13 +159,12 @@ namespace IncrementalCompiler
                 keySelector: file => file,
                 elementSelector: CreateReference
             );
-
             logTime("Loaded references");
 
             _sourceMap = options.Files.AsParallel().Select(
                 fileName => (fileName, tree: ParseSource(fileName, parseOptions))).ToDictionary(t => t.fileName, t => t.tree);
-
             logTime("Loaded sources");
+
 
             var specificDiagnosticOptions = options.NoWarnings.ToDictionary(x => x, _ => ReportDiagnostic.Suppress);
             var compilation = CSharpCompilation.Create(
@@ -106,18 +174,37 @@ namespace IncrementalCompiler
                 new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
                     .WithSpecificDiagnosticOptions(specificDiagnosticOptions)
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
-                    .WithAllowUnsafe(options.Options.Contains("-unsafe")));
-            logTime("Compialtion created");
-            ICollection<Diagnostic> diagnostic;
-            (compilation, diagnostic) = CodeGeneration.Run(
-                false, compilation, compilation.SyntaxTrees, parseOptions, assemblyNameNoExtension, ref _filesMapping, _sourceMap
+                    .WithAllowUnsafe(options.Options.Contains("-unsafe"))
+
             );
+            logTime("Compilation created");
+
+            List<Diagnostic> diagnostic;
+
+            (analyzers, diagnostic) = Analyzers();
+
+            compilation = CodeGeneration.Run(
+                false,
+                compilation,
+                compilation.SyntaxTrees,
+                parseOptions,
+                assemblyNameNoExtension,
+                ref _filesMapping, _sourceMap
+            ).tap((compAndDiag) => {
+                diagnostic.AddRange(compAndDiag.Item2);
+                return compAndDiag.Item1;
+            });
+
             logTime("Code generated");
-            compilation = MacroProcessor.Run(compilation, compilation.SyntaxTrees, _sourceMap);
+
+            compilation = MacroProcessor.Run(
+                compilation,
+                compilation.SyntaxTrees,
+                _sourceMap
+            );
             logTime("Macros completed");
 
-            Emit(result, diagnostic, compilation);
-
+            AnalyzeAndEmit(result, diagnostic, compilation, analyzers);
             logTime("Emitted dll");
 
             _logger.Info($"Total elapsed {totalSW.Elapsed}");
@@ -125,6 +212,27 @@ namespace IncrementalCompiler
             previousResult = result;
             return (result, compilation);
         }
+
+        void AnalyzeAndEmit(
+            CompileResult result,
+            ICollection<Diagnostic> diagnostic,
+            CSharpCompilation compilation,
+            ImmutableArray<DiagnosticAnalyzer> analyzers
+        ) {
+            diagnostic = diagnostic.Concat(AnalyzersDiagnostics(compilation, analyzers)).ToList();
+            Emit(result, diagnostic, compilation);
+        }
+
+        static ImmutableArray<Diagnostic> AnalyzersDiagnostics(
+            CSharpCompilation comp, ImmutableArray<DiagnosticAnalyzer> analyzers
+        ) =>
+            analyzers.Any()
+            ? comp
+                .WithAnalyzers(analyzers)
+                .GetAnalysisResultAsync(new CancellationToken())
+                .Result
+                .GetAllDiagnostics()
+            : ImmutableArray<Diagnostic>.Empty;
 
         CompileResult BuildIncremental(CompileOptions options)
         {
@@ -145,7 +253,7 @@ namespace IncrementalCompiler
             {
                 _logger.Info("* {0}", file);
                 var reference = CreateReference(file);
-                _compilation = _compilation.ReplaceReference(_referenceMap[file], reference);
+                _compilation =_compilation.ReplaceReference(_referenceMap[file], reference);
                 _referenceMap[file] = reference;
             }
             foreach (var file in referenceChanges.Removed)
@@ -205,7 +313,7 @@ namespace IncrementalCompiler
 
             var allAddedTrees = newTrees.Concat(changes).Select(t => t.tree).ToImmutableArray();
 
-            ICollection<Diagnostic> diagnostic;
+            List<Diagnostic> diagnostic;
             (_compilation, diagnostic) = CodeGeneration.Run(
                 true, _compilation, allAddedTrees, parseOptions, assemblyNameNoExtension, ref _filesMapping, _sourceMap
             );
@@ -213,10 +321,20 @@ namespace IncrementalCompiler
             //TODO: macros on new generated files
 
             var treeSet = allAddedTrees.Select(t => t.FilePath).ToImmutableHashSet();
-            var treesForMacroProcessor = _compilation.SyntaxTrees.Where(t => treeSet.Contains(t.FilePath)).ToImmutableArray();
-            _compilation = MacroProcessor.Run(_compilation, treesForMacroProcessor, _sourceMap);
+            var treesForMacroProcessor =
+                _compilation
+                .SyntaxTrees
+                .Where(t => treeSet.Contains(t.FilePath))
+                .ToImmutableArray();
 
+            _compilation = MacroProcessor.Run(
+                _compilation,
+                treesForMacroProcessor,
+                _sourceMap
+            );
             // emit or reuse prebuilt output
+
+            diagnostic.AddRange(AnalyzersDiagnostics(_compilation, analyzers));
 
             var reusePrebuilt = previousResult.Succeeded && _outputDllStream != null && (
                 (_options.PrebuiltOutputReuse == PrebuiltOutputReuseType.WhenNoChange &&
@@ -257,7 +375,7 @@ namespace IncrementalCompiler
 
                 var result = previousResult;
                 result.Clear();
-                Emit(result, diagnostic, _compilation);
+                AnalyzeAndEmit(result, diagnostic, _compilation, analyzers);
                 return result;
             }
         }
@@ -296,12 +414,12 @@ namespace IncrementalCompiler
 
             // gather result
 
-            foreach (var d in diagnostic.Concat(r.Diagnostics))
-            {
-                if (d.Severity == DiagnosticSeverity.Warning && d.IsWarningAsError == false)
-                    result.Warnings.Add(GetDiagnosticString(d, "warning"));
+            var formatter = new DiagnosticFormatter();
+            foreach (var d in diagnostic.Concat(r.Diagnostics)) {
+                if (d.Severity == DiagnosticSeverity.Warning && !d.IsWarningAsError)
+                    result.Warnings.Add(formatter.Format(d, CultureInfo.InvariantCulture));
                 else if (d.Severity == DiagnosticSeverity.Error || d.IsWarningAsError)
-                    result.Errors.Add(GetDiagnosticString(d, "error"));
+                    result.Errors.Add(formatter.Format(d, CultureInfo.InvariantCulture));
             }
 
             result.Succeeded = r.Success;
@@ -360,7 +478,9 @@ namespace IncrementalCompiler
                 ? line.Path.Substring(_options.WorkDirectory.Length + 1)
                 : line.Path;
 
-            return $"{path}({line.StartLinePosition.Line + 1},{line.StartLinePosition.Character + 1}): " + $"{type} {diagnostic.Id}: {diagnostic.GetMessage()}";
+            var msg = diagnostic.GetMessage();
+            return $"{path}({line.StartLinePosition.Line + 1},{line.StartLinePosition.Character + 1}): "
+                + $"{type} {diagnostic.Id}: {msg}";
         }
 
         public static int ConvertPdb2Mdb(string dllFile, Logger logger, List<string> resultErrors)

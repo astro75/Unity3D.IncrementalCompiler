@@ -1,2 +1,0 @@
-Generated\Assembly-CSharp\Assets\Scripts\CaseClassTest.cs
-Generated\Assembly-CSharp\com\tinylabproductions\generated\java\AssemblyCSharp.cs
