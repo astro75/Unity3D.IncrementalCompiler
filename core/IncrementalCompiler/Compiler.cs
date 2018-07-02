@@ -37,7 +37,7 @@ namespace IncrementalCompiler
         CSharpParseOptions parseOptions;
         CodeGeneration.GeneratedFilesMapping _filesMapping;
         ImmutableArray<DiagnosticAnalyzer> analyzers;
-        const string analyzersPath = "./Compiler/Analyzers";
+        const string analyzersPath = "./Analyzers";
         CompileResult previousResult;
 
         /// <summary>
