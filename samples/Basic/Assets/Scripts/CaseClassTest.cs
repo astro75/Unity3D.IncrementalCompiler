@@ -11,9 +11,9 @@ namespace Assets.Scripts {
     enum ByteEnum : byte { A, B, C }
     enum LongEnum : long { A, B, C }
     enum testEnum : int {
-        lol,
-        xd,
-        lmfao
+        one,
+        two,
+        three
     }
 
     [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
@@ -23,25 +23,25 @@ namespace Assets.Scripts {
         public readonly Func<double, int> nToA;
 
         public void testSwitchEnumAnalyzer() {
-            var lol = testEnum.lol;
-            switch (lol) {
-                case testEnum.lmfao:
-                    Console.WriteLine("lmfao");
+            var one = testEnum.one;
+            switch (one) {
+                case testEnum.three:
+                    Console.WriteLine("three");
                     break;
             }
         }
 
         public void testDefaultNotReachable() {
-            var lol = testEnum.lol;
-            switch (lol) {
-                case testEnum.lmfao:
-                    Console.WriteLine("lmfao");
+            var one = testEnum.one;
+            switch (one) {
+                case testEnum.three:
+                    Console.WriteLine("three");
                     break;
-                case testEnum.xd:
-                    Console.WriteLine("xd");
+                case testEnum.two:
+                    Console.WriteLine("two");
                     break;
-                case testEnum.lol:
-                    Console.WriteLine("lol");
+                case testEnum.one:
+                    Console.WriteLine("one");
                     break;
                 default: return;
             }

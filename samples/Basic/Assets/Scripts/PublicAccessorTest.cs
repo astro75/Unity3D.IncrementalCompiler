@@ -1,23 +1,27 @@
 ﻿using System.Collections.Generic;
 using GenerationAttributes;
 
-namespace Lol {
-    public class Lol { }
+namespace IdenticalNamespace {
+    public class IdenticalType {
+        Assets.Scripts.Class1 class1;
+    }
 }
 
-namespace Assets.Scripts.Lol {
-    public class Lol { }
+namespace Assets.Scripts.IdenticalNamespace {
+    public class IdenticalType {
+         Class1 class1;
+    }
 }
 
 namespace Assets.Scripts {
-    public class XD { }
+    public class Class1 { }
 
     public partial class PublicAccessorTest {
         [PublicAccessor] int _num;
-        [PublicAccessor] XD _xd;
-        [PublicAccessor] global::Lol.Lol _globalLol;
-        [PublicAccessor] Lol.Lol _lol;
+        [PublicAccessor] Class1 class1;
+        [PublicAccessor] global::IdenticalNamespace.IdenticalType type1;
+        [PublicAccessor] IdenticalNamespace.IdenticalType type2;
         [PublicAccessor] int[] numArray;
-        [PublicAccessor] List<Lol.Lol> lolList;
+        [PublicAccessor] List<IdenticalNamespace.IdenticalType> list;
     }
 }
