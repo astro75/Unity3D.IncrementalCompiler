@@ -2,10 +2,8 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
-using System.Reflection.Metadata;
 using System.Text;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
@@ -671,31 +669,29 @@ namespace IncrementalCompiler
             return res;
         }
 
-        static class Primitives {
-            public static List<string> list = new List<string> {
-                "bool",
-                "int",
-                "byte",
-                "sbyte",
-                "decimal",
-                "char",
-                "double",
-                "float",
-                "uint",
-                "long",
-                "ulong",
-                "short",
-                "object",
-                "ushort",
-                "string"
-            };
-        }
+        static readonly ImmutableArray<string> primitives = ImmutableArray.Create(
+            "bool",
+            "int",
+            "byte",
+            "sbyte",
+            "decimal",
+            "char",
+            "double",
+            "float",
+            "uint",
+            "long",
+            "ulong",
+            "short",
+            "object",
+            "ushort",
+            "string"
+        );
 
         static bool isPrimitive(this ITypeSymbol type) =>
             type.SpecialType != SpecialType.None;
 
         static bool isPrimitiveArray(this ITypeSymbol type) =>
-            type.TypeKind == TypeKind.Array && Primitives.list.Any(type.ToDisplayString().StartsWith);
+            type.TypeKind == TypeKind.Array && primitives.Any(type.ToDisplayString().StartsWith);
 
         static bool isBuiltIn(this ITypeSymbol type) =>
             type.isPrimitive() || type.isPrimitiveArray();

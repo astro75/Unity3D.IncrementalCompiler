@@ -7,19 +7,9 @@ using GenerationAttributes;
 
 namespace Assets.Scripts {
     class Class { }
-
-    enum Enum {
-        A, B, C
-    }
-
-    enum ByteEnum : byte {
-        A, B, C
-    }
-
-    enum LongEnum : long {
-        A, B, C
-    }
-
+    enum Enum { A, B, C }
+    enum ByteEnum : byte { A, B, C }
+    enum LongEnum : long { A, B, C }
     enum testEnum : int {
         lol,
         xd,
