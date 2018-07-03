@@ -2,8 +2,10 @@
 using System.Collections;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Reflection.Metadata;
 using System.Text;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
@@ -669,11 +671,40 @@ namespace IncrementalCompiler
             return res;
         }
 
+        static class Primitives {
+            public static List<string> list = new List<string> {
+                "bool",
+                "int",
+                "byte",
+                "sbyte",
+                "decimal",
+                "char",
+                "double",
+                "float",
+                "uint",
+                "long",
+                "ulong",
+                "short",
+                "object",
+                "ushort",
+                "string"
+            };
+        }
+
+        static bool isPrimitive(this ITypeSymbol type) =>
+            type.SpecialType != SpecialType.None;
+
+        static bool isPrimitiveArray(this ITypeSymbol type) =>
+             Primitives.list.Any(type.ToDisplayString().StartsWith);
+
         static string GenerateAccessor(IFieldSymbol fieldSymbol) {
             var name = fieldSymbol.Name;
             var newName = name.TrimStart('_');
+            var type = fieldSymbol.Type;
+            var globalKeyword = fieldSymbol.Type.isPrimitive() || fieldSymbol.Type.isPrimitiveArray() ? "" : "global::";
+
             if (name == newName) newName += "_";
-            return $"public {fieldSymbol.Type} {newName} => {name};";
+            return $"public {globalKeyword}{type} {newName} => {name};";
         }
 
         private static MemberDeclarationSyntax GenerateMatcher(
@@ -1035,7 +1066,8 @@ namespace IncrementalCompiler
                 switch (ancestor)
                 {
                     case NamespaceDeclarationSyntax a:
-                        generatedType = SF.NamespaceDeclaration(a.Name)
+                        generatedType =
+                            SF.NamespaceDeclaration(a.Name)
                             .WithUsings(cleanUsings(a.Usings))
                             .WithMembers(SF.SingletonList(generatedType));
                         break;
