@@ -528,7 +528,7 @@ namespace IncrementalCompiler
                                     {
                                         tryAttribute<PublicAccessor>(attr, _ =>
                                         {
-                                            newClassMembers = newClassMembers.Add(GenerateAccessor(fieldSymbol));
+                                            newClassMembers = newClassMembers.Add(GenerateAccessor(fieldSymbol, model));
                                         });
                                     }
                                     // TODO: generic way to add new attributes
@@ -669,11 +669,20 @@ namespace IncrementalCompiler
             return res;
         }
 
-        static string GenerateAccessor(IFieldSymbol fieldSymbol) {
+        // CSharpErrorMessageFormat is default for ToDisplayString
+        static readonly SymbolDisplayFormat format =
+            SymbolDisplayFormat
+            .CSharpErrorMessageFormat
+            .WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Included);
+
+        static string GenerateAccessor(IFieldSymbol fieldSymbol, SemanticModel model) {
             var name = fieldSymbol.Name;
             var newName = name.TrimStart('_');
+            var position = fieldSymbol.DeclaringSyntaxReferences[0].Span.Start;
+            var type = fieldSymbol.Type.ToMinimalDisplayString(model, position, format);
+
             if (name == newName) newName += "_";
-            return $"public {fieldSymbol.Type} {newName} => {name};";
+            return $"public {type} {newName} => {name};";
         }
 
         private static MemberDeclarationSyntax GenerateMatcher(
@@ -1035,7 +1044,8 @@ namespace IncrementalCompiler
                 switch (ancestor)
                 {
                     case NamespaceDeclarationSyntax a:
-                        generatedType = SF.NamespaceDeclaration(a.Name)
+                        generatedType =
+                            SF.NamespaceDeclaration(a.Name)
                             .WithUsings(cleanUsings(a.Usings))
                             .WithMembers(SF.SingletonList(generatedType));
                         break;
