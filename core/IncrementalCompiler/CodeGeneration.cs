@@ -695,13 +695,16 @@ namespace IncrementalCompiler
             type.SpecialType != SpecialType.None;
 
         static bool isPrimitiveArray(this ITypeSymbol type) =>
-             Primitives.list.Any(type.ToDisplayString().StartsWith);
+            type.TypeKind == TypeKind.Array && Primitives.list.Any(type.ToDisplayString().StartsWith);
+
+        static bool isBuiltIn(this ITypeSymbol type) =>
+            type.isPrimitive() || type.isPrimitiveArray();
 
         static string GenerateAccessor(IFieldSymbol fieldSymbol) {
             var name = fieldSymbol.Name;
             var newName = name.TrimStart('_');
             var type = fieldSymbol.Type;
-            var globalKeyword = fieldSymbol.Type.isPrimitive() || fieldSymbol.Type.isPrimitiveArray() ? "" : "global::";
+            var globalKeyword = isBuiltIn(fieldSymbol.Type) ? "" : "global::";
 
             if (name == newName) newName += "_";
             return $"public {globalKeyword}{type} {newName} => {name};";
