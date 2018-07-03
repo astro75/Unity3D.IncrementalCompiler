@@ -96,7 +96,7 @@ namespace IncrementalCompiler
             static string asVerbatimString(string str) => $"@\"{str.Replace("\"", "\"\"")}\"";
 
             SyntaxTree generateTree(CSharpParseOptions options, string assemblyName, string generatedFilesDir) {
-                var className = assemblyName.Replace("-", "");
+                var className = assemblyName.Replace("-", "").Replace(".", "");
                 var data = enumerate(javaFilesDict).Select(jf =>
                     $"new JavaFile(module: \"{jf.Module}\", path: {asVerbatimString(jf.Path)}, contents: {asVerbatimString(jf.Contents)})"
                 );

@@ -22,15 +22,6 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler
 	}
 #endif
 
-	private string[] GetAdditionalReferences()
-	{
-		// calling base method via reflection
-		var bindingFlags = BindingFlags.Instance | BindingFlags.NonPublic;
-		var methodInfo = GetType().BaseType.GetMethod(nameof(GetAdditionalReferences), bindingFlags);
-		var result = (string[])methodInfo.Invoke(this, null);
-		return result;
-	}
-
 	private string GetCompilerPath(List<string> arguments)
 	{
 		// calling base method via reflection
@@ -78,17 +69,12 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler
 			arguments.Add(PrepareFileName(file));
 		}
 
-		var additionalReferences = GetAdditionalReferences();
-		foreach (string path in additionalReferences)
-		{
-			var text = Path.Combine(GetProfileDirectoryViaReflection(), path);
-			if (File.Exists(text))
-			{
-				arguments.Add("-r:" + PrepareFileName(text));
-			}
-		}
+        foreach (string fileName in _island._references)
+        {
+            arguments.Add("-r:" + PrepareFileName(fileName));
+        }
 
-		var universalCompilerPath = GetUniversalCompilerPath();
+        var universalCompilerPath = GetUniversalCompilerPath();
 		if (universalCompilerPath != null)
 		{
 			// use universal compiler.
