@@ -18,7 +18,7 @@ public static class CSharp60SupportActivator
             list.Add(new CustomCSharpLanguage());
         } else
         {
-            // Unity 2017
+            // Unity 2017+
             var harmony = HarmonyInstance.Create("CSharpVNextSupport");
             harmony.PatchAll(Assembly.GetExecutingAssembly());
         }
