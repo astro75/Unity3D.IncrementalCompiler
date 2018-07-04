@@ -785,9 +785,9 @@ namespace IncrementalCompiler
         }
 
         struct FieldOrProp {
-            public TypeSyntax type;
-            public SyntaxToken identifier;
-            public bool initialized;
+            public readonly TypeSyntax type;
+            public readonly SyntaxToken identifier;
+            public readonly bool initialized;
 
             public FieldOrProp(TypeSyntax type, SyntaxToken identifier, bool initialized) {
                 this.type = type;
@@ -836,8 +836,7 @@ namespace IncrementalCompiler
                     var params_ = initialized.joinCommaSeparated(f => f.type + " " + f.identifier);
                     var body = initialized
                         .Select(f => "this." + f.identifier + " = " + f.identifier)
-                        .Aggregate("", (_1, _2) => _1 + ";\n" + _2)
-                        .tap(s => s.Substring(2) + ";");
+                        .tap(s => Join(";\n", s) + ";");
 
                     return ParseClassMembers($"public {cds.Identifier}({params_}){{{body}}}");
                 }
@@ -983,7 +982,7 @@ namespace IncrementalCompiler
         static string joinCommaSeparated<A>(this IEnumerable<A> collection, Func<A, string> mapper) =>
             collection
             .Select(mapper)
-            .Aggregate((p1, p2) => p1 + ", " + p2);
+            .tap(_ => Join(", ", _));
 
         static SyntaxList<MemberDeclarationSyntax> GenerateStaticApply(
             TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
