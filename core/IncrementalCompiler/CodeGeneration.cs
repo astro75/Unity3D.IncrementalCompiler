@@ -528,7 +528,7 @@ namespace IncrementalCompiler
                                     {
                                         tryAttribute<PublicAccessor>(attr, _ =>
                                         {
-                                            newClassMembers = newClassMembers.Add(GenerateAccessor(fieldSymbol));
+                                            newClassMembers = newClassMembers.Add(GenerateAccessor(fieldSymbol, model));
                                         });
                                     }
                                     // TODO: generic way to add new attributes
@@ -669,41 +669,20 @@ namespace IncrementalCompiler
             return res;
         }
 
-        static readonly ImmutableArray<string> primitives = ImmutableArray.Create(
-            "bool",
-            "int",
-            "byte",
-            "sbyte",
-            "decimal",
-            "char",
-            "double",
-            "float",
-            "uint",
-            "long",
-            "ulong",
-            "short",
-            "object",
-            "ushort",
-            "string"
-        );
+        // CSharpErrorMessageFormat is default for ToDisplayString
+        static readonly SymbolDisplayFormat format =
+            SymbolDisplayFormat
+            .CSharpErrorMessageFormat
+            .WithGlobalNamespaceStyle(SymbolDisplayGlobalNamespaceStyle.Included);
 
-        static bool isPrimitive(this ITypeSymbol type) =>
-            type.SpecialType != SpecialType.None;
-
-        static bool isPrimitiveArray(this ITypeSymbol type) =>
-            type.TypeKind == TypeKind.Array && primitives.Any(type.ToDisplayString().StartsWith);
-
-        static bool isBuiltIn(this ITypeSymbol type) =>
-            type.isPrimitive() || type.isPrimitiveArray();
-
-        static string GenerateAccessor(IFieldSymbol fieldSymbol) {
+        static string GenerateAccessor(IFieldSymbol fieldSymbol, SemanticModel model) {
             var name = fieldSymbol.Name;
             var newName = name.TrimStart('_');
-            var type = fieldSymbol.Type;
-            var globalKeyword = isBuiltIn(fieldSymbol.Type) ? "" : "global::";
+            var position = fieldSymbol.DeclaringSyntaxReferences[0].Span.Start;
+            var type = fieldSymbol.Type.ToMinimalDisplayString(model, position, format);
 
             if (name == newName) newName += "_";
-            return $"public {globalKeyword}{type} {newName} => {name};";
+            return $"public {type} {newName} => {name};";
         }
 
         private static MemberDeclarationSyntax GenerateMatcher(
