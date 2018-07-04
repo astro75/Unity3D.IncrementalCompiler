@@ -11,6 +11,7 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using MonadLib;
 using static System.String;
+using IncrementalCompiler;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
@@ -784,6 +785,18 @@ namespace IncrementalCompiler
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         }
 
+        struct FieldOrProp {
+            public TypeSyntax type;
+            public SyntaxToken identifier;
+            public bool initialized;
+
+            public FieldOrProp(TypeSyntax type, SyntaxToken identifier, bool initialized) {
+                this.type = type;
+                this.identifier = identifier;
+                this.initialized = initialized;
+            }
+        }
+
         private static CaseClass GenerateCaseClass(
             RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds
         ) {
@@ -794,17 +807,23 @@ namespace IncrementalCompiler
                     && ads.Body == null
                     && ads.ExpressionBody == null
                 ) ?? false)
-                .Select(prop => (type: prop.Type, prop.Identifier));
+                .Select(prop =>
+                    new FieldOrProp(prop.Type, prop.Identifier, prop.Initializer != null)
+                );
 
-            var fields = cds.Members.OfType<FieldDeclarationSyntax>()
+            var fields =
+                cds.Members.OfType<FieldDeclarationSyntax>()
                 .Where(field => {
                     var modifiers = field.Modifiers;
-                    return modifiers.HasNot(SyntaxKind.StaticKeyword) && modifiers.HasNot(SyntaxKind.ConstKeyword);
+                    return modifiers.HasNot(SyntaxKind.StaticKeyword)
+                        && modifiers.HasNot(SyntaxKind.ConstKeyword);
                 })
                 .SelectMany(field => {
                     var decl = field.Declaration;
                     var type = decl.Type;
-                    return decl.Variables.Select(varDecl => (type, varDecl.Identifier));
+                    return decl.Variables.Select(varDecl =>
+                        new FieldOrProp(type, varDecl.Identifier, varDecl.Initializer != null)
+                    );
                 });
 
             var fieldsAndProps = fields.Concat(properties).ToArray();
@@ -813,22 +832,22 @@ namespace IncrementalCompiler
 
             var constructor = createIf(
                 attr.GenerateConstructor.generateConstructor(),
-                () =>
-                    ImmutableList.Create((MemberDeclarationSyntax) SF.ConstructorDeclaration(cds.Identifier)
-                    .WithModifiers(SF.TokenList(SF.Token(SyntaxKind.PublicKeyword)))
-                    .WithParameterList(SF.ParameterList(
-                        SF.SeparatedList(fieldsAndProps.Select(f =>
-                            SF.Parameter(f.Identifier).WithType(f.type)))))
-                    .WithBody(SF.Block(fieldsAndProps.Select(f => SF.ExpressionStatement(SF.AssignmentExpression(
-                        SyntaxKind.SimpleAssignmentExpression,
-                        SF.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SF.ThisExpression(),
-                            SF.IdentifierName(f.Identifier)), SF.IdentifierName(f.Identifier)))))))
+                () => {
+                    var initialized = fieldsAndProps.Where(_ => !_.initialized).ToList();
+                    var params_ = initialized.joinCommaSeparated(f => f.type + " " + f.identifier);
+                    var body = initialized
+                        .Select(f => "this." + f.identifier + " = " + f.identifier)
+                        .Aggregate("", (_1, _2) => _1 + ";\n" + _2)
+                        .tap(s => s.Substring(2) + ";");
+
+                    return ParseClassMembers($"public {cds.Identifier}({params_}){{{body}}}");
+                }
             );
 
             var paramsStr =
-                Join(", ", fieldsAndProps
-                .Select(f => f.Identifier.ValueText)
-                .Select(n => n + ": \" + " + n + " + \""));
+                fieldsAndProps
+                .Select(f => f.identifier.ValueText)
+                .joinCommaSeparated(n => n + ": \" + " + n + " + \"");
 
             IEnumerable<MemberDeclarationSyntax> createIf(bool condition, Func<IEnumerable<MemberDeclarationSyntax>> a)
                 => condition ? a() : Enumerable.Empty<MemberDeclarationSyntax>();
@@ -844,7 +863,7 @@ namespace IncrementalCompiler
                 var hashLines = Join("\n", fieldsAndProps.Select(f => {
                     var type = model.GetTypeInfo(f.type).Type;
                     var isValueType = type.IsValueType;
-                    var name = f.Identifier.ValueText;
+                    var name = f.identifier.ValueText;
                     string ValueTypeHash(SpecialType sType)
                     {
                         switch (sType)
@@ -888,7 +907,7 @@ namespace IncrementalCompiler
                 var comparisons = fieldsAndProps.Select(f =>
                 {
                     var type = model.GetTypeInfo(f.type).Type;
-                    var name = f.Identifier.ValueText;
+                    var name = f.identifier.ValueText;
                     var otherName = "other." + name;
                     switch (type.SpecialType)
                     {
@@ -931,7 +950,7 @@ namespace IncrementalCompiler
 
             var companion = Maybe.MZero<TypeDeclarationSyntax>();
             {
-                var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.Identifier)).ToList();
+                var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.identifier)).ToList();
                 if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply) {
                     if (cds.TypeParameterList == null) {
                         newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
@@ -962,7 +981,7 @@ namespace IncrementalCompiler
                     .WithMembers(applyMethod);
         }
 
-        static string joinCommaSeparated<A>(IEnumerable<A> collection, Func<A, string> mapper) =>
+        static string joinCommaSeparated<A>(this IEnumerable<A> collection, Func<A, string> mapper) =>
             collection
             .Select(mapper)
             .Aggregate((p1, p2) => p1 + ", " + p2);

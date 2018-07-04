@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Xml.Schema;
 using GenerationAttributes;
 
 namespace Assets.Scripts {
@@ -16,9 +17,18 @@ namespace Assets.Scripts {
         three
     }
 
+    [Record]
+    public partial class WithInitializedField {
+        public readonly string name = "Peter";
+        public readonly int num;
+
+        public int initializedProp { get; set; } = 0;
+        public int prop { get; set; }
+    }
+
     [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
     public partial struct CCCompanionWithoutGenerics {
-        public readonly string name;
+        public static readonly string name = "TOM";
         public readonly Func<int, string> get;
         public readonly Func<double, int> nToA;
 
