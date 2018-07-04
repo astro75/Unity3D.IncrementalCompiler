@@ -11,7 +11,6 @@ using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using MonadLib;
 using static System.String;
-using IncrementalCompiler;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
