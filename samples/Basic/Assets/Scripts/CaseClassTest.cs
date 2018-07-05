@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Xml.Schema;
 using GenerationAttributes;
 
@@ -18,15 +19,33 @@ namespace Assets.Scripts {
     }
 
     [Record]
+    public partial class ToStringEnumerableTestClass {
+        public readonly String name = "Peter";
+        public readonly IEnumerable<int> nums2 = Enumerable.Range(0, 10);
+        public readonly IEnumerable<string> names =
+            new List<string>{"Tom", "Adam", "Chloe", "Dennis", "Michele"};
+        public readonly List<int> nums4 = new List<int>{1, 2, 3};
+        public int initializedProp { get; set; } = 0;
+        public readonly TwoNums nums = new TwoNums(1, 2);
+    }
+
+    [Record]
+    public partial class TwoNums {
+        public readonly int first;
+        public readonly int second;
+    }
+
+    [Record]
     public partial class WithInitializedField {
         public readonly string name = "Peter";
-        public readonly int num;
-
+        public readonly int[] nums;
+        public readonly IEnumerable<int> nums2;
+        public readonly List<int> nums4;
         public int initializedProp { get; set; } = 0;
         public int prop { get; set; }
     }
 
-    [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
+    [Record(GenerateComparer = true, GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
     public partial struct CCCompanionWithoutGenerics {
         public static readonly string name = "TOM";
         public readonly Func<int, string> get;
@@ -58,13 +77,13 @@ namespace Assets.Scripts {
         }
     }
 
-    [Record(GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
+    [Record(GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
     public partial struct CCOneGenericArgument<A> {
         public readonly string name;
         public readonly Func<A, string> get;
     }
 
-    [Record(GenerateConstructor = GeneratedContructor.None)]
+    [Record(GenerateConstructor = GeneratedConstructor.None)]
     public partial struct CCNoConstructor<A> {
         public readonly string name;
         public readonly Func<A, string> get;

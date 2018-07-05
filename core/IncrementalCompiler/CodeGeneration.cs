@@ -17,13 +17,13 @@ namespace IncrementalCompiler
 {
     public static class GeneratedContructorExts
     {
-        public static bool generateConstructor(this GeneratedContructor gc) {
+        public static bool generateConstructor(this GeneratedConstructor gc) {
             switch (gc)
             {
-                case GeneratedContructor.None:
+                case GeneratedConstructor.None:
                     return false;
-                case GeneratedContructor.Constructor:
-                case GeneratedContructor.ConstructorAndApply:
+                case GeneratedConstructor.Constructor:
+                case GeneratedConstructor.ConstructorAndApply:
                     return true;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(gc), gc, null);
@@ -460,8 +460,7 @@ namespace IncrementalCompiler
 
                     var symbol = model.GetDeclaredSymbol(tds);
                     JavaClassFile javaClassFile = null;
-                    foreach (var attr in symbol.GetAttributes())
-                    {
+                    foreach (var attr in symbol.GetAttributes()) {
                         if (!treeContains(attr.ApplicationSyntaxReference)) continue;
                         var attrClassName = attr.AttributeClass.ToDisplayString();
                         if (attrClassName == caseType.FullName)
@@ -788,11 +787,21 @@ namespace IncrementalCompiler
             public readonly TypeSyntax type;
             public readonly SyntaxToken identifier;
             public readonly bool initialized;
+            public readonly bool traversable;
 
-            public FieldOrProp(TypeSyntax type, SyntaxToken identifier, bool initialized) {
+            static readonly string stringName = "string";
+            static readonly string iEnumName = typeof(IEnumerable).FullName;
+            public FieldOrProp(
+                TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model
+            ) {
                 this.type = type;
                 this.identifier = identifier;
                 this.initialized = initialized;
+
+                var typeInfo = model.GetTypeInfo(type).Type;
+                var typeName = typeInfo.ToDisplayString();
+                traversable = typeName != stringName
+                    && typeInfo.AllInterfaces.Any(iface => iface.ToDisplayString() == iEnumName);
             }
         }
 
@@ -806,9 +815,9 @@ namespace IncrementalCompiler
                     && ads.Body == null
                     && ads.ExpressionBody == null
                 ) ?? false)
-                .Select(prop =>
-                    new FieldOrProp(prop.Type, prop.Identifier, prop.Initializer != null)
-                );
+                .Select(prop => new FieldOrProp(
+                    prop.Type, prop.Identifier, prop.Initializer != null, model
+                ));
 
             var fields =
                 cds.Members.OfType<FieldDeclarationSyntax>()
@@ -820,9 +829,9 @@ namespace IncrementalCompiler
                 .SelectMany(field => {
                     var decl = field.Declaration;
                     var type = decl.Type;
-                    return decl.Variables.Select(varDecl =>
-                        new FieldOrProp(type, varDecl.Identifier, varDecl.Initializer != null)
-                    );
+                    return decl.Variables.Select(varDecl => new FieldOrProp(
+                        type, varDecl.Identifier, varDecl.Initializer != null, model
+                    ));
                 });
 
             var fieldsAndProps = fields.Concat(properties).ToArray();
@@ -832,30 +841,36 @@ namespace IncrementalCompiler
             var constructor = createIf(
                 attr.GenerateConstructor.generateConstructor(),
                 () => {
-                    var initialized = fieldsAndProps.Where(_ => !_.initialized).ToList();
+                    var initialized = fieldsAndProps.Where(_ => !_.initialized).ToImmutableArray();
                     var params_ = initialized.joinCommaSeparated(f => f.type + " " + f.identifier);
-                    var body = initialized
-                        .Select(f => "this." + f.identifier + " = " + f.identifier)
-                        .tap(s => Join(";\n", s) + ";");
+                    var body = initialized.Any()
+                        ? initialized
+                            .Select(f => "this." + f.identifier + " = " + f.identifier)
+                            .tap(s => Join(";\n", s) + ";")
+                        : "";
 
                     return ParseClassMembers($"public {cds.Identifier}({params_}){{{body}}}");
                 }
             );
-
-            var paramsStr =
-                fieldsAndProps
-                .Select(f => f.identifier.ValueText)
-                .joinCommaSeparated(n => n + ": \" + " + n + " + \"");
 
             IEnumerable<MemberDeclarationSyntax> createIf(bool condition, Func<IEnumerable<MemberDeclarationSyntax>> a)
                 => condition ? a() : Enumerable.Empty<MemberDeclarationSyntax>();
 
             var toString = createIf(
                 attr.GenerateToString,
-                () => ParseClassMembers(
-                    $"public override string ToString() => \"{cds.Identifier.ValueText}(\" + \"{paramsStr})\";"
-                )
-            );
+                () => {
+                    var returnString = fieldsAndProps
+                        .joinCommaSeparated(f => f.traversable
+                            ? f.identifier.ValueText +
+                                ": [\" + Helpers.enumerableToString(" + f.identifier.ValueText + ") + \"]"
+                            : f.identifier.ValueText +
+                                ": \" + " + f.identifier.ValueText + " + \""
+                        );
+
+                    return ParseClassMembers(
+                        $"public override string ToString() => \"{cds.Identifier.ValueText}({returnString})\";"
+                    );
+                });
 
             var getHashCode = createIf(attr.GenerateGetHashCode, () => {
                 var hashLines = Join("\n", fieldsAndProps.Select(f => {
@@ -949,7 +964,7 @@ namespace IncrementalCompiler
             var companion = Maybe.MZero<TypeDeclarationSyntax>();
             {
                 var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.identifier)).ToList();
-                if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply) {
+                if (attr.GenerateConstructor == GeneratedConstructor.ConstructorAndApply) {
                     if (cds.TypeParameterList == null) {
                         newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
                     }
