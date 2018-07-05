@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -91,5 +92,9 @@ namespace IncrementalCompiler
         public static SyntaxTriviaList EmptyTriviaList = SyntaxFactory.TriviaList();
 
         public static B tap<A, B>(this A a, Func<A, B> func) => func(a);
+        public static void voidTap<A>(this A a, Action<A> act) => act(a);
+        public static void ForEach<A>(this IEnumerable<A> enumerable, Action<A> act) {
+            foreach (var e in enumerable) act(e);
+        }
     }
 }

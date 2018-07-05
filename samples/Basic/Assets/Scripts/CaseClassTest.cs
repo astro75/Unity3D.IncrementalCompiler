@@ -3,6 +3,7 @@
 
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using System.Xml.Schema;
 using GenerationAttributes;
 
@@ -18,13 +19,19 @@ namespace Assets.Scripts {
     }
 
     [Record]
+    public partial class ToStringEnumerableTestClass {
+        public readonly string name = "Peter";
+        public readonly IEnumerable<int> nums2 = Enumerable.Range(0, 10);
+        public readonly List<int> nums4 = new List<int>{1, 2, 3};
+        public int initializedProp { get; set; } = 0;
+    }
+
+    [Record]
     public partial class WithInitializedField {
         public readonly string name = "Peter";
         public readonly int[] nums;
         public readonly IEnumerable<int> nums2;
-        public readonly List<int> nums3;
         public readonly List<int> nums4;
-
         public int initializedProp { get; set; } = 0;
         public int prop { get; set; }
     }

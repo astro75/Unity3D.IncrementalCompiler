@@ -861,21 +861,43 @@ namespace IncrementalCompiler
             var toString = createIf(
                 attr.GenerateToString,
                 () => {
-                    var paramsStr = fieldsAndProps
-                        // .Select(f => f.identifier.ValueText)
-                        .Select(f => (f.identifier.ValueText,
-                            f.traversable
-                            ? $"((IEnumerable){f.identifier.ValueText}).ToList().ForEach(_ => _.ToString() + \";\\n\")"
-                            : f.identifier.ValueText
-                        ))
-                        .joinCommaSeparated(nameAndValue => {
-                            var (name, value) = nameAndValue;
-                            return name + ": \" + " + value + " + \"";
+                    var (traversable, nonTraversable) =
+                        fieldsAndProps.GroupBy(_ => _.traversable).ToList().tap(groups => {
+                            if (groups.Count == 1) {
+                                var empty = ImmutableArray<FieldOrProp>.Empty;
+                                var nonEmpty = groups[0].ToImmutableArray();
+                                return groups[0].Key
+                                    ? (nonEmpty, empty)
+                                    : (empty, nonEmpty);
+                            }
+                            var (ti, nti) = groups[0].Key ? (0, 1) : (1, 0);
+                            return (groups[ti].ToImmutableArray(), groups[nti].ToImmutableArray());
                         });
 
+                    var declareCollections = !traversable.IsEmpty
+                        ? traversable
+                            .Select(t => t.identifier.ValueText + "_ = \"[\\n\"")
+                            .tap(_ => "string " + Join(", ", _) + ";")
+                        : "";
+
+                    var loopCollections = traversable
+                        .Select(t => t.identifier.ValueText)
+                        .Select(t => $"foreach (var x in {t}) {t}_ += x + \"\\n\";")
+                        .tap(_ => Join("", _));
+
+                    var returnString = nonTraversable
+                        .Select(_ => _.identifier.ValueText)
+                        .tap(_ => Join("\\n", _.Select(t => t + ": \" + " + t + " + \"")))
+                        .tap(partialS =>
+                            partialS + "\\n" +
+                            traversable
+                            .Select(_ => _.identifier.ValueText)
+                            .tap(_ => Join("\\n", _.Select(t => t + ": \" + " + t + "_ + \"\\n]")))
+                        );
 
                     return ParseClassMembers(
-                        $"public override string ToString() => \"{cds.Identifier.ValueText}(\" + \"{paramsStr})\";"
+                        "public override string ToString() " +
+                        $"{{{declareCollections}\n{loopCollections}\nreturn \"{returnString}}}\";"
                     );
                 });
 
