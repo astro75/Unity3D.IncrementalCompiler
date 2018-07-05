@@ -9,7 +9,7 @@ using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
 {
-    internal static class Extensions
+    static class Extensions
     {
         public static bool Has(this BasePropertyDeclarationSyntax decl, SyntaxKind kind)
             => decl.Modifiers.Has(kind);

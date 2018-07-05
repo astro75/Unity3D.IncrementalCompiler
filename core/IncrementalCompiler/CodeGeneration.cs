@@ -4,7 +4,6 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
-using System.Net.Configuration;
 using System.Text;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
@@ -792,20 +791,19 @@ namespace IncrementalCompiler
             static SymbolDisplayFormat format =
                 new SymbolDisplayFormat().RemoveGenericsOptions(SymbolDisplayGenericsOptions.None);
 
-            public FieldOrProp(TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model, int pos) {
+
+            static string fullName(ISymbol symbol) => symbol.ContainingNamespace + "." + symbol.Name;
+            public FieldOrProp(
+                TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model, int pos
+            ) {
                 this.type = type;
                 this.identifier = identifier;
                 this.initialized = initialized;
 
                 var typeInfo = model.GetTypeInfo(type).Type;
-                var typeName = typeInfo.ToMinimalDisplayString(model, pos, format);
-                traversable =
-                    typeName.ToLower() != "string"
-                    && (typeName == "IEnumerable"
-                    || typeInfo.AllInterfaces.Any(iface => {
-                        var ifaceName = iface.ToMinimalDisplayString(model, pos, format);
-                        return ifaceName == "IEnumerable";
-                    }));
+                var typeName = fullName(typeInfo);
+                traversable = typeName != typeof(string).FullName
+                    && typeInfo.AllInterfaces.Any(iface => fullName(iface) == typeof(IEnumerable).FullName);
             }
         }
 
@@ -878,28 +876,30 @@ namespace IncrementalCompiler
 
                     var declareCollections = !traversable.IsEmpty
                         ? traversable
-                            .Select(t => t.identifier.ValueText + "_ = \"[\\n\"")
+                            .Select(t => t.identifier.ValueText + "_ = \"[\"")
                             .tap(_ => "string " + Join(", ", _) + ";")
                         : "";
 
                     var loopCollections = traversable
                         .Select(t => t.identifier.ValueText)
-                        .Select(t => $"foreach (var x in {t}) {t}_ += \"    \" + x + \"\\n\";")
+                        .Select(t => $"{t}_ += Helpers.EnumerableToString({t});")
                         .tap(_ => Join("", _));
 
                     var returnString = nonTraversable
                         .Select(_ => _.identifier.ValueText)
-                        .tap(_ => Join("\\n", _.Select(t => t + ": \" + " + t + " + \"")))
+                        .joinCommaSeparated(t => t + ": \" + " + t + " + \"")
                         .tap(partialS =>
-                            partialS + "\\n" +
-                            traversable
-                            .Select(_ => _.identifier.ValueText)
-                            .tap(_ => Join("\\n", _.Select(t => t + ": \" + " + t + "_ + \"]")))
+                            traversable.Any()
+                            ? partialS + ", " +
+                                traversable
+                                .Select(_ => _.identifier.ValueText)
+                                .joinCommaSeparated(t => t + ": \" + " + t + "_ + \"]")
+                            : partialS
                         );
 
                     return ParseClassMembers(
                         "public override string ToString() " +
-                        $"{{{declareCollections}\n{loopCollections}\nreturn \"{returnString}\";"
+                        $"{{{declareCollections}\n{loopCollections}\nreturn \"{cds.Identifier.ValueText}({returnString})\";"
                     );
                 });
 
