@@ -22,6 +22,8 @@ namespace Assets.Scripts {
     public partial class ToStringEnumerableTestClass {
         public readonly string name = "Peter";
         public readonly IEnumerable<int> nums2 = Enumerable.Range(0, 10);
+        public readonly IEnumerable<string> names =
+            new List<string>{"Tom", "Adam", "Chloe", "Dennis", "Michele"};
         public readonly List<int> nums4 = new List<int>{1, 2, 3};
         public int initializedProp { get; set; } = 0;
     }

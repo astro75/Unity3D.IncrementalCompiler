@@ -847,9 +847,11 @@ namespace IncrementalCompiler
                 () => {
                     var initialized = fieldsAndProps.Where(_ => !_.initialized).ToList();
                     var params_ = initialized.joinCommaSeparated(f => f.type + " " + f.identifier);
-                    var body = initialized
-                        .Select(f => "this." + f.identifier + " = " + f.identifier)
-                        .tap(s => Join(";\n", s) + ";");
+                    var body = initialized.Any()
+                        ? initialized
+                            .Select(f => "this." + f.identifier + " = " + f.identifier)
+                            .tap(s => Join(";\n", s) + ";")
+                        : "";
 
                     return ParseClassMembers($"public {cds.Identifier}({params_}){{{body}}}");
                 }
@@ -882,7 +884,7 @@ namespace IncrementalCompiler
 
                     var loopCollections = traversable
                         .Select(t => t.identifier.ValueText)
-                        .Select(t => $"foreach (var x in {t}) {t}_ += x + \"\\n\";")
+                        .Select(t => $"foreach (var x in {t}) {t}_ += \"    \" + x + \"\\n\";")
                         .tap(_ => Join("", _));
 
                     var returnString = nonTraversable
@@ -892,12 +894,12 @@ namespace IncrementalCompiler
                             partialS + "\\n" +
                             traversable
                             .Select(_ => _.identifier.ValueText)
-                            .tap(_ => Join("\\n", _.Select(t => t + ": \" + " + t + "_ + \"\\n]")))
+                            .tap(_ => Join("\\n", _.Select(t => t + ": \" + " + t + "_ + \"]")))
                         );
 
                     return ParseClassMembers(
                         "public override string ToString() " +
-                        $"{{{declareCollections}\n{loopCollections}\nreturn \"{returnString}}}\";"
+                        $"{{{declareCollections}\n{loopCollections}\nreturn \"{returnString}\";"
                     );
                 });
 
