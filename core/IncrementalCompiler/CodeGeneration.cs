@@ -17,13 +17,13 @@ namespace IncrementalCompiler
 {
     public static class GeneratedContructorExts
     {
-        public static bool generateConstructor(this GeneratedContructor gc) {
+        public static bool generateConstructor(this GeneratedConstructor gc) {
             switch (gc)
             {
-                case GeneratedContructor.None:
+                case GeneratedConstructor.None:
                     return false;
-                case GeneratedContructor.Constructor:
-                case GeneratedContructor.ConstructorAndApply:
+                case GeneratedConstructor.Constructor:
+                case GeneratedConstructor.ConstructorAndApply:
                     return true;
                 default:
                     throw new ArgumentOutOfRangeException(nameof(gc), gc, null);
@@ -860,12 +860,11 @@ namespace IncrementalCompiler
                 attr.GenerateToString,
                 () => {
                     var returnString = fieldsAndProps
-                        .Select(f => (f.identifier.ValueText,
-                            f.traversable
-                            ? ": [\" + Helpers.enumerableToString(" + f.identifier.ValueText + ") + \"]"
-                            : ": \" + " + f.identifier.ValueText + " + \""
-                        ))
-                        .joinCommaSeparated(nameAndValue => nameAndValue.Item1 + nameAndValue.Item2);
+                        .Select(f => f.traversable
+                            ? f.identifier.ValueText +": [\" + Helpers.enumerableToString(" + f.identifier.ValueText + ") + \"]"
+                            : f.identifier.ValueText + ": \" + " + f.identifier.ValueText + " + \""
+                        )
+                        .joinCommaSeparated(_ => _);
 
                     return ParseClassMembers(
                         $"public override string ToString() => \"{cds.Identifier.ValueText}({returnString})\";"
@@ -964,7 +963,7 @@ namespace IncrementalCompiler
             var companion = Maybe.MZero<TypeDeclarationSyntax>();
             {
                 var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.identifier)).ToList();
-                if (attr.GenerateConstructor == GeneratedContructor.ConstructorAndApply) {
+                if (attr.GenerateConstructor == GeneratedConstructor.ConstructorAndApply) {
                     if (cds.TypeParameterList == null) {
                         newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
                     }

@@ -3,7 +3,7 @@ using System.Diagnostics;
 
 namespace GenerationAttributes
 {
-    public enum GeneratedContructor : byte
+    public enum GeneratedConstructor : byte
     {
         None,
         Constructor,
@@ -17,7 +17,7 @@ namespace GenerationAttributes
         public bool GenerateToString { get; set; } = true;
         public bool GenerateComparer { get; set; } = true;
         public bool GenerateGetHashCode { get; set; } = true;
-        public GeneratedContructor GenerateConstructor { get; set; } = GeneratedContructor.Constructor;
+        public GeneratedConstructor GenerateConstructor { get; set; } = GeneratedConstructor.Constructor;
     }
 
     [AttributeUsage(AttributeTargets.Class | AttributeTargets.Interface)]

@@ -45,7 +45,7 @@ namespace Assets.Scripts {
         public int prop { get; set; }
     }
 
-    [Record(GenerateComparer = true, GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
+    [Record(GenerateComparer = true, GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
     public partial struct CCCompanionWithoutGenerics {
         public static readonly string name = "TOM";
         public readonly Func<int, string> get;
@@ -77,13 +77,13 @@ namespace Assets.Scripts {
         }
     }
 
-    [Record(GenerateConstructor = GeneratedContructor.ConstructorAndApply)]
+    [Record(GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
     public partial struct CCOneGenericArgument<A> {
         public readonly string name;
         public readonly Func<A, string> get;
     }
 
-    [Record(GenerateConstructor = GeneratedContructor.None)]
+    [Record(GenerateConstructor = GeneratedConstructor.None)]
     public partial struct CCNoConstructor<A> {
         public readonly string name;
         public readonly Func<A, string> get;
