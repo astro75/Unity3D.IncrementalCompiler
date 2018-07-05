@@ -789,7 +789,7 @@ namespace IncrementalCompiler
             public readonly bool initialized;
             public readonly bool traversable;
 
-            static readonly string stringName = typeof(string).FullName;
+            static readonly string stringName = "string";
             static readonly string iEnumName = typeof(IEnumerable).FullName;
             public FieldOrProp(
                 TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model
@@ -859,30 +859,13 @@ namespace IncrementalCompiler
             var toString = createIf(
                 attr.GenerateToString,
                 () => {
-                    var (traversable, nonTraversable) =
-                        fieldsAndProps.GroupBy(_ => _.traversable).ToList().tap(groups => {
-                            if (groups.Count == 1) {
-                                var empty = ImmutableArray<FieldOrProp>.Empty;
-                                var nonEmpty = groups[0].ToImmutableArray();
-                                return groups[0].Key
-                                    ? (nonEmpty, empty)
-                                    : (empty, nonEmpty);
-                            }
-                            var (ti, nti) = groups[0].Key ? (0, 1) : (1, 0);
-                            return (groups[ti].ToImmutableArray(), groups[nti].ToImmutableArray());
-                        });
-
-                    var returnString = nonTraversable
-                        .Select(_ => _.identifier.ValueText)
-                        .joinCommaSeparated(t => t + ": \" + " + t + " + \"")
-                        .tap(partialS =>
-                            traversable.Any()
-                            ? partialS + ", " +
-                                traversable
-                                .Select(_ => _.identifier.ValueText)
-                                .joinCommaSeparated(t => t + ": [\" + Helpers.enumerableToString(" + t + ") + \"]")
-                            : partialS
-                        );
+                    var returnString = fieldsAndProps
+                        .Select(f => (f.identifier.ValueText,
+                            f.traversable
+                            ? ": [\" + Helpers.enumerableToString(" + f.identifier.ValueText + ") + \"]"
+                            : ": \" + " + f.identifier.ValueText + " + \""
+                        ))
+                        .joinCommaSeparated(nameAndValue => nameAndValue.Item1 + nameAndValue.Item2);
 
                     return ParseClassMembers(
                         $"public override string ToString() => \"{cds.Identifier.ValueText}({returnString})\";"

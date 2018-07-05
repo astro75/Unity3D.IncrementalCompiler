@@ -20,7 +20,7 @@ namespace Assets.Scripts {
 
     [Record]
     public partial class ToStringEnumerableTestClass {
-        public readonly string name = "Peter";
+        public readonly String name = "Peter";
         public readonly IEnumerable<int> nums2 = Enumerable.Range(0, 10);
         public readonly IEnumerable<string> names =
             new List<string>{"Tom", "Adam", "Chloe", "Dennis", "Michele"};
