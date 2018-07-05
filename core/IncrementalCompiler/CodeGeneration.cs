@@ -860,11 +860,12 @@ namespace IncrementalCompiler
                 attr.GenerateToString,
                 () => {
                     var returnString = fieldsAndProps
-                        .Select(f => f.traversable
-                            ? f.identifier.ValueText +": [\" + Helpers.enumerableToString(" + f.identifier.ValueText + ") + \"]"
-                            : f.identifier.ValueText + ": \" + " + f.identifier.ValueText + " + \""
-                        )
-                        .joinCommaSeparated(_ => _);
+                        .joinCommaSeparated(f => f.traversable
+                            ? f.identifier.ValueText +
+                                ": [\" + Helpers.enumerableToString(" + f.identifier.ValueText + ") + \"]"
+                            : f.identifier.ValueText +
+                                ": \" + " + f.identifier.ValueText + " + \""
+                        );
 
                     return ParseClassMembers(
                         $"public override string ToString() => \"{cds.Identifier.ValueText}({returnString})\";"
