@@ -19,12 +19,6 @@ namespace Assets.Scripts {
     }
 
     [Record]
-    public partial class TwoNums {
-        public readonly int first;
-        public readonly int second;
-    }
-
-    [Record]
     public partial class ToStringEnumerableTestClass {
         public readonly string name = "Peter";
         public readonly IEnumerable<int> nums2 = Enumerable.Range(0, 10);
@@ -33,6 +27,12 @@ namespace Assets.Scripts {
         public readonly List<int> nums4 = new List<int>{1, 2, 3};
         public int initializedProp { get; set; } = 0;
         public readonly TwoNums nums = new TwoNums(1, 2);
+    }
+
+    [Record]
+    public partial class TwoNums {
+        public readonly int first;
+        public readonly int second;
     }
 
     [Record]

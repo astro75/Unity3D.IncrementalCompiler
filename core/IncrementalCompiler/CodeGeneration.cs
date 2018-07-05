@@ -788,22 +788,20 @@ namespace IncrementalCompiler
             public readonly SyntaxToken identifier;
             public readonly bool initialized;
             public readonly bool traversable;
-            static SymbolDisplayFormat format =
-                new SymbolDisplayFormat().RemoveGenericsOptions(SymbolDisplayGenericsOptions.None);
 
-
-            static string fullName(ISymbol symbol) => symbol.ContainingNamespace + "." + symbol.Name;
+            static readonly string stringName = typeof(string).FullName;
+            static readonly string iEnumName = typeof(IEnumerable).FullName;
             public FieldOrProp(
-                TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model, int pos
+                TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model
             ) {
                 this.type = type;
                 this.identifier = identifier;
                 this.initialized = initialized;
 
                 var typeInfo = model.GetTypeInfo(type).Type;
-                var typeName = fullName(typeInfo);
-                traversable = typeName != typeof(string).FullName
-                    && typeInfo.AllInterfaces.Any(iface => fullName(iface) == typeof(IEnumerable).FullName);
+                var typeName = typeInfo.ToDisplayString();
+                traversable = typeName != stringName
+                    && typeInfo.AllInterfaces.Any(iface => iface.ToDisplayString() == iEnumName);
             }
         }
 
@@ -818,7 +816,7 @@ namespace IncrementalCompiler
                     && ads.ExpressionBody == null
                 ) ?? false)
                 .Select(prop => new FieldOrProp(
-                    prop.Type, prop.Identifier, prop.Initializer != null, model, prop.SpanStart
+                    prop.Type, prop.Identifier, prop.Initializer != null, model
                 ));
 
             var fields =
@@ -832,7 +830,7 @@ namespace IncrementalCompiler
                     var decl = field.Declaration;
                     var type = decl.Type;
                     return decl.Variables.Select(varDecl => new FieldOrProp(
-                        type, varDecl.Identifier, varDecl.Initializer != null, model, varDecl.SpanStart
+                        type, varDecl.Identifier, varDecl.Initializer != null, model
                     ));
                 });
 
@@ -843,7 +841,7 @@ namespace IncrementalCompiler
             var constructor = createIf(
                 attr.GenerateConstructor.generateConstructor(),
                 () => {
-                    var initialized = fieldsAndProps.Where(_ => !_.initialized).ToList();
+                    var initialized = fieldsAndProps.Where(_ => !_.initialized).ToImmutableArray();
                     var params_ = initialized.joinCommaSeparated(f => f.type + " " + f.identifier);
                     var body = initialized.Any()
                         ? initialized
@@ -874,17 +872,6 @@ namespace IncrementalCompiler
                             return (groups[ti].ToImmutableArray(), groups[nti].ToImmutableArray());
                         });
 
-                    var declareCollections = !traversable.IsEmpty
-                        ? traversable
-                            .Select(t => t.identifier.ValueText + "_ = \"[\"")
-                            .tap(_ => "string " + Join(", ", _) + ";")
-                        : "";
-
-                    var loopCollections = traversable
-                        .Select(t => t.identifier.ValueText)
-                        .Select(t => $"{t}_ += Helpers.EnumerableToString({t});")
-                        .tap(_ => Join("", _));
-
                     var returnString = nonTraversable
                         .Select(_ => _.identifier.ValueText)
                         .joinCommaSeparated(t => t + ": \" + " + t + " + \"")
@@ -893,13 +880,12 @@ namespace IncrementalCompiler
                             ? partialS + ", " +
                                 traversable
                                 .Select(_ => _.identifier.ValueText)
-                                .joinCommaSeparated(t => t + ": \" + " + t + "_ + \"]")
+                                .joinCommaSeparated(t => t + ": [\" + Helpers.enumerableToString(" + t + ") + \"]")
                             : partialS
                         );
 
                     return ParseClassMembers(
-                        "public override string ToString() " +
-                        $"{{{declareCollections}\n{loopCollections}\nreturn \"{cds.Identifier.ValueText}({returnString})\";"
+                        $"public override string ToString() => \"{cds.Identifier.ValueText}({returnString})\";"
                     );
                 });
 
