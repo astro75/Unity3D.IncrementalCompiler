@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
+using System.Net.Configuration;
 using System.Text;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
@@ -460,8 +461,7 @@ namespace IncrementalCompiler
 
                     var symbol = model.GetDeclaredSymbol(tds);
                     JavaClassFile javaClassFile = null;
-                    foreach (var attr in symbol.GetAttributes())
-                    {
+                    foreach (var attr in symbol.GetAttributes()) {
                         if (!treeContains(attr.ApplicationSyntaxReference)) continue;
                         var attrClassName = attr.AttributeClass.ToDisplayString();
                         if (attrClassName == caseType.FullName)
@@ -788,11 +788,24 @@ namespace IncrementalCompiler
             public readonly TypeSyntax type;
             public readonly SyntaxToken identifier;
             public readonly bool initialized;
+            public readonly bool traversable;
+            static SymbolDisplayFormat format =
+                new SymbolDisplayFormat().RemoveGenericsOptions(SymbolDisplayGenericsOptions.None);
 
-            public FieldOrProp(TypeSyntax type, SyntaxToken identifier, bool initialized) {
+            public FieldOrProp(TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model, int pos) {
                 this.type = type;
                 this.identifier = identifier;
                 this.initialized = initialized;
+
+                var typeInfo = model.GetTypeInfo(type).Type;
+                var typeName = typeInfo.ToMinimalDisplayString(model, pos, format);
+                traversable =
+                    typeName.ToLower() != "string"
+                    && (typeName == "IEnumerable"
+                    || typeInfo.AllInterfaces.Any(iface => {
+                        var ifaceName = iface.ToMinimalDisplayString(model, pos, format);
+                        return ifaceName == "IEnumerable";
+                    }));
             }
         }
 
@@ -806,9 +819,9 @@ namespace IncrementalCompiler
                     && ads.Body == null
                     && ads.ExpressionBody == null
                 ) ?? false)
-                .Select(prop =>
-                    new FieldOrProp(prop.Type, prop.Identifier, prop.Initializer != null)
-                );
+                .Select(prop => new FieldOrProp(
+                    prop.Type, prop.Identifier, prop.Initializer != null, model, prop.SpanStart
+                ));
 
             var fields =
                 cds.Members.OfType<FieldDeclarationSyntax>()
@@ -820,9 +833,9 @@ namespace IncrementalCompiler
                 .SelectMany(field => {
                     var decl = field.Declaration;
                     var type = decl.Type;
-                    return decl.Variables.Select(varDecl =>
-                        new FieldOrProp(type, varDecl.Identifier, varDecl.Initializer != null)
-                    );
+                    return decl.Variables.Select(varDecl => new FieldOrProp(
+                        type, varDecl.Identifier, varDecl.Initializer != null, model, varDecl.SpanStart
+                    ));
                 });
 
             var fieldsAndProps = fields.Concat(properties).ToArray();
@@ -842,20 +855,29 @@ namespace IncrementalCompiler
                 }
             );
 
-            var paramsStr =
-                fieldsAndProps
-                .Select(f => f.identifier.ValueText)
-                .joinCommaSeparated(n => n + ": \" + " + n + " + \"");
-
             IEnumerable<MemberDeclarationSyntax> createIf(bool condition, Func<IEnumerable<MemberDeclarationSyntax>> a)
                 => condition ? a() : Enumerable.Empty<MemberDeclarationSyntax>();
 
             var toString = createIf(
                 attr.GenerateToString,
-                () => ParseClassMembers(
-                    $"public override string ToString() => \"{cds.Identifier.ValueText}(\" + \"{paramsStr})\";"
-                )
-            );
+                () => {
+                    var paramsStr = fieldsAndProps
+                        // .Select(f => f.identifier.ValueText)
+                        .Select(f => (f.identifier.ValueText,
+                            f.traversable
+                            ? $"((IEnumerable){f.identifier.ValueText}).ToList().ForEach(_ => _.ToString() + \";\\n\")"
+                            : f.identifier.ValueText
+                        ))
+                        .joinCommaSeparated(nameAndValue => {
+                            var (name, value) = nameAndValue;
+                            return name + ": \" + " + value + " + \"";
+                        });
+
+
+                    return ParseClassMembers(
+                        $"public override string ToString() => \"{cds.Identifier.ValueText}(\" + \"{paramsStr})\";"
+                    );
+                });
 
             var getHashCode = createIf(attr.GenerateGetHashCode, () => {
                 var hashLines = Join("\n", fieldsAndProps.Select(f => {
