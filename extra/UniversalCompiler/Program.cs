@@ -248,7 +248,11 @@ internal class Program
 
 		string monoPath = Environment.GetEnvironmentVariable("MONO_PATH").Replace("\\", "/");
 		int index = monoPath.IndexOf("/Mono/lib/", StringComparison.InvariantCultureIgnoreCase);
-		string path = monoPath.Substring(0, index);
+        if (index == -1) {
+            // .NET 4 runtime
+            index = monoPath.IndexOf("/MonoBleedingEdge/lib/", StringComparison.InvariantCultureIgnoreCase);
+        }
+        string path = monoPath.Substring(0, index);
 		return path;
 	}
 
