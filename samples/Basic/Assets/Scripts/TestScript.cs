@@ -13,7 +13,7 @@ public class TestScript : MonoBehaviour {
         var test = new ToStringEnumerableTestClass();
         var enumerable = Enumerable.Repeat(0, 10);
         // Debug.Log(Helpers.EnumerableToString(enumerable));
-        Debug.Log(test.ToString());
+        Debug.LogWarning(test.ToString());
     }
 
 	// Update is called once per frame
