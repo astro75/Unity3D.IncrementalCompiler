@@ -799,17 +799,20 @@ namespace IncrementalCompiler
                 this.identifier = identifier;
                 this.initialized = initialized;
 
-                string fullName(INamedTypeSymbol info) =>
-                    info.ContainingNamespace + "." + info.Name + "`" + info.Arity;
+                string fullName(ITypeSymbol info) => info.ContainingNamespace + "." + info.Name;
 
                 var typeInfo = model.GetTypeInfo(type).Type;
                 var typeName = typeInfo.ToDisplayString();
+
+                var c = fullName(typeInfo);
+
+                var typeIsIEnumerableItself = fullName(typeInfo) + "`1" == iEnumName;
+                var typeImplementsIEnumerable = typeInfo.AllInterfaces.Any(iface =>
+                    fullName(iface) + "`" + iface.Arity == iEnumName
+                );
+
                 traversable =
-                    typeName != stringName
-                    && (
-                        fullName((INamedTypeSymbol) typeInfo) == iEnumName
-                        || typeInfo.AllInterfaces.Any(iface => fullName(iface) == iEnumName)
-                    );
+                    typeName != stringName && (typeIsIEnumerableItself || typeImplementsIEnumerable);
             }
         }
 
