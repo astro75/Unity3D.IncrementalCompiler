@@ -790,7 +790,8 @@ namespace IncrementalCompiler
             public readonly bool traversable;
 
             static readonly string stringName = "string";
-            static readonly string iEnumName = typeof(IEnumerable).FullName;
+            static readonly string iEnumName = typeof(IEnumerable<>).FullName;
+
             public FieldOrProp(
                 TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model
             ) {
@@ -800,8 +801,11 @@ namespace IncrementalCompiler
 
                 var typeInfo = model.GetTypeInfo(type).Type;
                 var typeName = typeInfo.ToDisplayString();
-                traversable = typeName != stringName
-                    && typeInfo.AllInterfaces.Any(iface => iface.ToDisplayString() == iEnumName);
+                traversable =
+                    typeName != stringName
+                    && typeInfo.AllInterfaces.Any(iface =>
+                        (iface.ContainingNamespace + "." + iface.Name + "`" + iface.Arity) == (iEnumName)
+                    );
             }
         }
 
