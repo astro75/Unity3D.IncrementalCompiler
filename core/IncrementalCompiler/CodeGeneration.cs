@@ -804,8 +804,6 @@ namespace IncrementalCompiler
                 var typeInfo = model.GetTypeInfo(type).Type;
                 var typeName = typeInfo.ToDisplayString();
 
-                var c = fullName(typeInfo);
-
                 var typeIsIEnumerableItself = fullName(typeInfo) + "`1" == iEnumName;
                 var typeImplementsIEnumerable = typeInfo.AllInterfaces.Any(iface =>
                     fullName(iface) + "`" + iface.Arity == iEnumName
