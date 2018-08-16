@@ -810,8 +810,6 @@ namespace IncrementalCompiler
                         fullName((INamedTypeSymbol) typeInfo) == iEnumName
                         || typeInfo.AllInterfaces.Any(iface => fullName(iface) == iEnumName)
                     );
-
-                var l = stringName;
             }
         }
 
