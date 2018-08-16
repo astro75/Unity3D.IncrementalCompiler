@@ -22,16 +22,17 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler
 	}
 #endif
 
-	private string[] GetAdditionalReferences()
+    private string[] GetAdditionalReferences()
 	{
 		// calling base method via reflection
 		var bindingFlags = BindingFlags.Instance | BindingFlags.NonPublic;
 		var methodInfo = GetType().BaseType.GetMethod(nameof(GetAdditionalReferences), bindingFlags);
+        if (methodInfo == null) return null;
 		var result = (string[])methodInfo.Invoke(this, null);
 		return result;
-	}
+    }
 
-	private string GetCompilerPath(List<string> arguments)
+    private string GetCompilerPath(List<string> arguments)
 	{
 		// calling base method via reflection
 		var bindingFlags = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -63,10 +64,27 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler
 
 	    arguments.Add("-define:" + COMPILER_DEFINE);
 
-        foreach (var reference in _island._references)
-		{
-			arguments.Add("-r:" + PrepareFileName(reference));
-		}
+        var unity5References = GetAdditionalReferences();
+        if (unity5References != null)
+        {
+            foreach (string path in unity5References)
+            {
+                var text = Path.Combine(GetProfileDirectoryViaReflection(), path);
+                if (File.Exists(text))
+                {
+                    arguments.Add("-r:" + PrepareFileName(text));
+                }
+            }
+        }
+        else
+        {
+            // Unity 2017+
+            foreach (var reference in _island._references)
+            {
+                arguments.Add("-r:" + PrepareFileName(reference));
+            }
+        }
+
 
 		foreach (var define in _island._defines.Distinct())
 		{
@@ -78,17 +96,12 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler
 			arguments.Add(PrepareFileName(file));
 		}
 
-		var additionalReferences = GetAdditionalReferences();
-		foreach (string path in additionalReferences)
-		{
-			var text = Path.Combine(GetProfileDirectoryViaReflection(), path);
-			if (File.Exists(text))
-			{
-				arguments.Add("-r:" + PrepareFileName(text));
-			}
-		}
+        foreach (string fileName in _island._references)
+        {
+            arguments.Add("-r:" + PrepareFileName(fileName));
+        }
 
-		var universalCompilerPath = GetUniversalCompilerPath();
+        var universalCompilerPath = GetUniversalCompilerPath();
 		if (universalCompilerPath != null)
 		{
 			// use universal compiler.

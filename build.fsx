@@ -31,6 +31,7 @@ Target "Export" (fun _ ->
     "./GenerationAttributes/bin/Release/GenerationAttributes.dll" |> CopyFile pluginsDir
     "./GenerationAttributes/bin/Release/GenerationAttributes.xml" |> CopyFile pluginsDir
     "./core/UnityPackage/Assets/Editor/CompilerSettings.cs" |> CopyFile editorDir
+    "./tools/0Harmony.dll" |> CopyFile editorDir
     "./core/IncrementalCompiler/IncrementalCompiler.xml" |> CopyFile compilerDir
     "./extra/CompilerPlugin.Unity5/bin/Release/Unity.PureCSharpTests.dll" |> CopyFile (editorDir @@ "CSharpVNextSupport.dll")
     "./extra/UniversalCompiler/bin/Release/UniversalCompiler.exe" |> CopyFile compilerDir
