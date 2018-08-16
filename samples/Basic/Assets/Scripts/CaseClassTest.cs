@@ -2,6 +2,7 @@
 
 
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml.Schema;
@@ -30,9 +31,10 @@ namespace Assets.Scripts {
     }
 
     [Record]
-    public partial class TwoNums {
+    public partial class TwoNums : IEnumerable {
         public readonly int first;
         public readonly int second;
+        public IEnumerator GetEnumerator() { throw new NotImplementedException(); }
     }
 
     [Record]
@@ -55,6 +57,10 @@ namespace Assets.Scripts {
             var one = testEnum.one;
             switch (one) {
                 case testEnum.three:
+                    Console.WriteLine("three");
+                    break;
+                // default: throw new Exception();
+                default:
                     Console.WriteLine("three");
                     break;
             }
