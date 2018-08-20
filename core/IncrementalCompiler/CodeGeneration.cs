@@ -813,7 +813,7 @@ namespace IncrementalCompiler
             }
         }
 
-        private static CaseClass GenerateCaseClass(
+        static CaseClass GenerateCaseClass(
             RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds
         ) {
             var properties = cds.Members.OfType<PropertyDeclarationSyntax>()
@@ -991,10 +991,13 @@ namespace IncrementalCompiler
         static TypeDeclarationSyntax GenerateCaseClassCompanion(
             TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
         ) {
+            // add and remove partial modifier because rider prints
+            // warning if partial keyword is not right before class keyword
             var classModifiers =
                 cds.Modifiers
-                .RemoveOfKind(SyntaxKind.ReadOnlyKeyword)
-                .Add(SyntaxKind.StaticKeyword);
+                .RemoveOfKind(SyntaxKind.PartialKeyword)
+                .Add(SyntaxKind.StaticKeyword)
+                .Add(SyntaxKind.PartialKeyword);
 
             var applyMethod = GenerateStaticApply(cds, props);
             return SF.ClassDeclaration(cds.Identifier)
