@@ -4,6 +4,7 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using UnityEditor;
 using UnityEditor.Scripting;
 using UnityEditor.Scripting.Compilers;
@@ -132,14 +133,18 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
 
 		    if (!CompilationFlags.checkIfBuildCompiles) return program;
 
-		    var compiledDllName = _island._output.Split('/').Last();
+            var compiledDllName = _island._output.Split('/').Last();
             if (compiledDllName != "Assembly-CSharp.dll") return program;
 
 		    program.WaitForExit();
-		    if (program.ExitCode != 0) return program;
+            if (program.ExitCode != 0) return program;
 
 		    // message contents are used in CI script, so this shouldnt be changed
 		    Debug.Log($"Scripts successfully compile in Build mode");
+		    // CI script expects to find log from above if process was killed
+		    // sometimes process.Kill() happens faster than Debug.Log() logs our message
+		    // sleeping the thread ensures that message was logged before we kill the process
+		    Thread.Sleep(5000);
 
 		    Process.GetCurrentProcess().Kill();
 		    throw new Exception("unreachable code");
