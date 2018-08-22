@@ -127,15 +127,18 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
 				if (File.Exists(rspFileName))
 					arguments.Add("@" + rspFileName);
 			}
-		    var program = StartCompiler(_island._target, universalCompilerPath, arguments);
-		    var compiledDllName = _island._output.Split('/').Last();
 
-            if (compiledDllName != "Assembly-CSharp.dll" || !CompilationFlags.checkIfBuildCompiles)
-                return program;
+		    var program = StartCompiler(_island._target, universalCompilerPath, arguments);
+
+		    if (!CompilationFlags.checkIfBuildCompiles) return program;
+
+		    var compiledDllName = _island._output.Split('/').Last();
+            if (compiledDllName != "Assembly-CSharp.dll") return program;
 
 		    program.WaitForExit();
 		    if (program.ExitCode != 0) return program;
 
+		    // message contents are used in CI script, so this shouldnt be changed
 		    Debug.Log($"Scripts successfully compile in Build mode");
 
 		    Process.GetCurrentProcess().Kill();
