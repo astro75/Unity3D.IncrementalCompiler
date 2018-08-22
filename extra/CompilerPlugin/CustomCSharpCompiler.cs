@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -6,10 +8,13 @@ using UnityEditor;
 using UnityEditor.Scripting;
 using UnityEditor.Scripting.Compilers;
 using UnityEditor.Utils;
-using UnityEngine;
+using Debug = UnityEngine.Debug;
 
-internal class CustomCSharpCompiler : MonoCSharpCompiler
-{
+public class CompilationFlags {
+    public static bool checkIfBuildCompiles = false;
+}
+
+internal class CustomCSharpCompiler : MonoCSharpCompiler {
     public const string COMPILER_DEFINE = "ALWAYS_ON";
 
 #if UNITY4
@@ -122,8 +127,19 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler
 				if (File.Exists(rspFileName))
 					arguments.Add("@" + rspFileName);
 			}
+		    var program = StartCompiler(_island._target, universalCompilerPath, arguments);
+		    var compiledDllName = _island._output.Split('/').Last();
 
-			return StartCompiler(_island._target, universalCompilerPath, arguments);
+            if (compiledDllName != "Assembly-CSharp.dll" || !CompilationFlags.checkIfBuildCompiles)
+                return program;
+
+		    program.WaitForExit();
+		    if (program.ExitCode != 0) return program;
+
+		    Debug.Log($"Scripts successfully compile in Build mode");
+
+		    Process.GetCurrentProcess().Kill();
+		    throw new Exception("unreachable code");
 		}
 		else
 		{
