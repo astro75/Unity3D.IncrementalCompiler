@@ -140,7 +140,7 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
             if (program.ExitCode != 0) return program;
 
 		    // message contents are used in CI script, so this shouldnt be changed
-		    Debug.Log($"Scripts successfully compile in Build mode");
+		    Debug.Log("Scripts successfully compile in Build mode");
 		    // CI script expects to find log from above if process was killed
 		    // sometimes process.Kill() happens faster than Debug.Log() logs our message
 		    // sleeping the thread ensures that message was logged before we kill the process

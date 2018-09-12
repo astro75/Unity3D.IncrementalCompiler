@@ -1,6 +1,5 @@
 ﻿#if UNITY_5
 
-
 using System;
 using System.Collections;
 using System.Collections.Generic;
@@ -17,6 +16,12 @@ namespace Assets.Scripts {
         one,
         two,
         three
+    }
+
+    [Record(GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
+    public partial class ApplyTestWithFieldSet<A> {
+        A shouldGenerate;
+        float shouldntGenerate = 1;
     }
 
     [Record]
@@ -211,7 +216,13 @@ namespace Assets.Scripts {
     }
 
     sealed partial class DoublePartial {
+        #region Unity Serialized Fields
+        #pragma warning disable 649
+        // ReSharper disable FieldCanBeMadeReadOnly.Local
         [PublicAccessor] readonly int _intVal;
+        // ReSharper restore FieldCanBeMadeReadOnly.Local
+        #pragma warning restore 649
+        #endregion
     }
 
     class InvalidStuff {

@@ -846,13 +846,14 @@ namespace IncrementalCompiler
 
             if (!fieldsAndProps.Any()) throw new Exception("The record has no fields and therefore cannot be created");
 
+            var initializedFieldsAndProps = fieldsAndProps.Where(_ => !_.initialized).ToImmutableArray();
+
             var constructor = createIf(
                 attr.GenerateConstructor.generateConstructor(),
                 () => {
-                    var initialized = fieldsAndProps.Where(_ => !_.initialized).ToImmutableArray();
-                    var params_ = initialized.joinCommaSeparated(f => f.type + " " + f.identifier);
-                    var body = initialized.Any()
-                        ? initialized
+                    var params_ = initializedFieldsAndProps.joinCommaSeparated(f => f.type + " " + f.identifier);
+                    var body = initializedFieldsAndProps.Any()
+                        ? initializedFieldsAndProps
                             .Select(f => "this." + f.identifier + " = " + f.identifier)
                             .tap(s => Join(";\n", s) + ";")
                         : "";
@@ -969,15 +970,15 @@ namespace IncrementalCompiler
 
             #region Static apply method
 
+
             var companion = Maybe.MZero<TypeDeclarationSyntax>();
             {
-                var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.identifier)).ToList();
                 if (attr.GenerateConstructor == GeneratedConstructor.ConstructorAndApply) {
                     if (cds.TypeParameterList == null) {
-                        newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
+                        newMembers = newMembers.Concat(GenerateStaticApply(cds, initializedFieldsAndProps));
                     }
                     else {
-                        companion = Maybe.Just(GenerateCaseClassCompanion(cds, propsAsStruct));
+                        companion = Maybe.Just(GenerateCaseClassCompanion(cds, initializedFieldsAndProps));
                     }
                 }
             }
@@ -989,7 +990,7 @@ namespace IncrementalCompiler
         }
 
         static TypeDeclarationSyntax GenerateCaseClassCompanion(
-            TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
+            TypeDeclarationSyntax cds, ICollection<FieldOrProp> props
         ) {
             // add and remove partial modifier because rider prints
             // warning if partial keyword is not right before class keyword
@@ -1011,11 +1012,11 @@ namespace IncrementalCompiler
             .tap(_ => Join(", ", _));
 
         static SyntaxList<MemberDeclarationSyntax> GenerateStaticApply(
-            TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
+            TypeDeclarationSyntax cds, ICollection<FieldOrProp> props
         ) {
             var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
-            var funcParamsStr = joinCommaSeparated(props, _ => _.type + " " + _.identifier.ValueText);
-            var funcArgs = joinCommaSeparated(props, _ => _.identifier.ValueText);
+            var funcParamsStr = joinCommaSeparated(props, p => p.type + " " + p.identifier.ValueText);
+            var funcArgs = joinCommaSeparated(props, p => p.identifier.ValueText);
 
             return ParseClassMembers(
                 $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +
