@@ -757,16 +757,6 @@ namespace IncrementalCompiler
             return CreateStatic(tds, ParseClassMembers(VoidMatch() + Match()));
         }
 
-        struct TypeWithIdentifier {
-            public TypeSyntax type { get; }
-            public SyntaxToken identifier { get; }
-
-            public TypeWithIdentifier(TypeSyntax type, SyntaxToken identifier) {
-                this.type = type;
-                this.identifier = identifier;
-            }
-        }
-
         public class CaseClass : IEnumerable<TypeDeclarationSyntax> {
             readonly TypeDeclarationSyntax caseClass;
             readonly Maybe<TypeDeclarationSyntax> companion;
