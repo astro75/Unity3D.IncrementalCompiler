@@ -149,7 +149,7 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
 
 		    if (!CompilationFlags.checkIfBuildCompiles) return program;
 
-            var compiledDllName = _island._output.Split('/').Last();
+            var compiledDllName = island._output.Split('/').Last();
             if (compiledDllName != "Assembly-CSharp.dll") return program;
 
 		    program.WaitForExit();
