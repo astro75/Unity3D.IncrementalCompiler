@@ -97,15 +97,12 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
             const string GENERATED = "Generated";
             var generatedPathStart = GENERATED + Path.DirectorySeparatorChar;
 
-            void RemoveOldGeneratedFiles()
-            {
-                foreach (var fileNode in xdoc.Root.Descendants(compileName))
-                {
-                    if (fileNode.Attribute(includeName)?.Value.StartsWith(generatedPathStart, StringComparison.Ordinal) ?? false)
-                    {
-                        fileNode.Remove();
-                    }
-                }
+            void RemoveOldGeneratedFiles() {
+                var toRemove = xdoc.Root.Descendants(compileName).Where(fileNode =>
+                    fileNode.Attribute(includeName)?.Value
+                        .StartsWith(generatedPathStart, StringComparison.Ordinal) ?? false
+                ).ToArray();
+                foreach (var element in toRemove) element.Remove();
             }
 
             void AddGeneratedFiles()

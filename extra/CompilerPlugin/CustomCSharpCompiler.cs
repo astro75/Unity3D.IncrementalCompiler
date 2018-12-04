@@ -1,4 +1,5 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -12,15 +13,31 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler
 {
     public const string COMPILER_DEFINE = "ALWAYS_ON";
 
+    MonoIsland island => GetIsland();
+
 #if UNITY4
 	public CustomCSharpCompiler(MonoIsland island, bool runUpdater) : base(island)
-	{
+    {
 	}
 #else
 	public CustomCSharpCompiler(MonoIsland island, bool runUpdater) : base(island, runUpdater)
 	{
 	}
 #endif
+
+    MonoIsland GetIsland() {
+        const BindingFlags bindingAttr =
+            BindingFlags.Instance |
+            BindingFlags.Static |
+            BindingFlags.Public |
+            BindingFlags.NonPublic |
+            BindingFlags.FlattenHierarchy;
+        var field = GetType().GetField("_island", bindingAttr) ?? GetType().GetField("m_Island", bindingAttr);
+        if (field == null) {
+            throw new NotSupportedException("Cannot get _island or m_Island field from MonoCSharpCompiler. Did the internal API change?");
+        }
+        return (MonoIsland)field.GetValue(this);
+    }
 
     private string[] GetAdditionalReferences()
 	{
@@ -58,7 +75,7 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler
 			"-debug",
 			"-target:library",
 			"-nowarn:0169",
-			"-out:" + PrepareFileName(_island._output),
+			"-out:" + PrepareFileName(island._output),
 			"-unsafe"
 		};
 
@@ -79,24 +96,24 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler
         else
         {
             // Unity 2017+
-            foreach (var reference in _island._references)
-            {
-                arguments.Add("-r:" + PrepareFileName(reference));
-            }
+//            foreach (var reference in island._references)
+//            {
+//                arguments.Add("-r:" + PrepareFileName(reference));
+//            }
         }
 
 
-		foreach (var define in _island._defines.Distinct())
+		foreach (var define in island._defines.Distinct())
 		{
 			arguments.Add("-define:" + define);
 		}
 
-		foreach (var file in _island._files)
+		foreach (var file in island._files)
 		{
 			arguments.Add(PrepareFileName(file));
 		}
 
-        foreach (string fileName in _island._references)
+        foreach (string fileName in island._references)
         {
             arguments.Add("-r:" + PrepareFileName(fileName));
         }
@@ -107,23 +124,23 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler
 			// use universal compiler.
 			arguments.Add("-define:__UNITY_PROCESSID__" + System.Diagnostics.Process.GetCurrentProcess().Id);
 
-			// this function should be run because it addes an item to arguments
-			var compilerPath = GetCompilerPath(arguments);
+			// this function should be run because it adds an item to arguments
+			//var compilerPath = GetCompilerPath(arguments);
 
 			var rspFileName = "Assets/mcs.rsp";
 			if (File.Exists(rspFileName))
 			{
 				arguments.Add("@" + rspFileName);
 			}
-			else
-			{
-				var defaultCompilerName = Path.GetFileNameWithoutExtension(compilerPath);
-				rspFileName = "Assets/" + defaultCompilerName + ".rsp";
-				if (File.Exists(rspFileName))
-					arguments.Add("@" + rspFileName);
-			}
+			//else
+			//{
+			//	var defaultCompilerName = Path.GetFileNameWithoutExtension(compilerPath);
+			//	rspFileName = "Assets/" + defaultCompilerName + ".rsp";
+			//	if (File.Exists(rspFileName))
+			//		arguments.Add("@" + rspFileName);
+			//}
 
-			return StartCompiler(_island._target, universalCompilerPath, arguments);
+			return StartCompiler(island._target, universalCompilerPath, arguments);
 		}
 		else
 		{
@@ -149,7 +166,7 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler
 		// For Unity 5.6
 		var monoIslandType = typeof(MonoIsland);
 		var apiCompatibilityLevelFieldInfo = monoIslandType.GetField("_api_compatibility_level");
-		var apiCompatibilityLevel = (ApiCompatibilityLevel)apiCompatibilityLevelFieldInfo.GetValue(_island);
+		var apiCompatibilityLevel = (ApiCompatibilityLevel)apiCompatibilityLevelFieldInfo.GetValue(island);
 
 		string profile;
 		if (apiCompatibilityLevel != ApiCompatibilityLevel.NET_2_0)

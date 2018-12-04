@@ -50,6 +50,9 @@ internal class Program
 	{
 		logger?.AppendHeader();
 
+        logger?.Append("mono path");
+        logger?.Append(Environment.GetEnvironmentVariable("MONO_PATH"));
+
 		string responseFile = args[0];
 		var compilationOptions = File.ReadAllLines(responseFile.TrimStart('@'));
 		string targetProfileDir = GetTargetProfileDir(compilationOptions);
