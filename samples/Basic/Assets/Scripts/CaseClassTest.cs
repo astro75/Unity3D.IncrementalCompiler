@@ -1,7 +1,7 @@
 ﻿#if UNITY_5
 
-
 using System;
+using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
 using System.Xml.Schema;
@@ -18,6 +18,12 @@ namespace Assets.Scripts {
         three
     }
 
+    [Record(GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
+    public partial class ApplyTestWithFieldSet<A> {
+        A shouldGenerate;
+        float shouldntGenerate = 1;
+    }
+
     [Record]
     public partial class ToStringEnumerableTestClass {
         public readonly String name = "Peter";
@@ -30,9 +36,10 @@ namespace Assets.Scripts {
     }
 
     [Record]
-    public partial class TwoNums {
+    public partial class TwoNums : IEnumerable {
         public readonly int first;
         public readonly int second;
+        public IEnumerator GetEnumerator() { throw new NotImplementedException(); }
     }
 
     [Record]
@@ -55,6 +62,10 @@ namespace Assets.Scripts {
             var one = testEnum.one;
             switch (one) {
                 case testEnum.three:
+                    Console.WriteLine("three");
+                    break;
+                // default: throw new Exception();
+                default:
                     Console.WriteLine("three");
                     break;
             }
@@ -205,7 +216,13 @@ namespace Assets.Scripts {
     }
 
     sealed partial class DoublePartial {
+        #region Unity Serialized Fields
+        #pragma warning disable 649
+        // ReSharper disable FieldCanBeMadeReadOnly.Local
         [PublicAccessor] readonly int _intVal;
+        // ReSharper restore FieldCanBeMadeReadOnly.Local
+        #pragma warning restore 649
+        #endregion
     }
 
     class InvalidStuff {

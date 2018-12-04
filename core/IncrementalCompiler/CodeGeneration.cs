@@ -757,16 +757,6 @@ namespace IncrementalCompiler
             return CreateStatic(tds, ParseClassMembers(VoidMatch() + Match()));
         }
 
-        struct TypeWithIdentifier {
-            public TypeSyntax type { get; }
-            public SyntaxToken identifier { get; }
-
-            public TypeWithIdentifier(TypeSyntax type, SyntaxToken identifier) {
-                this.type = type;
-                this.identifier = identifier;
-            }
-        }
-
         public class CaseClass : IEnumerable<TypeDeclarationSyntax> {
             readonly TypeDeclarationSyntax caseClass;
             readonly Maybe<TypeDeclarationSyntax> companion;
@@ -790,7 +780,8 @@ namespace IncrementalCompiler
             public readonly bool traversable;
 
             static readonly string stringName = "string";
-            static readonly string iEnumName = typeof(IEnumerable).FullName;
+            static readonly string iEnumName = typeof(IEnumerable<>).FullName;
+
             public FieldOrProp(
                 TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model
             ) {
@@ -798,14 +789,21 @@ namespace IncrementalCompiler
                 this.identifier = identifier;
                 this.initialized = initialized;
 
+                bool interfaceInIEnumerable(INamedTypeSymbol info) =>
+                    info.ContainingNamespace + "." + info.Name + "`" + info.Arity == iEnumName;
+
                 var typeInfo = model.GetTypeInfo(type).Type;
                 var typeName = typeInfo.ToDisplayString();
-                traversable = typeName != stringName
-                    && typeInfo.AllInterfaces.Any(iface => iface.ToDisplayString() == iEnumName);
+
+                var typeIsIEnumerableItself = typeInfo is INamedTypeSymbol ti && interfaceInIEnumerable(ti);
+                var typeImplementsIEnumerable = typeInfo.AllInterfaces.Any(interfaceInIEnumerable);
+
+                traversable =
+                    typeName != stringName && (typeIsIEnumerableItself || typeImplementsIEnumerable);
             }
         }
 
-        private static CaseClass GenerateCaseClass(
+        static CaseClass GenerateCaseClass(
             RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds
         ) {
             var properties = cds.Members.OfType<PropertyDeclarationSyntax>()
@@ -838,13 +836,14 @@ namespace IncrementalCompiler
 
             if (!fieldsAndProps.Any()) throw new Exception("The record has no fields and therefore cannot be created");
 
+            var initializedFieldsAndProps = fieldsAndProps.Where(_ => !_.initialized).ToImmutableArray();
+
             var constructor = createIf(
                 attr.GenerateConstructor.generateConstructor(),
                 () => {
-                    var initialized = fieldsAndProps.Where(_ => !_.initialized).ToImmutableArray();
-                    var params_ = initialized.joinCommaSeparated(f => f.type + " " + f.identifier);
-                    var body = initialized.Any()
-                        ? initialized
+                    var params_ = initializedFieldsAndProps.joinCommaSeparated(f => f.type + " " + f.identifier);
+                    var body = initializedFieldsAndProps.Any()
+                        ? initializedFieldsAndProps
                             .Select(f => "this." + f.identifier + " = " + f.identifier)
                             .tap(s => Join(";\n", s) + ";")
                         : "";
@@ -961,15 +960,15 @@ namespace IncrementalCompiler
 
             #region Static apply method
 
+
             var companion = Maybe.MZero<TypeDeclarationSyntax>();
             {
-                var propsAsStruct = fieldsAndProps.Select(_ => new TypeWithIdentifier(_.type, _.identifier)).ToList();
                 if (attr.GenerateConstructor == GeneratedConstructor.ConstructorAndApply) {
                     if (cds.TypeParameterList == null) {
-                        newMembers = newMembers.Concat(GenerateStaticApply(cds, propsAsStruct));
+                        newMembers = newMembers.Concat(GenerateStaticApply(cds, initializedFieldsAndProps));
                     }
                     else {
-                        companion = Maybe.Just(GenerateCaseClassCompanion(cds, propsAsStruct));
+                        companion = Maybe.Just(GenerateCaseClassCompanion(cds, initializedFieldsAndProps));
                     }
                 }
             }
@@ -981,12 +980,15 @@ namespace IncrementalCompiler
         }
 
         static TypeDeclarationSyntax GenerateCaseClassCompanion(
-            TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
+            TypeDeclarationSyntax cds, ICollection<FieldOrProp> props
         ) {
+            // add and remove partial modifier because rider prints
+            // warning if partial keyword is not right before class keyword
             var classModifiers =
                 cds.Modifiers
-                .RemoveOfKind(SyntaxKind.ReadOnlyKeyword)
-                .Add(SyntaxKind.StaticKeyword);
+                .RemoveOfKind(SyntaxKind.PartialKeyword)
+                .Add(SyntaxKind.StaticKeyword)
+                .Add(SyntaxKind.PartialKeyword);
 
             var applyMethod = GenerateStaticApply(cds, props);
             return SF.ClassDeclaration(cds.Identifier)
@@ -1000,11 +1002,11 @@ namespace IncrementalCompiler
             .tap(_ => Join(", ", _));
 
         static SyntaxList<MemberDeclarationSyntax> GenerateStaticApply(
-            TypeDeclarationSyntax cds, ICollection<TypeWithIdentifier> props
+            TypeDeclarationSyntax cds, ICollection<FieldOrProp> props
         ) {
             var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
-            var funcParamsStr = joinCommaSeparated(props, _ => _.type + " " + _.identifier.ValueText);
-            var funcArgs = joinCommaSeparated(props, _ => _.identifier.ValueText);
+            var funcParamsStr = joinCommaSeparated(props, p => p.type + " " + p.identifier.ValueText);
+            var funcArgs = joinCommaSeparated(props, p => p.identifier.ValueText);
 
             return ParseClassMembers(
                 $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +

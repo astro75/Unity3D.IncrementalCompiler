@@ -52,8 +52,15 @@ namespace IncrementalCompiler
                 var loader = new AnalyzerAssemblyLoader();
                 var diagnostic = new List<Diagnostic>();
 
+                if (!Directory.Exists(analyzersPath)) {
+                    Directory.CreateDirectory(analyzersPath);
+                    File.WriteAllText(analyzersPath + "/readme.txt", "Add Roslyn Analyzers here");
+                    return (ImmutableArray<DiagnosticAnalyzer>.Empty, diagnostic);
+                }
+
                 _logger.Info("Analyzers:");
-                var analyzers = Directory
+                var analyzers = 
+                    Directory
                     .GetFiles(analyzersPath)
                     .Where(x => x.EndsWith(".dll"))
                     .Select(dll => {
