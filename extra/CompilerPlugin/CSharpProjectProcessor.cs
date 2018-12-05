@@ -1,9 +1,11 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Xml.Linq;
+using JetBrains.Annotations;
 using UnityEditor;
 using UnityEngine;
 
@@ -14,16 +16,13 @@ using UnityEngine;
 [InitializeOnLoad]
 public class CSharpProjectPostprocessor : AssetPostprocessor
 {
-    #region Overrides of AssetPostprocessor
-
     // We need to run this after Rider postprocessor, because we override LangVersion
     // Rider postprocessor has order of 10
     public override int GetPostprocessOrder() => 11;
 
-    #endregion
-
     // In case VSTU is installed
     static CSharpProjectPostprocessor() {
+        if (unityVersion >= new Version(2018, 1)) return;
         OnGeneratedCSProjectFiles();
         /*foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
         {
@@ -64,6 +63,8 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         }*/
     }
 
+    public static Version unityVersion => new Version(Application.unityVersion.Split(".".ToCharArray()).Take(2).Aggregate((a, b) => a + "." + b));
+
     // In case VSTU is not installed
     private static void OnGeneratedCSProjectFiles()
     {
@@ -76,12 +77,26 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         foreach (string projectFile in Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csproj"))
         {
             string content = File.ReadAllText(projectFile);
-            content = ModifyProjectFile(Path.GetFileNameWithoutExtension(projectFile), content);
+            content = ModifyProjectFile(content);
             File.WriteAllText(projectFile, content);
         }
     }
 
-    private static string ModifyProjectFile(string name, string content)
+    [UsedImplicitly]
+    public static string OnGeneratedCSProject(string path, string contents)
+    {
+        try
+        {
+            return ModifyProjectFile(contents);
+        }
+        catch (Exception ex)
+        {
+            Debug.LogError((object) ex);
+            return contents;
+        }
+    }
+
+    private static string ModifyProjectFile(string content)
     {
         var xdoc = XDocument.Parse(content);
 
