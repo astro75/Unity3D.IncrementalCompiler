@@ -876,23 +876,36 @@ namespace IncrementalCompiler
                     var type = model.GetTypeInfo(f.type).Type;
                     var isValueType = type.IsValueType;
                     var name = f.identifier.ValueText;
-                    string ValueTypeHash(SpecialType sType)
+
+
+                    string ValueTypeHash(ITypeSymbol t)
                     {
+                        if (t.isEnum(out var underlyingType))
+                        {
+                            switch (underlyingType)
+                            {
+                                case SpecialType.System_Int64:
+                                case SpecialType.System_UInt64:
+                                    return $"{name}.GetHashCode()";
+                                default:
+                                    return $"(int) {name}";
+                            }
+                        }
+
+                        var sType = t.SpecialType;
                         switch (sType)
                         {
                             case SpecialType.System_Byte:
                             case SpecialType.System_SByte:
                             case SpecialType.System_Int16:
                             case SpecialType.System_Int32: return name;
-                            case SpecialType.System_UInt32:
-                            //TODO: `long` type enums should not cast
-                            case SpecialType.System_Enum: return "(int) " + name;
+                            case SpecialType.System_UInt32: return "(int) " + name;
                             default: return name + ".GetHashCode()";
                         }
                     }
 
                     var fieldHashCode = isValueType
-                        ? ValueTypeHash(type.SpecialType)
+                        ? ValueTypeHash(type)
                         : $"({name} == null ? 0 : {name}.GetHashCode())";
                     return $"hashCode = (hashCode * 397) ^ {(fieldHashCode)}; // {type.SpecialType}";
                 }));
@@ -921,6 +934,9 @@ namespace IncrementalCompiler
                     var type = model.GetTypeInfo(f.type).Type;
                     var name = f.identifier.ValueText;
                     var otherName = "other." + name;
+
+                    if (type.isEnum(out _)) return $"{name} == {otherName}";
+
                     switch (type.SpecialType)
                     {
                         case SpecialType.System_Byte:
@@ -931,14 +947,18 @@ namespace IncrementalCompiler
                         case SpecialType.System_UInt32:
                         case SpecialType.System_Int64:
                         case SpecialType.System_UInt64:
-                        case SpecialType.System_Enum: return $"{name} == {otherName}";
                         case SpecialType.System_String: return $"string.Equals({name}, {otherName})";
-                        default: return $"{name}.Equals({otherName})";
+                        default:
+                            return $"{name}.Equals({otherName})";
                     }
                 });
                 var equalsExpr = isStruct ? "left.Equals(right)" : "Equals(left, right)";
                 return ParseClassMembers(
-                    $"public bool Equals({typeName} other) => {Join(" && ", comparisons)};" +
+                    $"public bool Equals({typeName} other) {{" +
+                    $"  if (ReferenceEquals(null, other)) return false;" +
+                    (!isStruct ? "if (ReferenceEquals(this, other)) return true;" : "") +
+                    $"return {Join(" && ", comparisons)};" +
+                    $"}}" +
                     $"public override bool Equals(object obj) {{" +
                     $"  if (ReferenceEquals(null, obj)) return false;" +
                     (!isStruct ? "if (ReferenceEquals(this, obj)) return true;" : "") +
