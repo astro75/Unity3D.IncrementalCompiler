@@ -68,8 +68,8 @@ namespace GenerationAttributes
     /// when generating code.
     /// </summary>
     [AttributeUsage(AttributeTargets.Class)]
-    [Conditional("CodeGeneration")]
-    [JavaClass("sdfsdf","","")]
+    // Used in CodeGeneration
+    // [Conditional("CodeGeneration")]
     public class JavaBindingAttribute : Attribute
     {
         /// <summary>Full java class name of associated java object</summary>
