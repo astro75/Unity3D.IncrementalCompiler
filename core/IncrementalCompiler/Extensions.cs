@@ -96,5 +96,16 @@ namespace IncrementalCompiler
         public static void ForEach<A>(this IEnumerable<A> enumerable, Action<A> act) {
             foreach (var e in enumerable) act(e);
         }
+
+        public static bool isEnum(this ITypeSymbol t, out SpecialType underlyingType) {
+            if (t is INamedTypeSymbol nt && nt.EnumUnderlyingType != null)
+            {
+                underlyingType = nt.EnumUnderlyingType.SpecialType;
+                return true;
+            }
+
+            underlyingType = t.SpecialType;
+            return false;
+        }
     }
 }
