@@ -1,4 +1,5 @@
-﻿#define LOGGING_ENABLED
+﻿// logging lib crashes compiler
+// #define LOGGING_ENABLED
 
 using System;
 using System.Diagnostics;
