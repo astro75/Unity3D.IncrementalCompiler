@@ -7,12 +7,10 @@ namespace IncrementalCompiler
 {
     public class Settings
     {
-        public DebugSymbolFileType DebugSymbolFile;
         public PrebuiltOutputReuseType PrebuiltOutputReuse;
 
         public static Settings Default = new Settings
         {
-            DebugSymbolFile = DebugSymbolFileType.PdbToMdb,
             PrebuiltOutputReuse = PrebuiltOutputReuseType.WhenNoChange,
         };
 
@@ -34,7 +32,6 @@ namespace IncrementalCompiler
             var xdoc = XDocument.Load(stream).Element("Settings");
             return new Settings
             {
-                DebugSymbolFile = (DebugSymbolFileType)Enum.Parse(typeof(DebugSymbolFileType), xdoc.Element("DebugSymbolFile").Value),
                 PrebuiltOutputReuse = (PrebuiltOutputReuseType)Enum.Parse(typeof(PrebuiltOutputReuseType), xdoc.Element("PrebuiltOutputReuse").Value),
             };
         }

@@ -48,7 +48,6 @@ namespace IncrementalCompiler
             options.WorkDirectory = curPath;
             options.References = options.References.Distinct().ToList();
             options.Files = options.Files.Distinct().ToList();
-            options.DebugSymbolFile = settings.DebugSymbolFile;
             options.PrebuiltOutputReuse = settings.PrebuiltOutputReuse;
 
             var parentProcessId = Process.GetCurrentProcess().Id;

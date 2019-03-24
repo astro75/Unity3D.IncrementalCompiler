@@ -26,13 +26,6 @@ public class CompilerSettings : EditorWindow
         public CompilerType Compiler;
     }
 
-    public enum DebugSymbolFileType
-    {
-        None,
-        Pdb,
-        PdbToMdb
-    }
-
     public enum PrebuiltOutputReuseType
     {
         None,
@@ -42,7 +35,6 @@ public class CompilerSettings : EditorWindow
 
     public struct IncrementalCompilerSettings
     {
-        public DebugSymbolFileType DebugSymbolFile;
         public PrebuiltOutputReuseType PrebuiltOutputReuse;
     }
 
@@ -246,7 +238,6 @@ public class CompilerSettings : EditorWindow
 
         LoadIncrementalCompilerSettings();
         IncrementalCompilerSettings ics;
-        ics.DebugSymbolFile = (DebugSymbolFileType)EditorGUILayout.EnumPopup("DebugSymbolFile:", _ics.DebugSymbolFile);
         ics.PrebuiltOutputReuse = (PrebuiltOutputReuseType)EditorGUILayout.EnumPopup("PrebuiltOutputReuse:", _ics.PrebuiltOutputReuse);
         if (ics.Equals(_ics) == false)
         {
@@ -268,8 +259,6 @@ public class CompilerSettings : EditorWindow
                 var xdoc = XDocument.Load(fs).Element("Settings");
                 _ics = new IncrementalCompilerSettings
                 {
-                    DebugSymbolFile = (DebugSymbolFileType)
-                        Enum.Parse(typeof(DebugSymbolFileType), xdoc.Element("DebugSymbolFile").Value),
                     PrebuiltOutputReuse = (PrebuiltOutputReuseType)
                         Enum.Parse(typeof(PrebuiltOutputReuseType), xdoc.Element("PrebuiltOutputReuse").Value),
                 };
@@ -301,7 +290,6 @@ public class CompilerSettings : EditorWindow
             {
             }
 
-            SetXmlElementValue(xel, "DebugSymbolFile", _ics.DebugSymbolFile.ToString());
             SetXmlElementValue(xel, "PrebuiltOutputReuse", _ics.PrebuiltOutputReuse.ToString());
 
             xel.Save(IcsFilePath);

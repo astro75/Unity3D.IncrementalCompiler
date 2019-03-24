@@ -31,7 +31,7 @@ namespace IncrementalCompiler
         [DataMember] public List<string> Files = new List<string>();
         [DataMember] public List<string> NoWarnings = new List<string>();
         [DataMember] public List<string> Options = new List<string>();
-        [DataMember] public DebugSymbolFileType DebugSymbolFile;
+        [DataMember] public DebugSymbolFileType DebugSymbolFile = DebugSymbolFileType.Pdb;
         [DataMember] public PrebuiltOutputReuseType PrebuiltOutputReuse;
 
         static string trimQuotes(string value) => value.Trim('"');
@@ -79,6 +79,10 @@ namespace IncrementalCompiler
                             {
                                 NoWarnings.Add(int.TryParse(id, out var num) ? $"CS{num:0000}" : id);
                             }
+                            break;
+
+                        case "custom-option-mdb":
+                            DebugSymbolFile = DebugSymbolFileType.PdbToMdb;
                             break;
 
                         default:

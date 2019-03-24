@@ -76,7 +76,6 @@ namespace IncrementalCompiler
             options.WorkDirectory = currentPath;
             options.References = options.References.Distinct().ToList();
             options.Files = options.Files.Distinct().ToList();
-            options.DebugSymbolFile = settings.DebugSymbolFile;
             options.PrebuiltOutputReuse = settings.PrebuiltOutputReuse;
 
             logger.Info("CurrentDir: {0}", Directory.GetCurrentDirectory());

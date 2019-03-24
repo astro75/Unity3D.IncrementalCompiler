@@ -9,6 +9,7 @@ using UnityEditor;
 using UnityEditor.Scripting;
 using UnityEditor.Scripting.Compilers;
 using UnityEditor.Utils;
+using UnityEngine;
 using Debug = UnityEngine.Debug;
 
 public class CompilationFlags {
@@ -123,6 +124,11 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
             arguments.Add("-r:" + PrepareFileName(fileName));
         }
 
+        if (Application.unityVersion.StartsWith("5."))
+        {
+            arguments.Add("-custom-option-mdb");
+        }
+
         var universalCompilerPath = GetUniversalCompilerPath();
 		if (universalCompilerPath != null)
 		{
@@ -171,7 +177,7 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
 			Debug.LogWarning($"Universal C# compiler not found in project directory. Use the default compiler");
 			return base.StartCompiler();
 		}
-	}
+    }
 
 	// In Unity 5.5 and earlier GetProfileDirectory() was an instance method of MonoScriptCompilerBase class.
 	// In Unity 5.6 the method is removed and the profile directory is detected differently.

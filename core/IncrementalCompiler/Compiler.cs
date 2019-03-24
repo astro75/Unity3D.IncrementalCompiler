@@ -13,6 +13,7 @@ using IncrementalCompiler.Analyzers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
+using Microsoft.CodeAnalysis.Emit;
 using Microsoft.CodeAnalysis.Text;
 using NLog;
 
@@ -413,7 +414,17 @@ namespace IncrementalCompiler
 
             // emit to memory
 
-            var r = compilation.Emit(_outputDllStream, _outputDebugSymbolStream);
+            var r = compilation.Emit(
+                _outputDllStream,
+                _outputDebugSymbolStream,
+                options: new EmitOptions(debugInformationFormat:
+                    // PdbToMdb requires full pdb format
+                    // otherwise unity works with PortablePdb
+                    _options.DebugSymbolFile == DebugSymbolFileType.PdbToMdb
+                        ? DebugInformationFormat.Pdb
+                        : DebugInformationFormat.PortablePdb
+                )
+            );
 
             // memory to file
 
