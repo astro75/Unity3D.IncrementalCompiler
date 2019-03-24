@@ -180,6 +180,7 @@ namespace IncrementalCompiler
                     .WithSpecificDiagnosticOptions(specificDiagnosticOptions)
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
                     .WithAllowUnsafe(options.Options.Contains("-unsafe"))
+                    .WithDeterministic(true)
                     // without SourceFileResolver debugging in Rider does not work
                     .WithSourceReferenceResolver(new SourceFileResolver(ImmutableArray<string>.Empty, _options.WorkDirectory))
 
