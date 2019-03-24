@@ -105,8 +105,10 @@ namespace IncrementalCompiler
 
         public CompileResult Build(CompileOptions options)
         {
-            parseOptions = new CSharpParseOptions(LanguageVersion.CSharp7_2, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines)
-                .WithFeatures(new []{new KeyValuePair<string, string>("IOperation", ""), });
+            parseOptions = new CSharpParseOptions(
+                LanguageVersion.CSharp7_3, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines
+            ).WithFeatures(new []{new KeyValuePair<string, string>("IOperation", ""), });
+
             if (PlatformHelper.CurrentPlatform != Platform.Windows)
             {
                 // OSX does not support pdb
