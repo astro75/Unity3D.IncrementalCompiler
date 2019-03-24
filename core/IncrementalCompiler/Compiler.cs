@@ -176,13 +176,17 @@ namespace IncrementalCompiler
                 options.AssemblyName,
                 _sourceMap.Values,
                 _referenceMap.Values,
-                new CSharpCompilationOptions(OutputKind.DynamicallyLinkedLibrary)
-                    .WithSpecificDiagnosticOptions(specificDiagnosticOptions)
-                    .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
-                    .WithAllowUnsafe(options.Options.Contains("-unsafe"))
-                    .WithDeterministic(true)
+                new CSharpCompilationOptions(
+                    OutputKind.DynamicallyLinkedLibrary,
+                    // deterministic option fails at runtime:
+                    // Unexpected error writing debug information -- 'Unable to load DLL 'Microsoft.DiaSymReader.Native.x86.dll': The specified module could not be found.
+                    // deterministic: true,
+                    specificDiagnosticOptions: specificDiagnosticOptions,
+                    assemblyIdentityComparer: DesktopAssemblyIdentityComparer.Default,
+                    allowUnsafe: options.Options.Contains("-unsafe"),
                     // without SourceFileResolver debugging in Rider does not work
-                    .WithSourceReferenceResolver(new SourceFileResolver(ImmutableArray<string>.Empty, _options.WorkDirectory))
+                    sourceReferenceResolver: new SourceFileResolver(ImmutableArray<string>.Empty, _options.WorkDirectory)
+                )
 
             );
             logTime("Compilation created");
