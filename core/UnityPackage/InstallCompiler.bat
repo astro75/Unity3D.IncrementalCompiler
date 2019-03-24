@@ -1,2 +1,2 @@
-XCOPY /S /Y /EXCLUDE:InstallCompiler.exclude ..\..\bin\Unity5\* .
+XCOPY /S /Y /EXCLUDE:InstallCompiler.exclude ..\..\bin\UnityCompiler\* .
 PAUSE.  

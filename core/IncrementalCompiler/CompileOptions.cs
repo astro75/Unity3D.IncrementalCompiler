@@ -10,8 +10,7 @@ namespace IncrementalCompiler
     {
         None,
         Pdb,
-        PdbToMdb,
-        Mdb
+        PdbToMdb
     }
 
     public enum PrebuiltOutputReuseType

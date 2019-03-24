@@ -12,7 +12,7 @@ namespace IncrementalCompiler
 
         public static Settings Default = new Settings
         {
-            DebugSymbolFile = DebugSymbolFileType.Mdb,
+            DebugSymbolFile = DebugSymbolFileType.PdbToMdb,
             PrebuiltOutputReuse = PrebuiltOutputReuseType.WhenNoChange,
         };
 

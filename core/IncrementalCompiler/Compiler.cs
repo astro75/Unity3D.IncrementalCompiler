@@ -14,7 +14,6 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
 using Microsoft.CodeAnalysis.Text;
-using Mono.CompilerServices.SymbolWriter;
 using NLog;
 
 
@@ -373,7 +372,6 @@ namespace IncrementalCompiler
                         break;
 
                     case DebugSymbolFileType.PdbToMdb:
-                    case DebugSymbolFileType.Mdb:
                         var mdbFile = Path.Combine(_options.WorkDirectory, _options.Output + ".mdb");
                         WriteToFile(_outputDebugSymbolStream, mdbFile);
                         break;
@@ -413,9 +411,7 @@ namespace IncrementalCompiler
 
             // emit to memory
 
-            var r = _options.DebugSymbolFile == DebugSymbolFileType.Mdb
-                ? compilation.EmitWithMdb(_outputDllStream, _outputDebugSymbolStream)
-                : compilation.Emit(_outputDllStream, _outputDebugSymbolStream);
+            var r = compilation.Emit(_outputDllStream, _outputDebugSymbolStream);
 
             // memory to file
 
@@ -442,7 +438,7 @@ namespace IncrementalCompiler
 
                 if (_outputDebugSymbolStream != null)
                 {
-                    var emitDebugSymbolFile = _options.DebugSymbolFile == DebugSymbolFileType.Mdb ? mdbFile : pdbFile;
+                    var emitDebugSymbolFile = pdbFile;
                     WriteToFile(_outputDebugSymbolStream, emitDebugSymbolFile);
                 }
 

@@ -30,8 +30,7 @@ public class CompilerSettings : EditorWindow
     {
         None,
         Pdb,
-        PdbToMdb,
-        Mdb
+        PdbToMdb
     }
 
     public enum PrebuiltOutputReuseType
@@ -193,7 +192,7 @@ public class CompilerSettings : EditorWindow
         if (!File.Exists(UcLogFilePath)) {
             return _ucLastBuildLog;
         }
-        
+
         try
         {
             var lines = File.ReadAllLines(UcLogFilePath);
