@@ -59,7 +59,7 @@ namespace IncrementalCompiler
                 }
 
                 _logger.Info("Analyzers:");
-                var analyzers = 
+                var analyzers =
                     Directory
                     .GetFiles(analyzersPath)
                     .Where(x => x.EndsWith(".dll"))
@@ -180,6 +180,8 @@ namespace IncrementalCompiler
                     .WithSpecificDiagnosticOptions(specificDiagnosticOptions)
                     .WithAssemblyIdentityComparer(DesktopAssemblyIdentityComparer.Default)
                     .WithAllowUnsafe(options.Options.Contains("-unsafe"))
+                    // without SourceFileResolver debugging in Rider does not work
+                    .WithSourceReferenceResolver(new SourceFileResolver(ImmutableArray<string>.Empty, _options.WorkDirectory))
 
             );
             logTime("Compilation created");
