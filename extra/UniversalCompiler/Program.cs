@@ -1,5 +1,5 @@
 ﻿// logging lib crashes compiler
-// #define LOGGING_ENABLED
+#define LOGGING_ENABLED
 
 using System;
 using System.Diagnostics;
@@ -245,20 +245,13 @@ internal class Program
 	private static string GetUnityEditorDataDir()
 	{
 		// Windows:
-		// MONO_PATH: C:\Program Files\Unity\Editor\Data\Mono\lib\mono\2.0
+		// UNITY_DATA: C:\Program Files\Unity\Editor\Data\Mono
 		//
 		// Mac OS X:
-		// MONO_PATH: /Applications/Unity/Unity.app/Contents/Frameworks/Mono/lib/mono/2.0
+		// UNITY_DATA: /Applications/Unity/Unity.app/Contents/Frameworks/Mono
 
-		string monoPath = Environment.GetEnvironmentVariable("MONO_PATH").Replace("\\", "/");
-		int index = monoPath.IndexOf("/Mono/lib/", StringComparison.InvariantCultureIgnoreCase);
-        if (index == -1) {
-            // .NET 4 runtime
-            index = monoPath.IndexOf("/MonoBleedingEdge/lib/", StringComparison.InvariantCultureIgnoreCase);
-        }
-        string path = monoPath.Substring(0, index);
-		return path;
-	}
+		return Environment.GetEnvironmentVariable("UNITY_DATA").Replace("\\", "/");
+    }
 
 	private static string GetTargetProfileDir(string[] compilationOptions)
 	{

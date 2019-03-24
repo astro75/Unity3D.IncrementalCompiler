@@ -14,7 +14,7 @@ internal class Logger : IDisposable
 		/*
 		- Immediate
 		Every message will be written to the log file right away in real time.
-		
+
 		- Retained
 		All the messages will be retained in a temporary storage and flushed to disk
 		only when the Logger object is disposed. This solves the log file sharing problem
@@ -43,7 +43,7 @@ internal class Logger : IDisposable
 	{
 	    Directory.CreateDirectory(Path.GetDirectoryName(LogFilename));
 
-		mutex = new Mutex(true, "CSharpCompilerWrapper");
+		mutex = new Mutex(initiallyOwned: false, name: "CSharpCompilerWrapper");
 
 		if (mutex.WaitOne(0)) // check if no other process is owning the mutex
 		{
@@ -59,16 +59,20 @@ internal class Logger : IDisposable
 
 	public void Dispose()
 	{
-		mutex.WaitOne(); // make sure we own the mutex now, so no other process is writing to the file
+        if (loggingMethod == LoggingMethod.Immediate)
+        {
+            mutex.ReleaseMutex();
+        }
+        else
+        {
+            mutex.WaitOne(); // make sure we own the mutex now, so no other process is writing to the file
 
-		if (loggingMethod == LoggingMethod.Retained)
-		{
-			DeleteLogFileIfTooOld();
-			File.AppendAllText(LogFilename, pendingLines.ToString());
-		}
+            DeleteLogFileIfTooOld();
+            File.AppendAllText(LogFilename, pendingLines.ToString());
 
-		mutex.ReleaseMutex();
-	}
+            mutex.ReleaseMutex();
+        }
+    }
 
 	private void DeleteLogFileIfTooOld()
 	{

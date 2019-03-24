@@ -151,7 +151,27 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
 			//		arguments.Add("@" + rspFileName);
 			//}
 
-		    var program = StartCompiler(island._target, universalCompilerPath, arguments);
+
+            // Replaced following line to use newer mono runtime for compiler
+		    // var program = StartCompiler(island._target, universalCompilerPath, arguments);
+            // Side effect: API updater is disabled
+
+            // Disabled API updater
+            Program StartCompilerLocal(BuildTarget target, string compiler, List<string> arguments_) {
+                AddCustomResponseFileIfPresent(arguments, Path.GetFileNameWithoutExtension(compiler) + ".rsp");
+                var responseFile = CommandLineFormatter.GenerateResponseFile(arguments_);
+
+                var p = new Program(CreateOSDependentStartInfo(
+                    isWindows: Application.platform == RuntimePlatform.WindowsEditor,
+                    processPath: compiler,
+                    processArguments: " @" + responseFile,
+                    unityEditorDataDir: MonoInstallationFinder.GetFrameWorksFolder()
+                ));
+                p.Start();
+                return p;
+            }
+
+            var program = StartCompilerLocal(island._target, universalCompilerPath, arguments);
 
 		    if (!CompilationFlags.checkIfBuildCompiles) return program;
 
@@ -177,6 +197,54 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
 			Debug.LogWarning($"Universal C# compiler not found in project directory. Use the default compiler");
 			return base.StartCompiler();
 		}
+    }
+
+    static ProcessStartInfo CreateOSDependentStartInfo(
+        bool isWindows, string processPath, string processArguments, string unityEditorDataDir
+    ) {
+        ProcessStartInfo startInfo;
+
+        if (isWindows)
+        {
+            startInfo = new ProcessStartInfo(processPath, processArguments);
+        }
+        else
+        {
+            string runtimePath;
+
+            if (File.Exists("/Library/Frameworks/Mono.framework/Commands/mono"))
+            {
+                runtimePath = "/Library/Frameworks/Mono.framework/Commands/mono";
+            }
+            else if (File.Exists("/usr/local/bin/mono"))
+            {
+                runtimePath = "/usr/local/bin/mono";
+            }
+            else
+            {
+                runtimePath = Path.Combine(unityEditorDataDir, "MonoBleedingEdge/bin/mono");
+            }
+            startInfo = new ProcessStartInfo(runtimePath, $"{CommandLineFormatter.PrepareFileName(processPath)} {processArguments}");
+        }
+
+        var vars = startInfo.EnvironmentVariables;
+        vars.Add("UNITY_DATA", unityEditorDataDir);
+
+        startInfo.CreateNoWindow = true;
+        startInfo.WorkingDirectory = Application.dataPath + "/..";
+        startInfo.RedirectStandardError = true;
+        startInfo.RedirectStandardOutput = true;
+        startInfo.UseShellExecute = false;
+
+        return startInfo;
+    }
+
+    static void AddCustomResponseFileIfPresent(List<string> arguments, string responseFileName)
+    {
+        var path = Path.Combine("Assets", responseFileName);
+        if (!File.Exists(path))
+            return;
+        arguments.Add("@" + path);
     }
 
 	// In Unity 5.5 and earlier GetProfileDirectory() was an instance method of MonoScriptCompilerBase class.
