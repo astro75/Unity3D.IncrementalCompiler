@@ -146,7 +146,7 @@ namespace RoslynCompilerFix
                     var baseInst = il.Body.Instructions[i + 8];
 
                     var appendStringMethod = typeof(StringBuilder).GetMethod("Append", new Type[] { typeof(string) });
-                    var appendString = method.Module.Import(appendStringMethod);
+                    var appendString = method.Module.ImportReference(appendStringMethod);
 
                     il.InsertBefore(baseInst, il.Create(OpCodes.Ldarg_0));
                     il.InsertBefore(baseInst, il.Create(OpCodes.Ldc_I4_S, (sbyte)100));
@@ -225,7 +225,7 @@ namespace RoslynCompilerFix
 
             var symbolType = method.Module.GetType("Microsoft.CodeAnalysis.CSharp.Symbol");
             var symbolGetNameMethod = symbolType.Methods.FirstOrDefault(m => m.Name == "get_Name");
-            var symbolGetName = method.Module.Import(symbolGetNameMethod);
+            var symbolGetName = method.Module.ImportReference(symbolGetNameMethod);
 
             il.InsertBefore(baseInst, il.Create(OpCodes.Ldstr, "<"));
             il.InsertBefore(baseInst, il.Create(OpCodes.Ldarg_1));
@@ -233,7 +233,7 @@ namespace RoslynCompilerFix
             il.InsertBefore(baseInst, il.Create(OpCodes.Ldstr, ">c__AnonStorey"));
 
             var concat4Method = typeof(string).GetMethod("Concat", new Type[] { typeof(string), typeof(string), typeof(string), typeof(string) });
-            var concat4 = method.Module.Import(concat4Method);
+            var concat4 = method.Module.ImportReference(concat4Method);
 
             il.InsertAfter(baseInst2, il.Create(OpCodes.Call, concat4));
         }
@@ -268,7 +268,7 @@ namespace RoslynCompilerFix
             var baseInst2 = il.Body.Instructions[il.Body.Instructions.Count - 1];
 
             var concatMethod = typeof(string).GetMethod("Concat", new Type[] { typeof(string), typeof(string) });
-            var concat = method.Module.Import(concatMethod);
+            var concat = method.Module.ImportReference(concatMethod);
 
             il.InsertBefore(baseInst, il.Create(OpCodes.Ldstr, "<>m__"));
             il.InsertBefore(baseInst2, il.Create(OpCodes.Call, concat));
@@ -300,10 +300,10 @@ namespace RoslynCompilerFix
             // find Methods
             var symbolType = method.Module.GetType("Microsoft.CodeAnalysis.CSharp.Symbol");
             var symbolGetAttributesMethod = symbolType.GetMethod("GetAttributes");
-            var symbolGetAttributes = method.Module.Import(symbolGetAttributesMethod);
+            var symbolGetAttributes = method.Module.ImportReference(symbolGetAttributesMethod);
             var symbolReturnType = (GenericInstanceType)symbolGetAttributesMethod.ReturnType;
             var symbolIsEmptyMethod = symbolReturnType.Resolve().GetMethod("get_IsEmpty");
-            var symbolIsEmptyMethodRef = method.Module.Import(symbolIsEmptyMethod);
+            var symbolIsEmptyMethodRef = method.Module.ImportReference(symbolIsEmptyMethod);
             var symbolIsEmpty = symbolIsEmptyMethodRef.MakeGeneric(symbolReturnType.GenericArguments.ToArray());
 
             // Add local var of ImmutableArray<CSharpAttributeData>
