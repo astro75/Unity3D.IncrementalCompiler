@@ -122,7 +122,7 @@ namespace IncrementalCompiler
                     return ImmutableArray<DiagnosticAnalyzer>.Empty;
                 }
 
-                var loader = new AnalyzerAssemblyLoader(name => ParseSource(name, parseOptions), _logger);
+                var loader = new AnalyzerAssemblyLoader();
 
                 var additionalPath = CompileAnalyzers();
 

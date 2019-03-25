@@ -239,7 +239,7 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
         return startInfo;
     }
 
-    static void AddCustomResponseFileIfPresent(List<string> arguments, string responseFileName)
+    new static void AddCustomResponseFileIfPresent(List<string> arguments, string responseFileName)
     {
         var path = Path.Combine("Assets", responseFileName);
         if (!File.Exists(path))
