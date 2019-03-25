@@ -15,7 +15,7 @@ using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
 {
-    public static class GeneratedContructorExts
+    public static class GeneratedConstructorExts
     {
         public static bool generateConstructor(this GeneratedConstructor gc) {
             switch (gc)
