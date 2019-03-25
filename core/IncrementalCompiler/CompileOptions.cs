@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Runtime.Serialization;
 using Microsoft.CodeAnalysis;
 
@@ -26,6 +27,7 @@ namespace IncrementalCompiler
         [DataMember] public string WorkDirectory;
         [DataMember] public string AssemblyName;
         [DataMember] public string Output;
+        [DataMember] public bool IsUnityPackage;
         [DataMember] public List<string> Defines = new List<string>();
         [DataMember] public List<string> References = new List<string>();
         [DataMember] public List<string> Files = new List<string>();
@@ -104,6 +106,15 @@ namespace IncrementalCompiler
                     var path = trimQuotes(arg);
                     if (path.Length > 0)
                         Files.Add(path);
+                }
+            }
+
+            foreach (var file in Files)
+            {
+                if (file.Contains("/Library/PackageCache/") || file.Contains("\\Library\\PackageCache\\"))
+                {
+                    IsUnityPackage = true;
+                    break;
                 }
             }
         }
