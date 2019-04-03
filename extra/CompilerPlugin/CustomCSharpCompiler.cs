@@ -21,15 +21,9 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
 
     MonoIsland island => GetIsland();
 
-#if UNITY4
-	public CustomCSharpCompiler(MonoIsland island, bool runUpdater) : base(island)
-    {
-	}
-#else
 	public CustomCSharpCompiler(MonoIsland island, bool runUpdater) : base(island, runUpdater)
 	{
 	}
-#endif
 
     MonoIsland GetIsland() {
         const BindingFlags bindingAttr =

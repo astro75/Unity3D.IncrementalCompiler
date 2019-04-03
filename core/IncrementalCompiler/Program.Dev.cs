@@ -29,19 +29,11 @@ namespace IncrementalCompiler
             {
                 "-nostdlib+",
                 "-noconfig",
-#if true
                 // Unity5
 //                "-r:" + @"C:/Software/Unity-2018/Editor/Data/Mono/lib/mono/2.0/mscorlib.dll",
 //                "-r:" + @"C:/Software/Unity-2018/Editor/Data/Mono/lib/mono/2.0/System.dll",
 //                "-r:" + @"C:/Software/Unity-2018/Editor/Data/Mono/lib/mono/2.0/System.Core.dll",
 //                "-r:" + @"C:/Software/Unity-2018/Editor/Data/Mono/lib/mono/2.0/System.Xml.dll",
-#else
-                // Unity4
-                "-r:" + @"C:/Program Files (x86)/Unity/Editor/Data/Mono/lib/mono/2.0/mscorlib.dll",
-                "-r:" + @"C:/Program Files (x86)/Unity/Editor/Data/Mono/lib/mono/2.0/System.dll",
-                "-r:" + @"C:/Program Files (x86)/Unity/Editor/Data/Mono/lib/mono/2.0/System.Core.dll",
-                "-r:" + @"C:/Program Files (x86)/Unity/Editor/Data/Mono/lib/mono/2.0/System.Xml.dll",
-#endif
                 "@Temp/" + reponseFile,
             });
 
