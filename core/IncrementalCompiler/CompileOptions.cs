@@ -34,6 +34,7 @@ namespace IncrementalCompiler
         [DataMember] public List<string> NoWarnings = new List<string>();
         [DataMember] public List<string> Options = new List<string>();
         [DataMember] public DebugSymbolFileType DebugSymbolFile = DebugSymbolFileType.Pdb;
+        [DataMember] public bool Optimize, Unsafe;
         [DataMember] public PrebuiltOutputReuseType PrebuiltOutputReuse;
 
         static string trimQuotes(string value) => value.Trim('"');
@@ -85,6 +86,19 @@ namespace IncrementalCompiler
 
                         case "custom-option-mdb":
                             DebugSymbolFile = DebugSymbolFileType.PdbToMdb;
+                            break;
+
+                        case "optimize":
+                        case "optimize+":
+                            Optimize = true;
+                            break;
+
+                        case "optimize-":
+                            Optimize = false;
+                            break;
+
+                        case "unsafe":
+                            Unsafe = true;
                             break;
 
                         default:

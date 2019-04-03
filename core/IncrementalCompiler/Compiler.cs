@@ -274,9 +274,10 @@ namespace IncrementalCompiler
                     // deterministic: true,
                     specificDiagnosticOptions: specificDiagnosticOptions,
                     assemblyIdentityComparer: DesktopAssemblyIdentityComparer.Default,
-                    allowUnsafe: options.Options.Contains("-unsafe"),
+                    allowUnsafe: options.Unsafe,
                     // without SourceFileResolver debugging in Rider does not work
-                    sourceReferenceResolver: new SourceFileResolver(ImmutableArray<string>.Empty, _options.WorkDirectory)
+                    sourceReferenceResolver: new SourceFileResolver(ImmutableArray<string>.Empty, _options.WorkDirectory),
+                    optimizationLevel: options.Optimize ? OptimizationLevel.Release : OptimizationLevel.Debug
                 )
 
             );

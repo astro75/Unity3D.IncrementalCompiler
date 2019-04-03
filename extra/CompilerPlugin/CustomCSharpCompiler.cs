@@ -19,24 +19,10 @@ public class CompilationFlags {
 internal class CustomCSharpCompiler : MonoCSharpCompiler {
     public const string COMPILER_DEFINE = "ALWAYS_ON";
 
-    MonoIsland island => GetIsland();
+    MonoIsland island;
 
-	public CustomCSharpCompiler(MonoIsland island, bool runUpdater) : base(island, runUpdater)
-	{
-	}
-
-    MonoIsland GetIsland() {
-        const BindingFlags bindingAttr =
-            BindingFlags.Instance |
-            BindingFlags.Static |
-            BindingFlags.Public |
-            BindingFlags.NonPublic |
-            BindingFlags.FlattenHierarchy;
-        var field = GetType().GetField("_island", bindingAttr) ?? GetType().GetField("m_Island", bindingAttr);
-        if (field == null) {
-            throw new NotSupportedException("Cannot get _island or m_Island field from MonoCSharpCompiler. Did the internal API change?");
-        }
-        return (MonoIsland)field.GetValue(this);
+	public CustomCSharpCompiler(MonoIsland island, bool runUpdater) : base(island, runUpdater) {
+        this.island = island;
     }
 
     private string[] GetAdditionalReferences()
@@ -93,14 +79,6 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
                 }
             }
         }
-        else
-        {
-            // Unity 2017+
-//            foreach (var reference in island._references)
-//            {
-//                arguments.Add("-r:" + PrepareFileName(reference));
-//            }
-        }
 
 
 		foreach (var define in island._defines.Distinct())
@@ -121,6 +99,15 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
         if (Application.unityVersion.StartsWith("5."))
         {
             arguments.Add("-custom-option-mdb");
+        }
+
+        if (!island._development_player && (!island._editor || !EditorPrefs.GetBool("AllowAttachedDebuggingOfEditor", true)))
+        {
+            arguments.Add("/optimize+");
+        }
+        else
+        {
+            arguments.Add("/optimize-");
         }
 
         var universalCompilerPath = GetUniversalCompilerPath();
