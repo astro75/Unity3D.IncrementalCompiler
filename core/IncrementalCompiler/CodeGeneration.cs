@@ -955,8 +955,11 @@ namespace IncrementalCompiler
                 var equalsExpr = isStruct ? "left.Equals(right)" : "Equals(left, right)";
                 return ParseClassMembers(
                     $"public bool Equals({typeName} other) {{" +
-                    $"  if (ReferenceEquals(null, other)) return false;" +
-                    (!isStruct ? "if (ReferenceEquals(this, other)) return true;" : "") +
+                    (!isStruct
+                        ? "if (ReferenceEquals(null, other)) return false;" +
+                          "if (ReferenceEquals(this, other)) return true;"
+                        : ""
+                    ) +
                     $"return {Join(" && ", comparisons)};" +
                     $"}}" +
                     $"public override bool Equals(object obj) {{" +
