@@ -43,7 +43,7 @@ namespace IncrementalCompiler
         {
             foreach (var arg in args)
             {
-                if (arg.StartsWith("-"))
+                if (arg.StartsWith("-") || arg.StartsWith("/"))
                 {
                     string command;
                     string value;
