@@ -84,7 +84,7 @@ namespace IncrementalCompiler
 
         string CompileAnalyzers() {
             const string ANALYZERS = "compiled-analyzers";
-            var outputPath = Directory.Exists("Temp") ? "Temp\\" + ANALYZERS : ANALYZERS;
+            var outputPath = Directory.Exists("Temp") ? Path.Combine("Temp", ANALYZERS) : ANALYZERS;
 
             if (Directory.Exists(outputPath)) Directory.Delete(outputPath, true);
             Directory.CreateDirectory(outputPath);

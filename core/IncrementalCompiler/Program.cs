@@ -204,10 +204,12 @@ namespace IncrementalCompiler
                 config.LoggingRules.Add(new LoggingRule("*", LogLevel.Debug, consoleTarget));
             }
 
-            var logDirectory = Directory.Exists(".\\Temp") ? ".\\Temp\\" : ".\\";
+            var separator = Path.DirectorySeparatorChar;
+
+            var logDirectory = Directory.Exists($".{separator}Temp") ? $".{separator}Temp" : $".";
             var fileTarget = new FileTarget
             {
-                FileName = logDirectory + fileName,
+                FileName = logDirectory + separator + fileName,
                 Layout = @"${longdate} ${uppercase:${level}}|${logger}|${message}|${exception:format=tostring}"
             };
             config.AddTarget("file", fileTarget);
