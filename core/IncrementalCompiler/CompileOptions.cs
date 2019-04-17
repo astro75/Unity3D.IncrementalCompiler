@@ -125,7 +125,12 @@ namespace IncrementalCompiler
 
             foreach (var file in Files)
             {
-                if (file.Contains("/Library/PackageCache/") || file.Contains("\\Library\\PackageCache\\"))
+                if (
+                       file.Contains("/Library/PackageCache/")
+                    || file.Contains("\\Library\\PackageCache\\")
+                    || file.Contains("/BuiltInPackages/")
+                    || file.Contains("\\BuiltInPackages\\")
+                )
                 {
                     IsUnityPackage = true;
                     break;
