@@ -946,7 +946,7 @@ namespace IncrementalCompiler
                         case SpecialType.System_Int32:
                         case SpecialType.System_UInt32:
                         case SpecialType.System_Int64:
-                        case SpecialType.System_UInt64:
+                        case SpecialType.System_UInt64: return $"{name} == {otherName}";
                         case SpecialType.System_String: return $"string.Equals({name}, {otherName})";
                         default:
                             return $"{name}.Equals({otherName})";
