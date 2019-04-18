@@ -114,11 +114,14 @@ namespace IncrementalCompiler
             );
 
             try {
+                if (PlatformHelper.CurrentPlatform == Platform.Mac) return ImmutableArray<DiagnosticAnalyzer>.Empty;
+
                 if (!Directory.Exists(analyzersPath)) {
                     Directory.CreateDirectory(analyzersPath);
                     File.WriteAllText(
                         analyzersPath + "/readme.txt",
-                        "Add Roslyn Analyzers here\r\nAdd analyzer dependencies in sub-folders");
+                        "Add Roslyn Analyzers here\r\nAdd analyzer dependencies in sub-folders"
+                    );
                     return ImmutableArray<DiagnosticAnalyzer>.Empty;
                 }
 
