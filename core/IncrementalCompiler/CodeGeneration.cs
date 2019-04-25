@@ -750,7 +750,7 @@ namespace IncrementalCompiler
 
                 return $"public static A match<A>({parameters}) {{" +
                        $"{body}" +
-                       $"throw new ArgumentOutOfRangeException(\"obj\", obj, \"Should never reach this\");" +
+                       $"throw new System.ArgumentOutOfRangeException(\"obj\", obj, \"Should never reach this\");" +
                        $"}}";
             }
 
