@@ -103,11 +103,11 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
 
         if (!island._development_player && (!island._editor || !EditorPrefs.GetBool("AllowAttachedDebuggingOfEditor", true)))
         {
-            arguments.Add("/optimize+");
+            arguments.Add("-optimize+");
         }
         else
         {
-            arguments.Add("/optimize-");
+            arguments.Add("-optimize-");
         }
 
         var universalCompilerPath = GetUniversalCompilerPath();

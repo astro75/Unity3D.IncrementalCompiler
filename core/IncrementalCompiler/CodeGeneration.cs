@@ -396,8 +396,15 @@ namespace IncrementalCompiler
             }
             catch (IOException)
             {
-                // it fails one thime if Windows file explorer is opened in targetDir
-                Directory.Delete(targetDir);
+                // it fails one time if Windows file explorer is opened in targetDir
+                try
+                {
+                    Directory.Delete(targetDir);
+                }
+                catch (DirectoryNotFoundException)
+                {
+                    // we get this error on mac sometimes
+                }
             }
         }
 
