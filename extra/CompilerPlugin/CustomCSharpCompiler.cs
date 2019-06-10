@@ -51,6 +51,19 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
 		return File.Exists(compilerPath) ? compilerPath : null;
 	}
 
+    public bool buildingForEditor() {
+        try
+        {
+            // 2019.1.6+
+            return island._buildingForEditor;
+        }
+        catch (Exception e)
+        {
+            // previous versions
+            return (bool) island.GetType().GetField("_editor").GetValue(island);
+        }
+    }
+
 	// Copy of MonoCSharpCompiler.StartCompiler()
 	// The only reason it exists is to call the new implementation
 	// of GetCompilerPath(...) which is non-virtual unfortunately.
@@ -101,7 +114,7 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
             arguments.Add("-custom-option-mdb");
         }
 
-        if (!island._development_player && (!island._editor || !EditorPrefs.GetBool("AllowAttachedDebuggingOfEditor", true)))
+        if (!island._development_player && (!buildingForEditor() || !EditorPrefs.GetBool("AllowAttachedDebuggingOfEditor", true)))
         {
             arguments.Add("-optimize+");
         }
