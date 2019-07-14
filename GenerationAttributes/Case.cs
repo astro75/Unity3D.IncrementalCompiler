@@ -24,7 +24,7 @@ namespace GenerationAttributes
     [Conditional("CodeGeneration")]
     public class MatcherAttribute : Attribute
     {
-
+        public string ClassName { get; set; } = null;
     }
 
     [AttributeUsage(AttributeTargets.Field)]

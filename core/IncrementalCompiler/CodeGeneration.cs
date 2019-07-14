@@ -483,9 +483,9 @@ namespace IncrementalCompiler
                         }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
                         {
-                            tryAttribute<MatcherAttribute>(attr, _ => {
+                            tryAttribute<MatcherAttribute>(attr, m => {
                                 newMembers = newMembers.Add(
-                                    AddAncestors(tds, GenerateMatcher(model, tds, typesInFile), onlyNamespace: true)
+                                    AddAncestors(tds, GenerateMatcher(model, tds, m, typesInFile), onlyNamespace: true)
                                 );
                             });
                         }
@@ -656,12 +656,12 @@ namespace IncrementalCompiler
 
         static Location attrLocation(AttributeData attr) => attr.ApplicationSyntaxReference.GetSyntax().GetLocation();
 
-        static void SetNamedArguments(AttributeData attributeData, Attribute instance) {
+        static void SetNamedArguments(Type type, AttributeData attributeData, Attribute instance) {
             foreach (var arg in attributeData.NamedArguments)
             {
-                // if some arguments are invelid they do not appear in NamedArguments list
+                // if some arguments are invalid they do not appear in NamedArguments list
                 // because of that we do not check for errors
-                var prop = caseType.GetProperty(arg.Key);
+                var prop = type.GetProperty(arg.Key);
                 prop.SetValue(instance, arg.Value.Value);
             }
         }
@@ -671,7 +671,7 @@ namespace IncrementalCompiler
             var arguments = attributeData.ConstructorArguments;
             var ctor = type.GetConstructors().First(ci => ci.GetParameters().Length == arguments.Length);
             var res = (A) ctor.Invoke(arguments.Select(a => a.Value).ToArray());
-            SetNamedArguments(attributeData, res);
+            SetNamedArguments(type, attributeData, res);
             return res;
         }
 
@@ -692,9 +692,10 @@ namespace IncrementalCompiler
         }
 
         private static MemberDeclarationSyntax GenerateMatcher(
-            SemanticModel model, TypeDeclarationSyntax tds, ImmutableArray<TypeDeclarationSyntax> typesInFile)
-        {
-            // TODO: ban extendig this class in different files
+            SemanticModel model, TypeDeclarationSyntax tds,
+            MatcherAttribute attribute, ImmutableArray<TypeDeclarationSyntax> typesInFile
+        ) {
+            // TODO: ban extending this class in different files
             // TODO: generics ?
 
             var baseTypeSymbol = model.GetDeclaredSymbol(tds);
@@ -761,7 +762,10 @@ namespace IncrementalCompiler
                        $"}}";
             }
 
-            return CreateStatic(tds, ParseClassMembers(VoidMatch() + Match()));
+            var className = IsNullOrWhiteSpace(attribute.ClassName)
+                ? tds.Identifier + "Matcher"
+                : attribute.ClassName;
+            return CreateStatic(className, tds, ParseClassMembers(VoidMatch() + Match()));
         }
 
         public class CaseClass : IEnumerable<TypeDeclarationSyntax> {
@@ -1057,9 +1061,11 @@ namespace IncrementalCompiler
             );
 
         private static TypeDeclarationSyntax CreateStatic(
-            TypeDeclarationSyntax originalType, IEnumerable<MemberDeclarationSyntax> newMembers
+            string className,
+            TypeDeclarationSyntax originalType,
+            IEnumerable<MemberDeclarationSyntax> newMembers
         ) =>
-            SF.ClassDeclaration(originalType.Identifier + "Matcher")
+            SF.ClassDeclaration(className)
             .WithModifiers(SF
                 .TokenList(originalType.Modifiers.Where(k => kindsForExtensionClass.Contains(k.Kind())))
                 .Add(SyntaxKind.StaticKeyword))
