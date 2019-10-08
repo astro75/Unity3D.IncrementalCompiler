@@ -55,11 +55,12 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
         try
         {
             // 2019.1.6+
-            return island._buildingForEditor;
+            return (bool) island.GetType().GetField("_buildingForEditor").GetValue(island);
         }
         catch (Exception e)
         {
             // previous versions
+            // and 2019.2.x
             return (bool) island.GetType().GetField("_editor").GetValue(island);
         }
     }
