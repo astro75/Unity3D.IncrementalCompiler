@@ -17,6 +17,8 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "CodeGeneration", "CodeGener
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GenerationAttributes", "GenerationAttributes\GenerationAttributes.csproj", "{0E0E523D-9842-4D2E-A304-59EF5C6CFFFD}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Macros", "Macros\Macros.csproj", "{A0D9425D-10B7-443C-90A6-AA6732BBBA96}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -39,6 +41,10 @@ Global
 		{0E0E523D-9842-4D2E-A304-59EF5C6CFFFD}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{0E0E523D-9842-4D2E-A304-59EF5C6CFFFD}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{0E0E523D-9842-4D2E-A304-59EF5C6CFFFD}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A0D9425D-10B7-443C-90A6-AA6732BBBA96}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A0D9425D-10B7-443C-90A6-AA6732BBBA96}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A0D9425D-10B7-443C-90A6-AA6732BBBA96}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A0D9425D-10B7-443C-90A6-AA6732BBBA96}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -48,6 +54,7 @@ Global
 		{67FE81D8-C1BF-4D15-A512-E9E8078DEECF} = {A22672B3-D1C4-47C0-AB82-6D22BBB94BBB}
 		{B19F1DAC-FA9A-4749-9E03-1848D29BFCCD} = {A22672B3-D1C4-47C0-AB82-6D22BBB94BBB}
 		{0E0E523D-9842-4D2E-A304-59EF5C6CFFFD} = {1C392DEF-0E87-4202-9946-4A087D7AD1ED}
+		{A0D9425D-10B7-443C-90A6-AA6732BBBA96} = {1C392DEF-0E87-4202-9946-4A087D7AD1ED}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {88A899B4-3F4C-4873-87E6-6D9025ADA54E}

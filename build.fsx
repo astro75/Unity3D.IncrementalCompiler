@@ -30,6 +30,8 @@ Target "Export" (fun _ ->
 
     "./GenerationAttributes/bin/Release/GenerationAttributes.dll" |> CopyFile pluginsDir
     "./GenerationAttributes/bin/Release/GenerationAttributes.xml" |> CopyFile pluginsDir
+    "./Macros/bin/Release/Macros.dll" |> CopyFile pluginsDir
+    "./Macros/bin/Release/Macros.xml" |> CopyFile pluginsDir
     "./core/UnityPackage/Assets/Editor/CompilerSettings.cs" |> CopyFile editorDir
     "./tools/0Harmony.dll" |> CopyFile editorDir
     "./core/IncrementalCompiler/IncrementalCompiler.xml" |> CopyFile compilerDir
@@ -38,7 +40,7 @@ Target "Export" (fun _ ->
     "./extra/UniversalCompiler/UniversalCompiler.xml" |> CopyFile compilerDir
     "./tools/pdb2mdb/pdb2mdb.exe" |> CopyFile compilerDir
 
-    let dir = new System.IO.DirectoryInfo("./core/IncrementalCompiler/bin/Release/")
+    let dir = System.IO.DirectoryInfo("./core/IncrementalCompiler/bin/Release/")
     filesInDir dir |> Array.iter (fun f -> f.FullName |> CopyFile compilerDir)
 )
 

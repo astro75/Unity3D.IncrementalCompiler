@@ -214,6 +214,10 @@
       <Project>{0e0e523d-9842-4d2e-a304-59ef5c6cfffd}</Project>
       <Name>GenerationAttributes</Name>
     </ProjectReference>
+    <ProjectReference Include="..\..\Macros\Macros.csproj">
+      <Project>{a0d9425d-10b7-443c-90a6-aa6732bbba96}</Project>
+      <Name>Macros</Name>
+    </ProjectReference>
   </ItemGroup>
   <ItemGroup>
     <Content Include="IncrementalCompiler.xml">
