@@ -19,8 +19,11 @@ namespace IncrementalCompiler
             var macrosType = typeof(Macros).FullName;
             var macros = compilation.GetTypeByMetadataName(macrosType);
 
-            if (macros == null) {
-                throw new Exception($"Could not find type {macrosType} in project.");
+            if (macros == null)
+            {
+                // skip this step if macros dll is not referenced
+                return compilation;
+                // throw new Exception($"Could not find type {macrosType} in project.");
             }
 
             var builder = ImmutableDictionary.CreateBuilder<ISymbol, MacroRewriter.PropertyMacro>();

@@ -9,6 +9,7 @@ using System.Reflection;
 using System.Text;
 using System.Threading;
 using Flinq;
+using GenerationAttributes;
 using IncrementalCompiler.Analyzers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -37,6 +38,7 @@ namespace IncrementalCompiler
         ImmutableArray<DiagnosticAnalyzer> analyzers;
         const string analyzersPath = "./Analyzers";
         CompileResult previousResult;
+        bool referencesCompilerAttributes;
 
         static readonly object _lockAnalyzers = new object();
         static ImmutableArray<DiagnosticAnalyzer>? _loadedAnalyzers;
@@ -288,13 +290,18 @@ namespace IncrementalCompiler
 
             var diagnostic = new List<Diagnostic>();
 
-            if (options.IsUnityPackage)
+            referencesCompilerAttributes =
+                !options.IsUnityPackage
+                && compilation.GetTypeByMetadataName(typeof(RecordAttribute).FullName) != null;
+
+            if (!referencesCompilerAttributes)
             {
                 analyzers = ImmutableArray<DiagnosticAnalyzer>.Empty;
             }
             else
             {
-                analyzers = Analyzers(diagnostic);
+                analyzers = ImmutableArray<DiagnosticAnalyzer>.Empty;
+                //analyzers = Analyzers(diagnostic);
                 logTime("Loaded analyzers");
 
                 compilation = CodeGeneration.Run(
@@ -431,7 +438,7 @@ namespace IncrementalCompiler
 
             var diagnostic = new List<Diagnostic>();
 
-            if (options.IsUnityPackage)
+            if (!referencesCompilerAttributes)
             {
 
             }
