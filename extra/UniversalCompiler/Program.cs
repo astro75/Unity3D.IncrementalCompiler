@@ -260,10 +260,18 @@ internal class Program
 		or
 		-r:'C:\Program Files\Unity\Editor\Data\Mono\lib\mono\unity\System.Xml.Linq.dll'
 		*/
-		string reference = compilationOptions.First(line => line.StartsWith("-r:") && line.Contains("System.Xml.Linq.dll"));
 
-		string systemXmlLinqPath = reference.Replace("'", "").Replace("\"", "").Substring(3);
-		string profileDir = Path.GetDirectoryName(systemXmlLinqPath);
+		var reference = compilationOptions.First(line =>
+            (
+                line.StartsWith("-r:", StringComparison.Ordinal)
+                || line.StartsWith("-reference:", StringComparison.Ordinal)
+            )
+            && line.Contains("System.Xml.Linq.dll")
+        );
+
+        var replaced = reference.Replace("'", "").Replace("\"", "");
+		var systemXmlLinqPath = replaced.Substring(replaced.IndexOf(":", StringComparison.Ordinal) + 1);
+		var profileDir = Path.GetDirectoryName(systemXmlLinqPath);
 		return profileDir;
 	}
 

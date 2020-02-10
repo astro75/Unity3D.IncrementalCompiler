@@ -57,7 +57,7 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
             // 2019.1.6+
             return (bool) island.GetType().GetField("_buildingForEditor").GetValue(island);
         }
-        catch (Exception e)
+        catch (Exception)
         {
             // previous versions
             // and 2019.2.x

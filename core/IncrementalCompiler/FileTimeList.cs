@@ -20,7 +20,17 @@ namespace IncrementalCompiler
 
         public Result Update(IEnumerable<string> files)
         {
-            return Update(files.Select(file => Tuple.Create(file, File.GetLastWriteTime(file))));
+            return Update(files.Select(file =>
+            {
+                try
+                {
+                    return Tuple.Create(file, File.GetLastWriteTime(file));
+                }
+                catch (Exception e)
+                {
+                    throw new Exception("Could not read time from file: " + file);
+                }
+            }));
         }
 
         public Result Update(IEnumerable<Tuple<string, DateTime>> files)
