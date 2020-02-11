@@ -23,16 +23,7 @@ internal class Incremental60Compiler : Compiler
 	        File.WriteAllText(filename, content);
 	    }
 
-        var systemDllPath = Path.Combine(targetProfileDir, "System.dll");
-		var systemCoreDllPath = Path.Combine(targetProfileDir, "System.Core.dll");
-		var systemXmlDllPath = Path.Combine(targetProfileDir, "System.Xml.dll");
-		var mscorlibDllPath = Path.Combine(targetProfileDir, "mscorlib.dll");
-
-		string processArguments = "-nostdlib+ -noconfig "
-								  + $"-r:\"{mscorlibDllPath}\" "
-								  + $"-r:\"{systemDllPath}\" "
-								  + $"-r:\"{systemCoreDllPath}\" "
-								  + $"-r:\"{systemXmlDllPath}\" " + responseFile;
+		string processArguments = "-noconfig " + responseFile;
 
 		var process = new Process();
 		process.StartInfo = CreateOSDependentStartInfo(platform, ProcessRuntime.CLR40, compilerPath, processArguments, unityEditorDataDir);

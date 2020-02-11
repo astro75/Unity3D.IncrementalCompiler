@@ -33,7 +33,8 @@ internal abstract class Compiler
 	{
 		var process = CreateCompilerProcess(platform, unityEditorDataDir, targetProfileDir, responseFile);
 		process.OutputDataReceived += (sender, e) => outputLines.Add(e.Data);
-		process.ErrorDataReceived += (sender, e) => errorLines.Add(e.Data);
+        // used to be errorLines, changed in unity 2019.3
+		process.ErrorDataReceived += (sender, e) => outputLines.Add(e.Data);
 
 		logger?.Append($"Process: {process.StartInfo.FileName}");
 		logger?.Append($"Arguments: {process.StartInfo.Arguments}");
