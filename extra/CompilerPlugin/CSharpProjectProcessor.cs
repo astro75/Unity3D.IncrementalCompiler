@@ -22,43 +22,6 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
     static CSharpProjectPostprocessor() {
         if (unityVersion >= new Version(2018, 1)) return;
         OnGeneratedCSProjectFiles();
-        /*foreach (var assembly in AppDomain.CurrentDomain.GetAssemblies())
-        {
-            if (assembly.FullName.StartsWith("SyntaxTree.VisualStudio.Unity.Bridge") == false)
-            {
-                continue;
-            }
-
-            var projectFilesGeneratorType = assembly.GetType("SyntaxTree.VisualStudio.Unity.Bridge.ProjectFilesGenerator");
-            if (projectFilesGeneratorType == null)
-            {
-                Debug.Log("Type 'SyntaxTree.VisualStudio.Unity.Bridge.ProjectFilesGenerator' not found");
-                return;
-            }
-
-            var delegateType = assembly.GetType("SyntaxTree.VisualStudio.Unity.Bridge.FileGenerationHandler");
-            if (delegateType == null)
-            {
-                Debug.Log("Type 'SyntaxTree.VisualStudio.Unity.Bridge.FileGenerationHandler' not found");
-                return;
-            }
-
-            var projectFileGenerationField = projectFilesGeneratorType.GetField("ProjectFileGeneration", BindingFlags.Static | BindingFlags.Public);
-            if (projectFileGenerationField == null)
-            {
-                Debug.Log("Field 'ProjectFileGeneration' not found");
-                return;
-            }
-
-            var handlerMethodInfo = typeof(CSharpProjectPostprocessor).GetMethod(nameof(ModifyProjectFile), BindingFlags.Static | BindingFlags.NonPublic);
-            var handlerDelegate = Delegate.CreateDelegate(delegateType, null, handlerMethodInfo);
-
-            var delegateValue = (Delegate)projectFileGenerationField.GetValue(null);
-            delegateValue = delegateValue == null ? handlerDelegate : Delegate.Combine(delegateValue, handlerDelegate);
-            projectFileGenerationField.SetValue(null, delegateValue);
-
-            return;
-        }*/
     }
 
     public static Version unityVersion => new Version(Application.unityVersion.Split(".".ToCharArray()).Take(2).Aggregate((a, b) => a + "." + b));
@@ -67,10 +30,6 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
     private static void OnGeneratedCSProjectFiles()
     {
         Debug.Log("Incremental compiler: " + nameof(OnGeneratedCSProjectFiles));
-        /*if (AppDomain.CurrentDomain.GetAssemblies().Any(a => a.FullName.StartsWith("SyntaxTree.VisualStudio.Unity.Bridge")))
-        {
-            return;
-        }*/
 
         foreach (string projectFile in Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csproj"))
         {
@@ -155,7 +114,7 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
 
     private static void SetUpCorrectLangVersion(XDocument xdoc)
     {
-        var csharpVersion = "latest";
+        var csharpVersion = "7.3";
         /*
         if (Directory.Exists("CSharp70Support"))
         {
