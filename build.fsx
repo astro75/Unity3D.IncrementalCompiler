@@ -8,11 +8,23 @@ open BuildLib
 
 let solution = initSolution "./IncrementalCompiler.sln" "Release" [ ]
 
+let setParams (defaults:MSBuildParams) =
+    { defaults with
+        Properties = 
+            [
+                //"Optimize", "True"
+                //"DebugSymbols", "True"
+                "Configuration", "Release"
+            ]
+    }
+
+let setParams2 (defaults:MSBuildParams) = defaults 
+
 Target "Clean" <| fun _ -> cleanBin
 
 Target "Restore" <| fun _ -> restoreNugetPackages solution
 
-Target "Build" <| fun _ -> buildSolution solution
+Target "Build" <| fun _ -> build setParams "./IncrementalCompiler.sln" // buildSolution solution
 
 Target "Export" (fun _ -> 
     for (target, target2) in [("2018", "Unity5"); ("2019.3", "2019.3")] do
@@ -37,8 +49,10 @@ Target "Export" (fun _ ->
         "./extra/UniversalCompiler/UniversalCompiler.xml" |> CopyFile compilerDir
         "./tools/pdb2mdb/pdb2mdb.exe" |> CopyFile compilerDir
 
-        let dir = System.IO.DirectoryInfo("./core/IncrementalCompiler/bin/Release/")
+        let dir = System.IO.DirectoryInfo("./core/IncrementalCompiler/bin/Release/netcoreapp2.0")
         filesInDir dir |> Array.iter (fun f -> f.FullName |> CopyFile compilerDir)
+
+        // IO.Shell.rename (compilerDir @@ "IncrementalCompiler.exe") (compilerDir @@ "IncrementalCompiler.dll")
 )
 
 Target "Help" <| fun _ -> 

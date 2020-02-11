@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
-using System.ServiceModel;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
@@ -141,7 +140,7 @@ namespace IncrementalCompiler
                     }
                     return result.Succeeded ? 0 : 1;
                 }
-                catch (EndpointNotFoundException)
+                /*catch (EndpointNotFoundException)
                 {
                     if (serverProcess == null)
                     {
@@ -162,7 +161,7 @@ namespace IncrementalCompiler
                         else
                             return 1;
                     }
-                }
+                }*/
                 catch (Exception e)
                 {
                     logger.Error(e, "Error in request");

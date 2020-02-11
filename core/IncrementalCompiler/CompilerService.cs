@@ -1,18 +1,17 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ServiceModel;
 using NLog;
 
 namespace IncrementalCompiler
 {
-    [ServiceContract(Namespace = "https://github.com/SaladLab/Unity3D.IncrementalCompiler")]
+    //[ServiceContract(Namespace = "https://github.com/SaladLab/Unity3D.IncrementalCompiler")]
     public interface ICompilerService
     {
-        [OperationContract]
+        //[OperationContract]
         CompileResult Build(string projectPath, CompileOptions options);
     }
 
-    [ServiceBehavior(InstanceContextMode = InstanceContextMode.Single, IncludeExceptionDetailInFaults = true)]
+    //[ServiceBehavior(InstanceContextMode = InstanceContextMode.Single, IncludeExceptionDetailInFaults = true)]
     public class CompilerService : ICompilerService
     {
         private Logger _logger = LogManager.GetLogger("CompilerService");

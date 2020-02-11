@@ -8,10 +8,12 @@ internal class Incremental60Compiler : Compiler
 	public override string Name => "Incremental C# Compiler 6.0";
 	public override bool NeedsPdb2MdbConversion => false;
 
-	public Incremental60Compiler(Logger logger, string directory)
-		: base(logger, Path.Combine(directory, "IncrementalCompiler.exe"), Path.Combine(directory, "pdb2mdb.exe")) { }
+    const string DllName = "IncrementalCompiler.dll";
 
-	public static bool IsAvailable(string directory) => File.Exists(Path.Combine(directory, "IncrementalCompiler.exe"));
+	public Incremental60Compiler(Logger logger, string directory)
+		: base(logger, Path.Combine(directory, DllName), Path.Combine(directory, "pdb2mdb.exe")) { }
+
+	public static bool IsAvailable(string directory) => File.Exists(Path.Combine(directory, DllName));
 
 	protected override Process CreateCompilerProcess(Platform platform, string unityEditorDataDir, string targetProfileDir, string responseFile)
 	{
@@ -28,14 +30,15 @@ internal class Incremental60Compiler : Compiler
 		var systemXmlDllPath = Path.Combine(targetProfileDir, "System.Xml.dll");
 		var mscorlibDllPath = Path.Combine(targetProfileDir, "mscorlib.dll");
 
-		string processArguments = "-nostdlib+ -noconfig "
+		string processArguments = compilerPath
+                                  + " -nostdlib+ -noconfig "
 								  + $"-r:\"{mscorlibDllPath}\" "
 								  + $"-r:\"{systemDllPath}\" "
 								  + $"-r:\"{systemCoreDllPath}\" "
 								  + $"-r:\"{systemXmlDllPath}\" " + responseFile;
 
 		var process = new Process();
-		process.StartInfo = CreateOSDependentStartInfo(platform, ProcessRuntime.CLR40, compilerPath, processArguments, unityEditorDataDir);
+        process.StartInfo = CreateStartInfo("dotnet", processArguments);
 		return process;
 	}
 

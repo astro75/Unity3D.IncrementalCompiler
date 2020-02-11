@@ -138,6 +138,17 @@ internal abstract class Compiler
 		return startInfo;
 	}
 
+    protected static ProcessStartInfo CreateStartInfo(string processPath, string processArguments)
+    {
+        var startInfo = new ProcessStartInfo(processPath, processArguments) {
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+
+        return startInfo;
+    }
+
 	public virtual void PrintPdb2MdbOutputAndErrors()
 	{
 		throw new NotSupportedException();

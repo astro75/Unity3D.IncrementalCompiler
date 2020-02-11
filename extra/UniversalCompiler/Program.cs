@@ -80,6 +80,11 @@ internal class Program
 
 	    var compiler = CreateCompiler(settings.Compiler, logger, CurrentPlatform, targetProfileDir, projectDir, compilationOptions, unityEditorDataDir);
 
+        if (compiler == null)
+        {
+            logger?.Append($"ERROR: Compiler is null");
+        }
+
         logger?.Append($"Compiler: {compiler.Name}");
 		logger?.Append("");
 		logger?.Append("- Compilation -----------------------------------------------");
@@ -135,7 +140,11 @@ internal class Program
     // TODO: clean this mess
     private static Compiler CreateCompiler(CompilerType compilerType, Logger logger, Platform platform, string monoProfileDir, string projectDir, string[] compilationOptions, string unityEditorDataDir)
     {
+        logger?.Append("Create Compiler: " + compilerType);
+
         var compilerDirectory = Path.Combine(projectDir, LANGUAGE_SUPPORT_DIR);
+
+        logger?.Append("Compiler directory: " + compilerDirectory);
 
         switch (compilerType)
         {

@@ -1,4 +1,5 @@
-﻿using System.ServiceModel;
+﻿
+using JKang.IpcServiceFramework;
 
 namespace IncrementalCompiler
 {
@@ -8,11 +9,17 @@ namespace IncrementalCompiler
         {
             if (!useCompilationServer)
                 return new CompilerService().Build(currentPath, options);
+
             var address = CompilerServiceHelper.BaseAddress + parentProcessId;
-            var binding = CompilerServiceHelper.GetBinding();
-            var ep = new EndpointAddress(address);
-            var channel = ChannelFactory<ICompilerService>.CreateChannel(binding, ep);
-            return channel.Build(currentPath, options);
+
+            var client = new IpcServiceClientBuilder<ICompilerService>()
+                .UseNamedPipe(address)
+                // or .UseTcp(IPAddress.Loopback, 45684) to invoke using TCP
+                .Build();
+
+            var result = client.InvokeAsync(cs => cs.Build(currentPath, options)).Result;
+
+            return result;
         }
     }
 }
