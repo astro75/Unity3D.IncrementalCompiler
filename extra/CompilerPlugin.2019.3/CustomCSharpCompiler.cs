@@ -38,7 +38,7 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
     {
         arguments.Add("-nostdlib+");
         arguments.Add("-preferreduilang:en-US");
-        arguments.Add("-langversion:latest");
+        arguments.Add("-langversion:7.3");
     }
 
     static string GenerateResponseFileEdited(
@@ -52,7 +52,8 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
       {
         "-target:library",
         "-nowarn:0169",
-        "-out:" + PrepareFileName(AssetPath.Combine(tempBuildDirectory, assembly.Filename))
+        "-out:" + PrepareFileName(AssetPath.Combine(tempBuildDirectory, assembly.Filename)),
+        "-unsafe" // added unsafe to all projects, because setting in unity asmdef does not work
       };
 
       // added

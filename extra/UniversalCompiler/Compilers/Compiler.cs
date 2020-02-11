@@ -6,27 +6,18 @@ using System.Linq;
 
 internal abstract class Compiler
 {
-	protected enum ProcessRuntime
-	{
-		CLR40,
-		CLR20,
-	}
-
 	public abstract string Name { get; }
-	public abstract bool NeedsPdb2MdbConversion { get; }
 
 	protected readonly Logger logger;
 	protected readonly string compilerPath;
-	protected readonly string pbd2MdbPath;
 
 	protected readonly List<string> outputLines = new List<string>();
 	protected readonly List<string> errorLines = new List<string>();
 
-	protected Compiler(Logger logger, string compilerPath, string pbd2MdbPath = null)
+	protected Compiler(Logger logger, string compilerPath)
 	{
 		this.logger = logger;
 		this.compilerPath = compilerPath;
-		this.pbd2MdbPath = pbd2MdbPath;
 	}
 
 	public int Compile(Platform platform, string unityEditorDataDir, string targetProfileDir, string responseFile)
@@ -49,7 +40,7 @@ internal abstract class Compiler
 		return process.ExitCode;
 	}
 
-	public virtual void PrintCompilerOutputAndErrors()
+	public void PrintCompilerOutputAndErrors()
 	{
 		var lines = (from line in outputLines
 					 let trimmedLine = line?.Trim()
@@ -81,9 +72,7 @@ internal abstract class Compiler
 
 	protected abstract Process CreateCompilerProcess(Platform platform, string unityEditorDataDir, string targetProfileDir, string responseFile);
 
-	public virtual void ConvertDebugSymbols(Platform platform, string targetAssemblyPath, string unityEditorDataDir) { }
-
-	protected static ProcessStartInfo CreateOSDependentStartInfo(Platform platform, ProcessRuntime processRuntime, string processPath,
+	protected static ProcessStartInfo CreateOSDependentStartInfo(Platform platform, string processPath,
 																 string processArguments, string unityEditorDataDir)
 	{
 		ProcessStartInfo startInfo;
@@ -95,41 +84,26 @@ internal abstract class Compiler
 		else
 		{
 			string runtimePath;
-			switch (processRuntime)
+			if (File.Exists("/Library/Frameworks/Mono.framework/Commands/mono"))
 			{
-				case ProcessRuntime.CLR40:
-					if (File.Exists("/Library/Frameworks/Mono.framework/Commands/mono"))
-					{
-						runtimePath = "/Library/Frameworks/Mono.framework/Commands/mono";
-					}
-					else if (File.Exists("/usr/local/bin/mono"))
-					{
-						runtimePath = "/usr/local/bin/mono";
-					}
-					else
-					{
-						runtimePath = Path.Combine(unityEditorDataDir, "MonoBleedingEdge/bin/mono");
-					}
-					break;
-
-				case ProcessRuntime.CLR20:
-					runtimePath = Path.Combine(unityEditorDataDir, @"Mono/bin/mono");
-					break;
-
-				default:
-					throw new ArgumentOutOfRangeException(nameof(processRuntime), processRuntime, null);
+				runtimePath = "/Library/Frameworks/Mono.framework/Commands/mono";
+			}
+			else if (File.Exists("/usr/local/bin/mono"))
+			{
+				runtimePath = "/usr/local/bin/mono";
+			}
+			else
+			{
+				runtimePath = Path.Combine(unityEditorDataDir, "MonoBleedingEdge/bin/mono");
 			}
 
 			startInfo = new ProcessStartInfo(runtimePath, $"\"{processPath}\" {processArguments}");
 
-			if (processRuntime != ProcessRuntime.CLR20)
-			{
-				// Since we already are running under old mono runtime, we need to remove
-				// these variables before launching the different version of the runtime.
-				var vars = startInfo.EnvironmentVariables;
-				vars.Remove("MONO_PATH");
-				vars.Remove("MONO_CFG_DIR");
-			}
+			// Since we already are running under old mono runtime, we need to remove
+			// these variables before launching the different version of the runtime.
+			var vars = startInfo.EnvironmentVariables;
+			vars.Remove("MONO_PATH");
+			vars.Remove("MONO_CFG_DIR");
 		}
 
 		startInfo.RedirectStandardError = true;
@@ -137,10 +111,5 @@ internal abstract class Compiler
 		startInfo.UseShellExecute = false;
 
 		return startInfo;
-	}
-
-	public virtual void PrintPdb2MdbOutputAndErrors()
-	{
-		throw new NotSupportedException();
 	}
 }
