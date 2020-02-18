@@ -12,38 +12,48 @@ namespace IncrementalCompiler
         CompileResult Build(string projectPath, CompileOptions options);
     }
 
-    [ServiceBehavior(InstanceContextMode = InstanceContextMode.Single, IncludeExceptionDetailInFaults = true)]
+    [ServiceBehavior(
+        InstanceContextMode = InstanceContextMode.Single,
+        IncludeExceptionDetailInFaults = true,
+        ConcurrencyMode = ConcurrencyMode.Multiple)]
     public class CompilerService : ICompilerService
     {
         private Logger _logger = LogManager.GetLogger("CompilerService");
         private string _projectPath;
         private Dictionary<string, Compiler> _compilerMap;
+        readonly object _lockObj = new object();
 
         public CompileResult Build(string projectPath, CompileOptions options)
         {
             _logger.Info("Build(projectPath={0}, output={1})", projectPath, options.Output);
 
-            if (string.IsNullOrEmpty(_projectPath) || _projectPath != projectPath)
-            {
-                // create new one
-                _compilerMap = new Dictionary<string, Compiler>();
-                if (string.IsNullOrEmpty(_projectPath) == false)
-                    _logger.Info("Flush old project. (Project={0})", _projectPath);
-            }
-
-            _projectPath = projectPath;
-
             Compiler compiler;
-            if (_compilerMap.TryGetValue(options.Output, out compiler) == false)
+
+            lock (_lockObj)
             {
-                compiler = new Compiler();
-                _compilerMap.Add(options.Output, compiler);
-                _logger.Info("Add new project. (Project={0})", _projectPath);
+                if (string.IsNullOrEmpty(_projectPath) || _projectPath != projectPath)
+                {
+                    // create new one
+                    _projectPath = projectPath;
+                    _compilerMap = new Dictionary<string, Compiler>();
+                    if (string.IsNullOrEmpty(_projectPath) == false)
+                        _logger.Info("Flush old project. (Project={0})", _projectPath);
+                }
+
+                if (_compilerMap.TryGetValue(options.Output, out compiler) == false)
+                {
+                    compiler = new Compiler();
+                    _compilerMap.Add(options.Output, compiler);
+                    _logger.Info("Add new project. (Project={0})", _projectPath);
+                }
             }
 
             try
             {
-                return compiler.Build(options);
+                lock (compiler)
+                {
+                    return compiler.Build(options);
+                }
             }
             catch (Exception e)
             {
