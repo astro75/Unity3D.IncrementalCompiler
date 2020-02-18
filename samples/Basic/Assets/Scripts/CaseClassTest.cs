@@ -1,6 +1,4 @@
-﻿#if UNITY_5
-
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -231,4 +229,3 @@ namespace Assets.Scripts {
         static int nonono;
     }
 }
-#endif
