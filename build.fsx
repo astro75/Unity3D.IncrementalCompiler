@@ -49,7 +49,7 @@ Target "Export" (fun _ ->
         "./extra/UniversalCompiler/UniversalCompiler.xml" |> CopyFile compilerDir
         "./tools/pdb2mdb/pdb2mdb.exe" |> CopyFile compilerDir
 
-        let dir = System.IO.DirectoryInfo("./core/IncrementalCompiler/bin/Release/netcoreapp2.0")
+        let dir = System.IO.DirectoryInfo("./core/IncrementalCompiler/bin/Release/net471")
         filesInDir dir |> Array.iter (fun f -> f.FullName |> CopyFile compilerDir)
 
         // IO.Shell.rename (compilerDir @@ "IncrementalCompiler.exe") (compilerDir @@ "IncrementalCompiler.dll")

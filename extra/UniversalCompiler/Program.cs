@@ -91,7 +91,7 @@ internal class Program
     // TODO: clean this mess
     private static Compiler CreateCompiler(Logger logger, string projectDir)
     {
-        logger?.Append("Create Compiler: " + compilerType);
+        logger?.Append("Create Compiler");
 
         var compilerDirectory = Path.Combine(projectDir, LANGUAGE_SUPPORT_DIR);
 

@@ -45,11 +45,11 @@ namespace IncrementalCompiler
 
             Process serverProcess = null;
 
-            new Thread(() => CompilerServiceServer.Run(logger, parentProcessId)).Start();
+            // new Thread(() => CompilerServiceServer.Run(logger, parentProcessId)).Start();
 
             while (true)
             {
-                // try
+                try
                 {
                     var w = new Stopwatch();
                     w.Start();
@@ -59,7 +59,8 @@ namespace IncrementalCompiler
 
                     w.Stop();
 
-                    Console.WriteLine("Done: Succeeded={0}. Duration={1}sec. ", result.Succeeded, w.Elapsed.TotalSeconds);
+                    Console.WriteLine("Done: Succeeded={0}. Duration={1}sec. ", result.Succeeded,
+                        w.Elapsed.TotalSeconds);
                     foreach (var warning in result.Warnings)
                         Console.WriteLine(warning);
                     foreach (var error in result.Errors)
@@ -67,7 +68,7 @@ namespace IncrementalCompiler
 
                     Console.ReadLine();
                 }
-                /*catch (EndpointNotFoundException)
+                catch (TimeoutException)
                 {
                     if (serverProcess == null)
                     {
@@ -92,7 +93,7 @@ namespace IncrementalCompiler
                         else
                             serverProcess = null;
                     }
-                }*/
+                }
             }
         }
     }

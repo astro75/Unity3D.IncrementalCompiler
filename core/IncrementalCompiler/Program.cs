@@ -140,7 +140,7 @@ namespace IncrementalCompiler
                     }
                     return result.Succeeded ? 0 : 1;
                 }
-                /*catch (EndpointNotFoundException)
+                catch (TimeoutException)
                 {
                     if (serverProcess == null)
                     {
@@ -161,7 +161,7 @@ namespace IncrementalCompiler
                         else
                             return 1;
                     }
-                }*/
+                }
                 catch (Exception e)
                 {
                     logger.Error(e, "Error in request");

@@ -46,6 +46,8 @@ namespace IncrementalCompiler
 
             // open service
 
+            var cts = new CancellationTokenSource();
+
             try
             {
                 var services = ConfigureServices(new ServiceCollection());
@@ -57,7 +59,7 @@ namespace IncrementalCompiler
                     //.AddTcpEndpoint<ICompilerService>(name: "endpoint2", ipEndpoint: IPAddress.Loopback, port: 45684)
                     .Build();
 
-                host.Run();
+                host.RunAsync(cts.Token);
             }
             catch (Exception e)
             {
@@ -69,7 +71,7 @@ namespace IncrementalCompiler
                 return 1;
             }
 
-            /*if (parentProcess != null)
+            if (parentProcess != null)
             {
                 // WaitForExit returns immediately instead of waiting on Mac so use while loop
                 if (PlatformHelper.CurrentPlatform == Platform.Mac)
@@ -83,12 +85,9 @@ namespace IncrementalCompiler
                 {
                     parentProcess.WaitForExit();
                 }
-                if (serviceHost != null)
-                {
-                    serviceHost.Close();
-                }
+                cts.Cancel();
                 logger.Info("Parent process just exited. (PID={0})", parentProcess.Id);
-            }*/
+            }
 
             return 0;
         }
