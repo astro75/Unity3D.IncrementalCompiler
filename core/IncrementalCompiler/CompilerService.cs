@@ -29,22 +29,30 @@ namespace IncrementalCompiler
 
             Compiler compiler;
 
-            lock (_lockObj)
+            if (options.IsUnityPackage)
             {
-                if (string.IsNullOrEmpty(_projectPath) || _projectPath != projectPath)
+                // do not cache packages in ram, because they do not change
+                compiler = new Compiler();
+            }
+            else
+            {
+                lock (_lockObj)
                 {
-                    // create new one
-                    _projectPath = projectPath;
-                    _compilerMap = new Dictionary<string, Compiler>();
-                    if (string.IsNullOrEmpty(_projectPath) == false)
-                        _logger.Info("Flush old project. (Project={0})", _projectPath);
-                }
+                    if (string.IsNullOrEmpty(_projectPath) || _projectPath != projectPath)
+                    {
+                        // create new one
+                        _projectPath = projectPath;
+                        _compilerMap = new Dictionary<string, Compiler>();
+                        if (string.IsNullOrEmpty(_projectPath) == false)
+                            _logger.Info("Flush old project. (Project={0})", _projectPath);
+                    }
 
-                if (_compilerMap.TryGetValue(options.Output, out compiler) == false)
-                {
-                    compiler = new Compiler();
-                    _compilerMap.Add(options.Output, compiler);
-                    _logger.Info("Add new project. (Project={0})", _projectPath);
+                    if (_compilerMap.TryGetValue(options.Output, out compiler) == false)
+                    {
+                        compiler = new Compiler();
+                        _compilerMap.Add(options.Output, compiler);
+                        _logger.Info("Add new project. (Project={0})", _projectPath);
+                    }
                 }
             }
 
@@ -52,7 +60,12 @@ namespace IncrementalCompiler
             {
                 lock (compiler)
                 {
-                    return compiler.Build(options);
+                    var result = compiler.Build(options);
+                    if (options.IsUnityPackage)
+                    {
+                        compiler.Dispose();
+                    }
+                    return result;
                 }
             }
             catch (Exception e)
