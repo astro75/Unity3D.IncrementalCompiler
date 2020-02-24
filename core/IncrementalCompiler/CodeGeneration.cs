@@ -863,7 +863,7 @@ namespace IncrementalCompiler
                 }
             );
 
-            IEnumerable<MemberDeclarationSyntax> createIf(bool condition, Func<IEnumerable<MemberDeclarationSyntax>> a)
+            IEnumerable<MemberDeclarationSyntax> createIf(bool condition, Func<SyntaxList<MemberDeclarationSyntax>> a)
                 => condition ? a() : Enumerable.Empty<MemberDeclarationSyntax>();
 
             var toString = createIf(
@@ -1021,6 +1021,7 @@ namespace IncrementalCompiler
             var classModifiers =
                 cds.Modifiers
                 .RemoveOfKind(SyntaxKind.PartialKeyword)
+                .RemoveOfKind(SyntaxKind.ReadOnlyKeyword)
                 .Add(SyntaxKind.StaticKeyword)
                 .Add(SyntaxKind.PartialKeyword);
 

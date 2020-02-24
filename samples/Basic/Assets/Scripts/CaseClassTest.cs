@@ -228,4 +228,9 @@ namespace Assets.Scripts {
         //        [ThreadStatic]
         static int nonono;
     }
+
+    [Record(GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
+    public readonly partial struct ReadonlyApply<A> {
+        public readonly int val;
+    }
 }
