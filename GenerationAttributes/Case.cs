@@ -33,4 +33,8 @@ namespace GenerationAttributes
     {
 
     }
+
+    [AttributeUsage(AttributeTargets.Class)]
+    [Conditional("CodeGeneration")]
+    public class SingletonAttribute : Attribute { }
 }

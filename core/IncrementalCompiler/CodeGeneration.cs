@@ -481,6 +481,17 @@ namespace IncrementalCompiler
                                 );
                             });
                         }
+                        if (attrClassName == typeof(SingletonAttribute).FullName)
+                        {
+                            if (tds is ClassDeclarationSyntax cds) {
+                                tryAttribute<SingletonAttribute>(attr, m =>
+                                {
+                                    newMembers = newMembers.Add(
+                                        AddAncestors(tds, GenerateSingleton(cds), onlyNamespace: false)
+                                    );
+                                });
+                            }
+                        }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
                         {
                             tryAttribute<MatcherAttribute>(attr, m => {
@@ -604,6 +615,7 @@ namespace IncrementalCompiler
                     var nt = CSharpSyntaxTree.Create(
                         SF.CompilationUnit()
                             .WithUsings(cleanUsings(root.Usings))
+                            .WithLeadingTrivia(SyntaxTriviaList.Create(SyntaxFactory.Comment("// ReSharper disable all")))
                             .WithMembers(SF.List(newMembers))
                             .NormalizeWhitespace(),
                         path: Path.Combine(generatedProjectFilesDirectory, tree.FilePath),
@@ -691,7 +703,17 @@ namespace IncrementalCompiler
             return $"public {type} {newName} => {name};";
         }
 
-        private static MemberDeclarationSyntax GenerateMatcher(
+        static MemberDeclarationSyntax GenerateSingleton(
+            ClassDeclarationSyntax tds
+        ) {
+            var members = ParseClassMembers(
+                $"private {tds.Identifier}(){{}}" +
+                $"public static readonly {tds.Identifier} instance = new {tds.Identifier}();");
+            var partialClass = CreatePartial(tds, members, Extensions.EmptyBaseList);
+            return partialClass;
+        }
+
+        static MemberDeclarationSyntax GenerateMatcher(
             SemanticModel model, TypeDeclarationSyntax tds,
             MatcherAttribute attribute, ImmutableArray<TypeDeclarationSyntax> typesInFile
         ) {

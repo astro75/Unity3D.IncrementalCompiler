@@ -233,4 +233,10 @@ namespace Assets.Scripts {
     public readonly partial struct ReadonlyApply<A> {
         public readonly int val;
     }
+
+    [Record]
+    public partial struct EmptyStruct { }
+
+    [Singleton]
+    public partial class Singleton { }
 }
