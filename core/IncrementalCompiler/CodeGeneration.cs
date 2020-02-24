@@ -845,12 +845,12 @@ namespace IncrementalCompiler
 
             var fieldsAndProps = fields.Concat(properties).ToArray();
 
-            if (!fieldsAndProps.Any()) throw new Exception("The record has no fields and therefore cannot be created");
+            var hasAnyFields = fieldsAndProps.Any();
 
             var initializedFieldsAndProps = fieldsAndProps.Where(_ => !_.initialized).ToImmutableArray();
 
             var constructor = createIf(
-                attr.GenerateConstructor.generateConstructor(),
+                attr.GenerateConstructor.generateConstructor() && hasAnyFields,
                 () => {
                     var params_ = initializedFieldsAndProps.joinCommaSeparated(f => f.type + " " + f.identifier);
                     var body = initializedFieldsAndProps.Any()
@@ -883,51 +883,59 @@ namespace IncrementalCompiler
                 });
 
             var getHashCode = createIf(attr.GenerateGetHashCode, () => {
-                var hashLines = Join("\n", fieldsAndProps.Select(f => {
-                    var type = model.GetTypeInfo(f.type).Type;
-                    var isValueType = type.IsValueType;
-                    var name = f.identifier.ValueText;
-
-
-                    string ValueTypeHash(ITypeSymbol t)
+                if (hasAnyFields)
+                {
+                    var hashLines = Join("\n", fieldsAndProps.Select(f =>
                     {
-                        if (t.isEnum(out var underlyingType))
-                        {
-                            switch (underlyingType)
+                        var type = model.GetTypeInfo(f.type).Type;
+                        var isValueType = type.IsValueType;
+                        var name = f.identifier.ValueText;
+
+
+                        string ValueTypeHash(ITypeSymbol t) {
+                            if (t.isEnum(out var underlyingType))
                             {
-                                case SpecialType.System_Int64:
-                                case SpecialType.System_UInt64:
-                                    return $"{name}.GetHashCode()";
-                                default:
-                                    return $"(int) {name}";
+                                switch (underlyingType)
+                                {
+                                    case SpecialType.System_Int64:
+                                    case SpecialType.System_UInt64:
+                                        return $"{name}.GetHashCode()";
+                                    default:
+                                        return $"(int) {name}";
+                                }
+                            }
+
+                            var sType = t.SpecialType;
+                            switch (sType)
+                            {
+                                case SpecialType.System_Byte:
+                                case SpecialType.System_SByte:
+                                case SpecialType.System_Int16:
+                                case SpecialType.System_Int32: return name;
+                                case SpecialType.System_UInt32: return "(int) " + name;
+                                default: return name + ".GetHashCode()";
                             }
                         }
 
-                        var sType = t.SpecialType;
-                        switch (sType)
-                        {
-                            case SpecialType.System_Byte:
-                            case SpecialType.System_SByte:
-                            case SpecialType.System_Int16:
-                            case SpecialType.System_Int32: return name;
-                            case SpecialType.System_UInt32: return "(int) " + name;
-                            default: return name + ".GetHashCode()";
-                        }
-                    }
-
-                    var fieldHashCode = isValueType
-                        ? ValueTypeHash(type)
-                        : $"({name} == null ? 0 : {name}.GetHashCode())";
-                    return $"hashCode = (hashCode * 397) ^ {(fieldHashCode)}; // {type.SpecialType}";
-                }));
-                return ParseClassMembers(
-                $@"public override int GetHashCode() {{
-                    unchecked {{
-                        var hashCode = 0;
-                        {hashLines}
-                        return hashCode;
-                    }}
-                }}");
+                        var fieldHashCode = isValueType
+                            ? ValueTypeHash(type)
+                            : $"({name} == null ? 0 : {name}.GetHashCode())";
+                        return $"hashCode = (hashCode * 397) ^ {(fieldHashCode)}; // {type.SpecialType}";
+                    }));
+                    return ParseClassMembers(
+                        $@"public override int GetHashCode() {{
+                            unchecked {{
+                                var hashCode = 0;
+                                {hashLines}
+                                return hashCode;
+                            }}
+                        }}");
+                }
+                else
+                {
+                    return ParseClassMembers(
+                        $@"public override int GetHashCode() => {cds.Identifier.ValueText.GetHashCode()};");
+                }
             });
 
             /*
@@ -940,46 +948,57 @@ namespace IncrementalCompiler
 
             var equals = createIf(attr.GenerateComparer, () => {
                 var isStruct = cds.Kind() == SyntaxKind.StructDeclaration;
-                var comparisons = fieldsAndProps.Select(f =>
+                if (hasAnyFields)
                 {
-                    var type = model.GetTypeInfo(f.type).Type;
-                    var name = f.identifier.ValueText;
-                    var otherName = "other." + name;
-
-                    if (type.isEnum(out _)) return $"{name} == {otherName}";
-
-                    switch (type.SpecialType)
+                    var comparisons = fieldsAndProps.Select(f =>
                     {
-                        case SpecialType.System_Byte:
-                        case SpecialType.System_SByte:
-                        case SpecialType.System_Int16:
-                        case SpecialType.System_UInt16:
-                        case SpecialType.System_Int32:
-                        case SpecialType.System_UInt32:
-                        case SpecialType.System_Int64:
-                        case SpecialType.System_UInt64: return $"{name} == {otherName}";
-                        case SpecialType.System_String: return $"string.Equals({name}, {otherName})";
-                        default:
-                            return $"{name}.Equals({otherName})";
-                    }
-                });
-                var equalsExpr = isStruct ? "left.Equals(right)" : "Equals(left, right)";
-                return ParseClassMembers(
-                    $"public bool Equals({typeName} other) {{" +
-                    (!isStruct
-                        ? "if (ReferenceEquals(null, other)) return false;" +
-                          "if (ReferenceEquals(this, other)) return true;"
-                        : ""
-                    ) +
-                    $"return {Join(" && ", comparisons)};" +
-                    $"}}" +
-                    $"public override bool Equals(object obj) {{" +
-                    $"  if (ReferenceEquals(null, obj)) return false;" +
-                    (!isStruct ? "if (ReferenceEquals(this, obj)) return true;" : "") +
-                    $"  return obj is {typeName} && Equals(({typeName}) obj);" +
-                    $"}}" +
-                    $"public static bool operator ==({typeName} left, {typeName} right) => {equalsExpr};" +
-                    $"public static bool operator !=({typeName} left, {typeName} right) => !{equalsExpr};");
+                        var type = model.GetTypeInfo(f.type).Type;
+                        var name = f.identifier.ValueText;
+                        var otherName = "other." + name;
+
+                        if (type.isEnum(out _)) return $"{name} == {otherName}";
+
+                        switch (type.SpecialType)
+                        {
+                            case SpecialType.System_Byte:
+                            case SpecialType.System_SByte:
+                            case SpecialType.System_Int16:
+                            case SpecialType.System_UInt16:
+                            case SpecialType.System_Int32:
+                            case SpecialType.System_UInt32:
+                            case SpecialType.System_Int64:
+                            case SpecialType.System_UInt64: return $"{name} == {otherName}";
+                            case SpecialType.System_String: return $"string.Equals({name}, {otherName})";
+                            default:
+                                return $"{name}.Equals({otherName})";
+                        }
+                    });
+                    var equalsExpr = isStruct ? "left.Equals(right)" : "Equals(left, right)";
+                    return ParseClassMembers(
+                        $"public bool Equals({typeName} other) {{" +
+                        (!isStruct
+                            ? "if (ReferenceEquals(null, other)) return false;" +
+                              "if (ReferenceEquals(this, other)) return true;"
+                            : ""
+                        ) +
+                        $"return {Join(" && ", comparisons)};" +
+                        $"}}" +
+                        $"public override bool Equals(object obj) {{" +
+                        $"  if (ReferenceEquals(null, obj)) return false;" +
+                        (!isStruct ? "if (ReferenceEquals(this, obj)) return true;" : "") +
+                        $"  return obj is {typeName} && Equals(({typeName}) obj);" +
+                        $"}}" +
+                        $"public static bool operator ==({typeName} left, {typeName} right) => {equalsExpr};" +
+                        $"public static bool operator !=({typeName} left, {typeName} right) => !{equalsExpr};");
+                }
+                else
+                {
+                    return ParseClassMembers(
+                        $"public bool Equals({typeName} other) => true;" +
+                        $"public override bool Equals(object obj) => obj is {typeName};" +
+                        $"public static bool operator ==({typeName} left, {typeName} right) => true;" +
+                        $"public static bool operator !=({typeName} left, {typeName} right) => false;");
+                }
             });
 
             var baseList = attr.GenerateComparer
