@@ -10,5 +10,6 @@ public class TestScript : MonoBehaviour {
     void Start() {
         var test = new ToStringEnumerableTestClass();
         Debug.LogWarning(test.ToString());
+        LinqTests.test();
     }
 }
