@@ -49,24 +49,26 @@ namespace Shaman.Roslyn.LinqRewrite
 
         public static readonly HashSet<string> KnownMethods = new HashSet<string>
         {
-            ToDictionaryWithKeyValueMethod, ToArrayMethod, ToListMethod, ReverseMethod, 
-            
+            ToDictionaryWithKeyValueMethod, ToArrayMethod, ToListMethod, ReverseMethod,
+
             FirstMethod, SingleMethod, LastMethod,
             FirstOrDefaultMethod, SingleOrDefaultMethod, LastOrDefaultMethod,
             FirstWithConditionMethod, SingleWithConditionMethod, LastWithConditionMethod,
             FirstOrDefaultWithConditionMethod, SingleOrDefaultWithConditionMethod, LastOrDefaultWithConditionMethod,
-            
+
             CountMethod, CountWithConditionMethod, LongCountMethod, LongCountWithConditionMethod,
-            
+
             ElementAtMethod, ElementAtOrDefaultMethod,
-            
+
             AnyMethod, AnyWithConditionMethod, AllWithConditionMethod,
-            
+
             ContainsMethod,
-            
+
             ListForEachMethod,
-            
-            EnumerableForEachMethod
+
+            EnumerableForEachMethod,
+
+            WhereMethod, SelectMethod, CastMethod, OfTypeMethod
         };
 
         public static readonly string[] RootMethodsThatRequireYieldReturn = {

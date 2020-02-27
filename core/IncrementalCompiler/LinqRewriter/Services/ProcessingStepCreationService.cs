@@ -11,16 +11,15 @@ namespace Shaman.Roslyn.LinqRewrite.Services
 {
     public class ProcessingStepCreationService
     {
-        private static ProcessingStepCreationService _instance;
-        public static ProcessingStepCreationService Instance => _instance ??= new ProcessingStepCreationService();
+        // private static ProcessingStepCreationService _instance;
+        // public static ProcessingStepCreationService Instance => _instance ??= new ProcessingStepCreationService();
 
         private readonly RewriteDataService _data;
         private readonly CodeCreationService _code;
 
-        public ProcessingStepCreationService()
-        {
-            _data = RewriteDataService.Instance;
-            _code = CodeCreationService.Instance;
+        public ProcessingStepCreationService(RewriteDataService data, CodeCreationService code) {
+            _data = data;
+            _code = code;
         }
 
         public StatementSyntax CreateProcessingStep(List<LinqStep> chain, int chainIndex, TypeSyntax itemType,
@@ -58,7 +57,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 .TypeArgumentList.Arguments.First();
             var newName = $"_linqitem{++_data.LastId}";
             var next = CreateProcessingStep(chain, chainIndex - 1, newType, newName, arguments, noAggregation);
-                    
+
             var local = _code.CreateLocalVariableDeclaration(newName,
                 SyntaxFactory.CastExpression(newType, SyntaxFactory.IdentifierName(itemName)));
             var nextStatement = next is BlockSyntax syntax
@@ -74,7 +73,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 .TypeArgumentList.Arguments.First();
             var newName = $"_linqitem{++_data.LastId}";
             var next = CreateProcessingStep(chain, chainIndex - 1, newType, newName, arguments, noAggregation);
-                    
+
             var type = _data.Semantic.GetTypeInfo(newType).Type;
             if (type.IsValueType)
             {

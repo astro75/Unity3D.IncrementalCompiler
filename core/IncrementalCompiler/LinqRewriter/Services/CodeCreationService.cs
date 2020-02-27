@@ -12,18 +12,17 @@ namespace Shaman.Roslyn.LinqRewrite.Services
 {
     public class CodeCreationService
     {
-        private static CodeCreationService _instance;
-        public static CodeCreationService Instance => _instance ??= new CodeCreationService();
-        
+        // private static CodeCreationService _instance;
+        // public static CodeCreationService Instance => _instance ??= new CodeCreationService();
+
         private readonly RewriteDataService _data;
         private readonly SyntaxInformationService _info;
 
-        public CodeCreationService()
-        {
-            _data = RewriteDataService.Instance;
-            _info = SyntaxInformationService.Instance;
+        public CodeCreationService(RewriteDataService data, SyntaxInformationService info) {
+            _data = data;
+            _info = info;
         }
-        
+
         public StatementSyntax CreateStatement(ExpressionSyntax expression)
             => SyntaxFactory.ExpressionStatement(expression);
 
@@ -75,7 +74,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         public ParameterSyntax CreateParameter(string name, TypeSyntax type)
             => CreateParameter(SyntaxFactory.Identifier(name), type);
 
-        public PredefinedTypeSyntax CreatePrimitiveType(SyntaxKind keyword) 
+        public PredefinedTypeSyntax CreatePrimitiveType(SyntaxKind keyword)
             => SyntaxFactory.PredefinedType(SyntaxFactory.Token(keyword));
 
         public ExpressionSyntax CreateCollectionCount(ExpressionSyntax collection, bool allowUnknown)
@@ -84,7 +83,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
             if (collectionType is IArrayTypeSymbol) return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName), SyntaxFactory.IdentifierName("Length"));
             if (collectionType.ToDisplayString().StartsWith("System.Collections.Generic.IReadOnlyCollection<") || collectionType.AllInterfaces.Any(x => x.ToDisplayString().StartsWith("System.Collections.Generic.IReadOnlyCollection<")))
                 return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName), SyntaxFactory.IdentifierName("Count"));
-                
+
             if (collectionType.ToDisplayString().StartsWith("System.Collections.Generic.ICollection<") || collectionType.AllInterfaces.Any(x => x.ToDisplayString().StartsWith("System.Collections.Generic.ICollection<")))
                 return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName), SyntaxFactory.IdentifierName("Count"));
 
@@ -92,7 +91,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
             if (collectionType.IsValueType) return null;
             var itemType = _info.GetItemType(collectionType);
             if (itemType == null) return null;
-            
+
             return SyntaxFactory.InvocationExpression(
                 SyntaxFactory.MemberAccessExpression(
                     SyntaxKind.SimpleMemberAccessExpression,
@@ -145,10 +144,10 @@ namespace Shaman.Roslyn.LinqRewrite.Services
             var fn = _info.GetUniqueName($"{_data.CurrentMethodName}_ProceduralLinqHelper");
             if (body is ExpressionSyntax syntax) return syntax;
 
-            if (captures.Any(x => SyntaxExtensions.IsAnonymousType(_info.GetSymbolType(x.Symbol)))) 
+            if (captures.Any(x => SyntaxExtensions.IsAnonymousType(_info.GetSymbolType(x.Symbol))))
                 throw new NotSupportedException();
             if (returnType == null) throw new NotSupportedException(); // Anonymous type
-            
+
             var method = SyntaxFactory.MethodDeclaration(returnType, fn)
                 .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(
                     new[] { param }
@@ -163,7 +162,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 .WithConstraintClauses(_data.CurrentMethodConstraintClauses)
                 .NormalizeWhitespace();
 
-            _data.MethodsToAddToCurrentType.Add(Tuple.Create(_data.CurrentType, method));
+            _data.AddMethod(method);
             return SyntaxFactory.InvocationExpression(
                 CreateMethodNameSyntaxWithCurrentTypeParameters(fn),
                 CreateArguments(new[] { SyntaxFactory.Argument(SyntaxFactory.IdentifierName(param.Identifier.ValueText))}

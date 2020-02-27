@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using IncrementalCompiler;
 using Shaman.Roslyn.LinqRewrite.DataStructures;
 using Shaman.Roslyn.LinqRewrite.Services;
 using SyntaxExtensions = Shaman.Roslyn.LinqRewrite.Extensions.SyntaxExtensions;
@@ -15,18 +16,20 @@ namespace Shaman.Roslyn.LinqRewrite
         private readonly RewriteDataService _data;
         private readonly SyntaxInformationService _info;
         private readonly CodeCreationService _code;
+        readonly RewriteService _rewriteService;
 
         public int RewrittenMethods { get; private set; }
         public int RewrittenLinqQueries { get; private set; }
 
         public LinqRewriter(SemanticModel semantic)
         {
-            _data = RewriteDataService.Instance;
-            _info = SyntaxInformationService.Instance;
-            _code = CodeCreationService.Instance;
-            
+            _data = new RewriteDataService();
+            _info = new SyntaxInformationService(_data);
+            _code = new CodeCreationService(_data, _info);
+            var processingStep = new ProcessingStepCreationService(_data, _code);
+
             _data.Semantic = semantic;
-            RewriteService.Instance.Visit = Visit;
+            _rewriteService = new RewriteService(_data, _info, _code, processingStep, Visit);
         }
         public override SyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node)
             => TryVisitInvocationExpression(node, null) ?? base.VisitInvocationExpression(node);
@@ -54,11 +57,38 @@ namespace Shaman.Roslyn.LinqRewrite
 
         public override SyntaxNode VisitMethodDeclaration(MethodDeclarationSyntax node)
         {
+            // if (HasNoRewriteAttribute(node.AttributeLists)) return node;
+            // var old = RewrittenLinqQueries;
+            // var syntaxNode = base.VisitMethodDeclaration(node);
+            // if (RewrittenLinqQueries != old) RewrittenMethods++;
+            // return syntaxNode;
+
             if (HasNoRewriteAttribute(node.AttributeLists)) return node;
-            var old = RewrittenLinqQueries;
-            var syntaxNode = base.VisitMethodDeclaration(node);
-            if (RewrittenLinqQueries != old) RewrittenMethods++;
-            return syntaxNode;
+
+            if (node.ExpressionBody != null) return base.VisitMethodDeclaration(node);
+
+            _data.CurrentTypes.Push(node);
+            var changed = (MethodDeclarationSyntax) base.VisitMethodDeclaration(node);
+
+            if (_data.MethodsToAddToCurrentType.Count != 0)
+            {
+                var newMembers = _data.MethodsToAddToCurrentType
+                    .Where(x => x.Item1 == node)
+                    .Select(x => x.Item2)
+                    .ToArray();
+
+                var withMethods = changed.AddBodyStatements(newMembers.Select(_ =>
+                    (StatementSyntax) SyntaxFactory.LocalFunctionStatement(
+                        _.Modifiers.RemoveOfKind(SyntaxKind.StaticKeyword), _.ReturnType, _.Identifier, _.TypeParameterList, _.ParameterList,
+                        _.ConstraintClauses, _.Body, _.ExpressionBody)
+                ).ToArray());
+
+                _data.MethodsToAddToCurrentType.RemoveAll(x => x.Item1 == node);
+                _data.CurrentTypes.Pop();
+                return withMethods.NormalizeWhitespace();
+            }
+            _data.CurrentTypes.Pop();
+            return changed;
         }
 
         public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
@@ -77,7 +107,7 @@ namespace Shaman.Roslyn.LinqRewrite
                     return expressionSyntax;
                 }
             }
-            catch (Exception ex) when (ex is InvalidCastException || ex is NotSupportedException)
+            catch (Exception ex) when (ex is InvalidCastException || ex is NotSupportedException || ex is NotSupportedException)
             {
                 _data.MethodsToAddToCurrentType.RemoveRange(methodIdx, _data.MethodsToAddToCurrentType.Count - methodIdx);
             }
@@ -92,7 +122,7 @@ namespace Shaman.Roslyn.LinqRewrite
             //var symbol = _data.Semantic.GetSymbolInfo(memberAccess).Symbol as IMethodSymbol;
             var owner = node.AncestorsAndSelf().FirstOrDefault(x => x is MethodDeclarationSyntax);
             if (owner == null) return null;
-            
+
             _data.CurrentMethodIsStatic = _data.Semantic.GetDeclaredSymbol((MethodDeclarationSyntax) owner).IsStatic;
             _data.CurrentMethodName = ((MethodDeclarationSyntax) owner).Identifier.ValueText;
             _data.CurrentMethodTypeParameters = ((MethodDeclarationSyntax) owner).TypeParameterList;
@@ -101,14 +131,14 @@ namespace Shaman.Roslyn.LinqRewrite
             if (!IsSupportedMethod(node)) return null;
             var chain = GetInvocationStepChain(node, out var lastNode);
             if (containingForEach != null) InvocationChainInsertForEach(chain, containingForEach);
-            
+
             var (rewrite, collection, semanticReturnType) = CheckIfRewriteInvocation(chain, node, lastNode);
             if (!rewrite) return null;
 
             var returnType = SyntaxFactory.ParseTypeName(semanticReturnType.ToDisplayString());
             var aggregationMethod = chain.First().MethodName;
-            
-            using var parameters = RewriteParametersHolder.BorrowParameters();
+
+            using var parameters = RewriteParametersHolder.BorrowParameters(_rewriteService, _code, _data, _info);
             parameters.SetData(aggregationMethod, collection, returnType, semanticReturnType, chain, node);
 
             return InvocationRewriter.TryRewrite(parameters, aggregationMethod)
@@ -120,28 +150,27 @@ namespace Shaman.Roslyn.LinqRewrite
         {
             if (HasNoRewriteAttribute(node.AttributeLists)) return node;
 
-            var old = _data.CurrentType;
-            _data.CurrentType = node;
+            _data.CurrentTypes.Push(node);
             var changed = (TypeDeclarationSyntax) (node is ClassDeclarationSyntax declarationSyntax
                 ? base.VisitClassDeclaration(declarationSyntax)
                 : base.VisitStructDeclaration((StructDeclarationSyntax) node));
-            
+
             if (_data.MethodsToAddToCurrentType.Count != 0)
             {
                 var newMembers = _data.MethodsToAddToCurrentType
-                    .Where(x => x.Item1 == _data.CurrentType)
+                    .Where(x => x.Item1 == node)
                     .Select(x => x.Item2)
                     .ToArray();
-                
+
                 var withMethods = changed is ClassDeclarationSyntax syntax
                     ? (TypeDeclarationSyntax) syntax.AddMembers(newMembers)
                     : ((StructDeclarationSyntax) changed).AddMembers(newMembers);
-                
-                _data.MethodsToAddToCurrentType.RemoveAll(x => x.Item1 == _data.CurrentType);
-                _data.CurrentType = old;
+
+                _data.MethodsToAddToCurrentType.RemoveAll(x => x.Item1 == node);
+                _data.CurrentTypes.Pop();
                 return withMethods.NormalizeWhitespace();
             }
-            _data.CurrentType = old;
+            _data.CurrentTypes.Pop();
             return changed;
         }
 
@@ -187,10 +216,10 @@ namespace Shaman.Roslyn.LinqRewrite
             if (!chain.Any(x => x.Arguments
                 .Any(y => y is AnonymousFunctionExpressionSyntax)))
                 return (false, null, null);
-            
-            if (chain.Count == 1 && Constants.RootMethodsThatRequireYieldReturn.Contains(chain[0].MethodName)) 
+
+            if (chain.Count == 1 && Constants.RootMethodsThatRequireYieldReturn.Contains(chain[0].MethodName))
                 return (false, null, null);
-            
+
             var (flowsIn, flowsOut) = GetFlows(chain);
             _data.CurrentFlow = flowsIn.Union(flowsOut)
                 .Where(x => (x as IParameterSymbol)?.IsThis != true)
@@ -201,7 +230,7 @@ namespace Shaman.Roslyn.LinqRewrite
 
             var semanticReturnType = _data.Semantic.GetTypeInfo(node).Type;
             if (SyntaxExtensions.IsAnonymousType(semanticReturnType) ||
-                _data.CurrentFlow.Any(x => SyntaxExtensions.IsAnonymousType(_info.GetSymbolType(x.Symbol)))) 
+                _data.CurrentFlow.Any(x => SyntaxExtensions.IsAnonymousType(_info.GetSymbolType(x.Symbol))))
                 return (false, null, null);
 
             return (true, collection, semanticReturnType);
@@ -278,13 +307,13 @@ namespace Shaman.Roslyn.LinqRewrite
         {
             if (v == null) return false;
             if (Constants.KnownMethods.Contains(v)) return true;
-            
+
             if (!v.StartsWith("System.Collections.Generic.IEnumerable<")) return false;
             var k = v.Replace("<", "(");
-            
+
             if (!k.Contains(">.Sum(") && !k.Contains(">.Average(") && !k.Contains(">.Min(") &&
                 !k.Contains(">.Max(")) return false;
-            
+
             if (k.Contains("TResult")) return false;
             if (v == "System.Collections.Generic.IEnumerable<TSource>.Min()") return false;
             if (v == "System.Collections.Generic.IEnumerable<TSource>.Max()") return false;
@@ -292,7 +321,7 @@ namespace Shaman.Roslyn.LinqRewrite
         }
 
         private bool HasNoRewriteAttribute(SyntaxList<AttributeListSyntax> attributeLists) =>
-            attributeLists.Any(x => 
+            attributeLists.Any(x =>
                 x.Attributes.Any(y =>
             {
                 var symbol = ((IMethodSymbol) _data.Semantic.GetSymbolInfo(y).Symbol).ContainingType;

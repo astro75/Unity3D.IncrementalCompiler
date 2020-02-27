@@ -12,20 +12,19 @@ namespace Shaman.Roslyn.LinqRewrite.DataStructures
         public readonly CodeCreationService Code;
         public readonly RewriteDataService Data;
         public readonly SyntaxInformationService Info;
-        
+
         public string AggregationMethod;
         public ExpressionSyntax Collection;
         public TypeSyntax ReturnType;
         public List<LinqStep> Chain;
         public InvocationExpressionSyntax Node;
         public ITypeSymbol SemanticReturnType;
-        
-        public RewriteParameters()
-        {
-            Rewrite = RewriteService.Instance;
-            Code = CodeCreationService.Instance;
-            Data = RewriteDataService.Instance;
-            Info = SyntaxInformationService.Instance;
+
+        public RewriteParameters(RewriteService rewrite, CodeCreationService code, RewriteDataService data, SyntaxInformationService info) {
+            Rewrite = rewrite;
+            Code = code;
+            Data = data;
+            Info = info;
         }
 
         public void SetData(string aggregationMethod, ExpressionSyntax collection,

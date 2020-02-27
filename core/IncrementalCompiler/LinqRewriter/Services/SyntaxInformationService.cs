@@ -8,15 +8,14 @@ namespace Shaman.Roslyn.LinqRewrite.Services
 {
     public class SyntaxInformationService
     {
-        private static SyntaxInformationService _instance;
-        public static SyntaxInformationService Instance => _instance ??= new SyntaxInformationService();
+        // private static SyntaxInformationService _instance;
+        // public static SyntaxInformationService Instance => _instance ??= new SyntaxInformationService();
 
         private readonly RewriteDataService _data;
-        public SyntaxInformationService()
-        {
-            _data = RewriteDataService.Instance;
+        public SyntaxInformationService(RewriteDataService data) {
+            _data = data;
         }
-        
+
         public ITypeSymbol GetSymbolType(ISymbol x)
         {
             switch (x)
@@ -26,8 +25,8 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 default: throw new NotImplementedException();
             }
         }
-        
-        public ITypeSymbol GetSymbolType(VariableCapture x) 
+
+        public ITypeSymbol GetSymbolType(VariableCapture x)
             => GetSymbolType(x.Symbol);
 
         public string GetMethodFullName(InvocationExpressionSyntax invocation)

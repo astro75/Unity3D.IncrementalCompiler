@@ -11,23 +11,23 @@ namespace Shaman.Roslyn.LinqRewrite.Services
 {
     public class RewriteService
     {
-        private static RewriteService _instance;
-        public static RewriteService Instance => _instance ??= new RewriteService();
+        // private static RewriteService _instance;
+        // public static RewriteService Instance => _instance ??= new RewriteService();
 
         private readonly RewriteDataService _data;
         private readonly SyntaxInformationService _info;
         private readonly CodeCreationService _code;
         private readonly ProcessingStepCreationService _processingStep;
-        public Func<SyntaxNode, SyntaxNode> Visit;
+        public readonly Func<SyntaxNode, SyntaxNode> Visit;
 
-        public RewriteService()
-        {
-            _data = RewriteDataService.Instance;
-            _info = SyntaxInformationService.Instance;
-            _code = CodeCreationService.Instance;
-            _processingStep = ProcessingStepCreationService.Instance;
+        public RewriteService(RewriteDataService data, SyntaxInformationService info, CodeCreationService code, ProcessingStepCreationService processingStep, Func<SyntaxNode, SyntaxNode> visit) {
+            _data = data;
+            _info = info;
+            _code = code;
+            _processingStep = processingStep;
+            Visit = visit;
         }
-        
+
         internal ExpressionSyntax RewriteAsLoop(TypeSyntax returnType, IEnumerable<StatementSyntax> prologue,
             IEnumerable<StatementSyntax> epilogue, ExpressionSyntax collection, List<LinqStep> chain,
             RewriteDataService.AggregationDelegate k, bool noAggregation = false,
@@ -56,13 +56,13 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 ? GetForStatement(collection, loopContent)
                 : GetForEachStatement(loopContent);
 
-            var coreFunction = GetCoreMethod(returnType, prologue, epilogue, 
+            var coreFunction = GetCoreMethod(returnType, prologue, epilogue,
                 functionName, parameters, collectionSemanticType, foreachStatement);
 
-            _data.MethodsToAddToCurrentType.Add(Tuple.Create(_data.CurrentType, coreFunction));
+            _data.AddMethod(coreFunction);
             var args = new[] {SyntaxFactory.Argument((ExpressionSyntax) Visit(collection))}
                     .Concat(arguments.Arguments.Skip(1));
-            
+
             if (additionalParameters != null) args = args.Concat(additionalParameters.Select(x => SyntaxFactory.Argument(x.Item2)));
             var inv = SyntaxFactory.InvocationExpression(
                 _code.CreateMethodNameSyntaxWithCurrentTypeParameters(functionName), _code.CreateArguments(args));
@@ -71,14 +71,14 @@ namespace Shaman.Roslyn.LinqRewrite.Services
             return inv;
         }
 
-        private StatementSyntax GetForStatement(ExpressionSyntax collection, StatementSyntax loopContent) 
+        private StatementSyntax GetForStatement(ExpressionSyntax collection, StatementSyntax loopContent)
             => SyntaxFactory.ForStatement(
                 SyntaxFactory.VariableDeclaration(
                     _code.CreatePrimitiveType(SyntaxKind.IntKeyword), _code.CreateSeparatedList(SyntaxFactory.VariableDeclarator("_index")
-                        .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(0)))))), 
+                        .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(0)))))),
                 default,
                 SyntaxFactory.BinaryExpression(SyntaxKind.LessThanExpression,
-                    SyntaxFactory.IdentifierName("_index"), 
+                    SyntaxFactory.IdentifierName("_index"),
                     _code.CreateCollectionCount(collection, false)),
                 _code.CreateSeparatedList<ExpressionSyntax>(
                     SyntaxFactory.PostfixUnaryExpression(SyntaxKind.PostIncrementExpression,
@@ -90,14 +90,14 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                             SyntaxFactory.IdentifierName(Constants.ItemsName),
                             SyntaxFactory.BracketedArgumentList(_code.CreateSeparatedList(SyntaxFactory.Argument(SyntaxFactory.IdentifierName("_index"))))))
                 }.Union((loopContent as BlockSyntax)?.Statements ?? (IEnumerable<StatementSyntax>) new[] {loopContent})));
-        
+
         private StatementSyntax GetForEachStatement(StatementSyntax loopContent)
             => SyntaxFactory.ForEachStatement(
                 SyntaxFactory.IdentifierName("var"),
                 Constants.ItemName,
                 SyntaxFactory.IdentifierName(Constants.ItemsName),
                 loopContent is BlockSyntax ? loopContent : SyntaxFactory.Block(loopContent));
-        
+
         private MethodDeclarationSyntax GetCoreMethod(TypeSyntax returnType, IEnumerable<StatementSyntax> prologue,
             IEnumerable<StatementSyntax> epilogue, string functionName, IEnumerable<ParameterSyntax> parameters,
             ITypeSymbol? collectionSemanticType, StatementSyntax foreachStatement)

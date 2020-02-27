@@ -69,7 +69,7 @@ namespace IncrementalCompiler
 
             var oldCompilation = compilation;
 
-            var treeEdits = trees.AsParallel().SelectMany(tree =>
+            var treeEdits = trees.SelectMany(tree =>
             {
 //                var walker = new Walker();
                 var root = tree.GetCompilationUnitRoot();
@@ -128,15 +128,15 @@ namespace IncrementalCompiler
                 }
 
                 {
-                    var currentModel = model;
-                    if (newRoot != root)
-                    {
-                        var newTree = tree.WithRootAndOptions(newRoot, tree.Options);
-                        currentModel = oldCompilation.ReplaceSyntaxTree(tree, newTree).GetSemanticModel(newTree);
-                    }
-                    var rewriter = new LinqRewriter(currentModel);
-                    var rewritten = rewriter.Visit(newRoot);
-                    newRoot = (CompilationUnitSyntax) rewritten;
+                    // var currentModel = model;
+                    // if (newRoot != root)
+                    // {
+                    //     var newTree = tree.WithRootAndOptions(newRoot, tree.Options);
+                    //     currentModel = oldCompilation.ReplaceSyntaxTree(tree, newTree).GetSemanticModel(newTree);
+                    // }
+                    var rewriter = new LinqRewriter(model);
+                    var rewritten = rewriter.Visit(root);
+                    if (root != rewritten) newRoot = (CompilationUnitSyntax) rewritten;
                 }
                 if (newRoot != root)
                 {
