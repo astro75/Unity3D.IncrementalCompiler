@@ -46,15 +46,22 @@ namespace Shaman.Roslyn.LinqRewrite.Services
             if (additionalParameters != null) parameters = parameters.Concat(additionalParameters.Select(x => x.Item1));
 
             var functionName = _info.GetUniqueName($"{_data.CurrentMethodName}_ProceduralLinq");
-            var arguments = _code.CreateArguments(new[] {SyntaxFactory.Argument(SyntaxFactory.IdentifierName(Constants.ItemName))}.Concat(
-                _data.CurrentFlow.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name)).WithRef(x.Changes))));
+            var arguments = _code.CreateArguments(
+                new[] {SyntaxFactory.Argument(SyntaxFactory.IdentifierName(Constants.ItemName))}
+                // .Concat(_data.CurrentFlow.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name)).WithRef(x.Changes)))
+                );
 
             var loopContent = _processingStep.CreateProcessingStep(chain, chain.Count - 1,
                 SyntaxFactory.ParseTypeName(collectionItemType.ToDisplayString()), Constants.ItemName, arguments, noAggregation);
 
-            var foreachStatement = collectionType.ToDisplayString().StartsWith("System.Collections.Generic.List<") || collectionType is IArrayTypeSymbol
-                ? GetForStatement(collection, loopContent)
-                : GetForEachStatement(loopContent);
+            var displayString = collectionType.ToDisplayString();
+            // TODO: check if extends ICollection
+            var foreachStatement =
+                displayString.StartsWith("System.Collections.Generic.List<", StringComparison.Ordinal)
+                //|| displayString.StartsWith("System.Collections.Immutable.ImmutableList<", StringComparison.Ordinal)
+                || collectionType is IArrayTypeSymbol
+                    ? GetForStatement(collection, loopContent)
+                    : GetForEachStatement(loopContent);
 
             var coreFunction = GetCoreMethod(returnType, prologue, epilogue,
                 functionName, parameters, collectionSemanticType, foreachStatement);
@@ -92,11 +99,20 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 }.Union((loopContent as BlockSyntax)?.Statements ?? (IEnumerable<StatementSyntax>) new[] {loopContent})));
 
         private StatementSyntax GetForEachStatement(StatementSyntax loopContent)
-            => SyntaxFactory.ForEachStatement(
-                SyntaxFactory.IdentifierName("var"),
-                Constants.ItemName,
-                SyntaxFactory.IdentifierName(Constants.ItemsName),
-                loopContent is BlockSyntax ? loopContent : SyntaxFactory.Block(loopContent));
+            => SyntaxFactory.Block(
+                SyntaxFactory.LocalDeclarationStatement(
+                    SyntaxFactory.VariableDeclaration(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)))
+                        .WithVariables(SyntaxFactory.SingletonSeparatedList<VariableDeclaratorSyntax>(
+                            SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier("_index"))
+                                .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(0))))))),
+                SyntaxFactory.ForEachStatement(
+                    SyntaxFactory.IdentifierName("var"),
+                    Constants.ItemName,
+                    SyntaxFactory.IdentifierName(Constants.ItemsName),
+                    SyntaxFactory.Block(
+                        SyntaxFactory.ExpressionStatement(SyntaxFactory.PostfixUnaryExpression(SyntaxKind.PostIncrementExpression, SyntaxFactory.IdentifierName("_index"))))
+                        .AddStatements((loopContent is BlockSyntax ? loopContent : SyntaxFactory.Block(loopContent))))
+                );
 
         private MethodDeclarationSyntax GetCoreMethod(TypeSyntax returnType, IEnumerable<StatementSyntax> prologue,
             IEnumerable<StatementSyntax> epilogue, string functionName, IEnumerable<ParameterSyntax> parameters,
@@ -104,16 +120,18 @@ namespace Shaman.Roslyn.LinqRewrite.Services
             => SyntaxFactory.MethodDeclaration(returnType, functionName)
                 .WithParameterList(_code.CreateParameters(parameters))
                 .WithBody(
-                    SyntaxFactory.Block((collectionSemanticType.IsValueType
-                            ? Enumerable.Empty<StatementSyntax>()
-                            : new[]
-                            {
-                                SyntaxFactory.IfStatement(
-                                    SyntaxFactory.BinaryExpression(SyntaxKind.EqualsExpression,
-                                        SyntaxFactory.IdentifierName(Constants.ItemsName),
-                                        SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)),
-                                    _code.CreateThrowException("System.ArgumentNullException"))
-                            })
+                    SyntaxFactory.Block(
+                        Enumerable.Empty<StatementSyntax>()
+                        // (collectionSemanticType.IsValueType
+                        //     ? Enumerable.Empty<StatementSyntax>()
+                        //     : new[]
+                        //     {
+                        //         SyntaxFactory.IfStatement(
+                        //             SyntaxFactory.BinaryExpression(SyntaxKind.EqualsExpression,
+                        //                 SyntaxFactory.IdentifierName(Constants.ItemsName),
+                        //                 SyntaxFactory.LiteralExpression(SyntaxKind.NullLiteralExpression)),
+                        //             _code.CreateThrowException("System.ArgumentNullException"))
+                        //     })
                         .Concat(prologue)
                         .Concat(new[] { foreachStatement})
                         .Concat(epilogue)))

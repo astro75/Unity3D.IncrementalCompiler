@@ -81,6 +81,10 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         {
             var collectionType = _data.Semantic.GetTypeInfo(collection).Type;
             if (collectionType is IArrayTypeSymbol) return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName), SyntaxFactory.IdentifierName("Length"));
+
+            // if (collectionType.ToDisplayString().StartsWith("System.Collections.Generic.List<"))
+            //     return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName), SyntaxFactory.IdentifierName("Count"));
+
             if (collectionType.ToDisplayString().StartsWith("System.Collections.Generic.IReadOnlyCollection<") || collectionType.AllInterfaces.Any(x => x.ToDisplayString().StartsWith("System.Collections.Generic.IReadOnlyCollection<")))
                 return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName), SyntaxFactory.IdentifierName("Count"));
 
@@ -148,11 +152,13 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 throw new NotSupportedException();
             if (returnType == null) throw new NotSupportedException(); // Anonymous type
 
+            // captures are not needed for local functions
+            captures = new VariableCapture[0];
+
             var method = SyntaxFactory.MethodDeclaration(returnType, fn)
                 .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(
                     new[] { param }
-                        .Union(captures.Select(x => CreateParameter(x.Name, _info.GetSymbolType(x))
-                        .WithRef(x.Changes)))
+                        .Union(captures.Select(x => CreateParameter(x.Name, _info.GetSymbolType(x)).WithRef(x.Changes)))
                 )))
                 .WithBody(body as BlockSyntax ?? (body is StatementSyntax statementSyntax
                               ? SyntaxFactory.Block(statementSyntax)

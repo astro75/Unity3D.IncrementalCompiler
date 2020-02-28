@@ -63,12 +63,20 @@ namespace Shaman.Roslyn.LinqRewrite
             // if (RewrittenLinqQueries != old) RewrittenMethods++;
             // return syntaxNode;
 
+
             if (HasNoRewriteAttribute(node.AttributeLists)) return node;
 
-            if (node.ExpressionBody != null) return base.VisitMethodDeclaration(node);
+            var rootMethod = false;
+            if (!_data.InMethod)
+            {
+                _data.InMethod = true;
+                rootMethod = true;
+            }
 
             _data.CurrentTypes.Push(node);
             var changed = (MethodDeclarationSyntax) base.VisitMethodDeclaration(node);
+
+            // TODO: probably don't need to check for methods if we do that for blocks
 
             if (_data.MethodsToAddToCurrentType.Count != 0)
             {
@@ -77,6 +85,13 @@ namespace Shaman.Roslyn.LinqRewrite
                     .Select(x => x.Item2)
                     .ToArray();
 
+                if (changed.ExpressionBody != null)
+                {
+                    changed = changed.WithExpressionBody(null).WithBody(SyntaxFactory.Block(
+                        SyntaxFactory.ReturnStatement(changed.ExpressionBody.Expression)
+                    ));
+                }
+
                 var withMethods = changed.AddBodyStatements(newMembers.Select(_ =>
                     (StatementSyntax) SyntaxFactory.LocalFunctionStatement(
                         _.Modifiers.RemoveOfKind(SyntaxKind.StaticKeyword), _.ReturnType, _.Identifier, _.TypeParameterList, _.ParameterList,
@@ -84,8 +99,84 @@ namespace Shaman.Roslyn.LinqRewrite
                 ).ToArray());
 
                 _data.MethodsToAddToCurrentType.RemoveAll(x => x.Item1 == node);
-                _data.CurrentTypes.Pop();
+                clean();
                 return withMethods.NormalizeWhitespace();
+            }
+            clean();
+            return changed;
+
+            void clean() {
+                _data.CurrentTypes.Pop();
+                if (rootMethod)
+                {
+                    _data.InMethod = false;
+                    _data.UsedNames.Clear();
+                }
+            }
+        }
+
+        public override SyntaxNode VisitBlock(BlockSyntax node) {
+            // TODO: HasNoRewriteAttribute
+            // TODO: remove code duplication
+
+            _data.CurrentTypes.Push(node);
+            var changed = (BlockSyntax) base.VisitBlock(node);
+
+            if (_data.MethodsToAddToCurrentType.Count != 0)
+            {
+                var newMembers = _data.MethodsToAddToCurrentType
+                    .Where(x => x.Item1 == node)
+                    .Select(x => x.Item2)
+                    .ToArray();
+
+                if (newMembers.Length > 0)
+                {
+                    var withMethods = changed.AddStatements(newMembers.Select(_ =>
+                        (StatementSyntax) SyntaxFactory.LocalFunctionStatement(
+                            _.Modifiers.RemoveOfKind(SyntaxKind.StaticKeyword), _.ReturnType, _.Identifier,
+                            _.TypeParameterList, _.ParameterList,
+                            _.ConstraintClauses, _.Body, _.ExpressionBody)
+                    ).ToArray());
+
+                    _data.MethodsToAddToCurrentType.RemoveAll(x => x.Item1 == node);
+                    _data.CurrentTypes.Pop();
+                    return withMethods.NormalizeWhitespace();
+                }
+            }
+            _data.CurrentTypes.Pop();
+            return changed;
+        }
+
+        public override SyntaxNode VisitSimpleLambdaExpression(SimpleLambdaExpressionSyntax node) {
+            _data.CurrentTypes.Push(node);
+            var changed = (SimpleLambdaExpressionSyntax) base.VisitSimpleLambdaExpression(node);
+
+            if (_data.MethodsToAddToCurrentType.Count != 0)
+            {
+                var newMembers = _data.MethodsToAddToCurrentType
+                    .Where(x => x.Item1 == node)
+                    .Select(x => x.Item2)
+                    .ToArray();
+
+                if (newMembers.Length > 0)
+                {
+                    // body is not block, because we handle them in VisitBlock
+
+                    var newBody = SyntaxFactory.Block(
+                        SyntaxFactory.ReturnStatement((ExpressionSyntax) changed.Body)
+                    );
+
+                    var withMethods = changed.WithBody(newBody.AddStatements(newMembers.Select(_ =>
+                        (StatementSyntax) SyntaxFactory.LocalFunctionStatement(
+                            _.Modifiers.RemoveOfKind(SyntaxKind.StaticKeyword), _.ReturnType, _.Identifier,
+                            _.TypeParameterList, _.ParameterList,
+                            _.ConstraintClauses, _.Body, _.ExpressionBody)
+                    ).ToArray()));
+
+                    _data.MethodsToAddToCurrentType.RemoveAll(x => x.Item1 == node);
+                    _data.CurrentTypes.Pop();
+                    return withMethods.NormalizeWhitespace();
+                }
             }
             _data.CurrentTypes.Pop();
             return changed;
@@ -125,8 +216,8 @@ namespace Shaman.Roslyn.LinqRewrite
 
             _data.CurrentMethodIsStatic = _data.Semantic.GetDeclaredSymbol((MethodDeclarationSyntax) owner).IsStatic;
             _data.CurrentMethodName = ((MethodDeclarationSyntax) owner).Identifier.ValueText;
-            _data.CurrentMethodTypeParameters = ((MethodDeclarationSyntax) owner).TypeParameterList;
-            _data.CurrentMethodConstraintClauses = ((MethodDeclarationSyntax) owner).ConstraintClauses;
+            //_data.CurrentMethodTypeParameters = ((MethodDeclarationSyntax) owner).TypeParameterList;
+            //_data.CurrentMethodConstraintClauses = ((MethodDeclarationSyntax) owner).ConstraintClauses;
 
             if (!IsSupportedMethod(node)) return null;
             var chain = GetInvocationStepChain(node, out var lastNode);
@@ -221,9 +312,10 @@ namespace Shaman.Roslyn.LinqRewrite
                 return (false, null, null);
 
             var (flowsIn, flowsOut) = GetFlows(chain);
-            _data.CurrentFlow = flowsIn.Union(flowsOut)
-                .Where(x => (x as IParameterSymbol)?.IsThis != true)
-                .Select(x => _code.CreateVariableCapture(x, flowsOut));
+            _data.CurrentFlow = new VariableCapture[0];
+            // _data.CurrentFlow = flowsIn.Union(flowsOut)
+            //     .Where(x => (x as IParameterSymbol)?.IsThis != true)
+            //     .Select(x => _code.CreateVariableCapture(x, flowsOut));
 
             var collection = ((MemberAccessExpressionSyntax) lastNode.Expression).Expression;
             if (SyntaxExtensions.IsAnonymousType(_data.Semantic.GetTypeInfo(collection).Type)) return (false, null, null);

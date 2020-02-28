@@ -62,7 +62,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
             for (var i = 1;; i++)
             {
                 var name = v + i;
-                if (_data.MethodsToAddToCurrentType.Any(x => x.Item2.Identifier.ValueText == name)) continue;
+                if (_data.UsedNames.Contains(name)) continue;
                 return name;
             }
         }

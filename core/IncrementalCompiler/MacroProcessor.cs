@@ -69,7 +69,7 @@ namespace IncrementalCompiler
 
             var oldCompilation = compilation;
 
-            var treeEdits = trees.SelectMany(tree =>
+            var treeEdits = trees.AsParallel().SelectMany(tree =>
             {
 //                var walker = new Walker();
                 var root = tree.GetCompilationUnitRoot();
