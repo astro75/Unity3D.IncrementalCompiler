@@ -100,17 +100,17 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         private StatementSyntax SelectProcessingStep(List<LinqStep> chain, int chainIndex, TypeSyntax itemType,
             string itemName, ArgumentListSyntax arguments, bool noAggregation, LinqStep step)
         {
-            var lambda = (AnonymousFunctionExpressionSyntax) step.Arguments[0];
+            var argument = step.Arguments[0];
 
             var newName = $"_linqitem{++_data.LastId}";
-            var lambdaType = (INamedTypeSymbol) _data.Semantic.GetTypeInfo(lambda).ConvertedType;
+            var lambdaType = (INamedTypeSymbol) _data.Semantic.GetTypeInfo(argument).ConvertedType;
             var lambdaBodyType = lambdaType.TypeArguments.Last();
             var newType = SyntaxExtensions.IsAnonymousType(lambdaBodyType)
                 ? null
                 : SyntaxFactory.ParseTypeName(lambdaBodyType.ToDisplayString());
 
             var local = _code.CreateLocalVariableDeclaration(newName,
-                _code.InlineOrCreateMethod(new Lambda(lambda), newType,
+                _code.InlineOrCreateMethod(Lambda.Create(argument), newType,
                     _code.CreateParameter(itemName, itemType)));
 
             var next = CreateProcessingStep(chain, chainIndex - 1, newType, newName, arguments, noAggregation);

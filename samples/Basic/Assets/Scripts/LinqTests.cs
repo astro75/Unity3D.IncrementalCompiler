@@ -6,6 +6,9 @@ using GenerationAttributes;
 using UnityEngine;
 
 public class LinqTests {
+    static int[] array = new[] {1, 2, 3, 4, 5, 6, 7};
+
+
     public static void aaaaaaa() {
         var arr = new[] {1, 2, 3, 4, 5, 6, 7};
         var mapped = arr.Select(_ => _ * _).ToArray();
@@ -13,16 +16,16 @@ public class LinqTests {
 
     public static void test() {
         var arr = new[] {1, 2, 3, 4, 5, 6, 7};
-        var updated = arr.Where(_ => _ % 2 == 0).Select(_ => _ * _);
+        var updated = arr.Where(_ => _ % 2 == 0).Select(_ => _ * _).ToArray();
         {
-            var str = string.Join(", ", updated.Select(_ => _.ToString()));
+            var str = string.Join(", ", updated.Select(_ => _.ToString()).ToArray());
             Debug.Log(Macros.classAndMethodName+str);
         }
         {
             var array = arr.Where(_ => _ % 2 == 0).Select(_ => _ * _).ToArray();
         }
         {
-            var strings = updated.Select(_ => _.ToString());
+            var strings = updated.Select(_ => _.ToString()).ToArray();
             var str = string.Join(", ", strings);
             Debug.Log(str);
         }
@@ -37,19 +40,22 @@ public class LinqTests {
         }
         {
             var closure = 5;
-            var mult = arr.Select(_ => _ * closure);
+            var mult = arr.Select(_ => _ * closure).ToArray();
         }
+    }
+
+    public static void doubleSelect() {
+        var mapped = array.Select(_ => _ * _).Select(_ => _ * _).ToArray();
     }
 
     public static void testLocal() {
         var arr = new[] {1, 2, 3, 4, 5, 6, 7};
         int local(int x) => x * 2;
-        var mapped = arr.Select(_ => local(_));
+        var mapped = arr.Select(_ => local(_)).ToArray();
     }
 
-    static int[] array = new[] {1, 2, 3, 4, 5, 6, 7};
-
-    public static int a() => array.Select(_ => _ * 2).FirstOrDefault();
+    public static int arrowWithReturn() => array.Select(_ => _ * 2).FirstOrDefault();
+    public static void voidArrow() => array.Select(_ => _ * 2).FirstOrDefault();
 
     public static void interesting(int num) {
         var arr = new[] {1, 2, 3, 4, 5, 6, 7};
@@ -86,7 +92,7 @@ public class LinqTests {
         void a(Action<int> act) {}
         void f(Func<int, int> fn) {}
 
-        a(i => array.Select(_ => _ == i));
+        a(i => array.Select(_ => _ == i).ToArray());
         f(i => array.Select(_ => _ * i).First());
     }
 
@@ -105,6 +111,7 @@ public class LinqTests {
     }
 
     public static void arrowWithArguments(int arg) => array.Select(_ => _ == arg).ToArray();
+    public static bool arrowWithArgumentsAndReturn(int arg) => array.Select(_ => _ == arg).FirstOrDefault();
 
     public static void enumerableToArray() {
         var x = array.AsEnumerable();
@@ -149,5 +156,10 @@ public class LinqTests {
     public static void customEnum() {
         var x = new CustomEnum();
         var y = x.Select(_ => _ * 2).ToArray();
+    }
+
+    public static void passByRef() {
+        int mapper(int val) => val * 2;
+        var mapped = array.Select(mapper).ToArray();
     }
 }

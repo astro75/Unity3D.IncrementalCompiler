@@ -87,8 +87,12 @@ namespace Shaman.Roslyn.LinqRewrite
 
                 if (changed.ExpressionBody != null)
                 {
+                    // replace `=> x;` with `{ (return) x; }`
+                    var isVoid = _data.Semantic.GetDeclaredSymbol(node)?.ReturnType.SpecialType == SpecialType.System_Void;
                     changed = changed.WithExpressionBody(null).WithBody(SyntaxFactory.Block(
-                        SyntaxFactory.ReturnStatement(changed.ExpressionBody.Expression)
+                        isVoid
+                            ? (StatementSyntax) SyntaxFactory.ExpressionStatement(changed.ExpressionBody.Expression)
+                            : SyntaxFactory.ReturnStatement(changed.ExpressionBody.Expression)
                     ));
                 }
 
@@ -162,8 +166,11 @@ namespace Shaman.Roslyn.LinqRewrite
                 {
                     // body is not block, because we handle them in VisitBlock
 
+                    var isVoid = ((IMethodSymbol) _data.Semantic.GetSymbolInfo(node).Symbol).ReturnType.SpecialType == SpecialType.System_Void;
                     var newBody = SyntaxFactory.Block(
-                        SyntaxFactory.ReturnStatement((ExpressionSyntax) changed.Body)
+                        isVoid
+                            ? (StatementSyntax) SyntaxFactory.ExpressionStatement((ExpressionSyntax) changed.Body)
+                            : SyntaxFactory.ReturnStatement((ExpressionSyntax) changed.Body)
                     );
 
                     var withMethods = changed.WithBody(newBody.AddStatements(newMembers.Select(_ =>
@@ -198,7 +205,7 @@ namespace Shaman.Roslyn.LinqRewrite
                     return expressionSyntax;
                 }
             }
-            catch (Exception ex) when (ex is InvalidCastException || ex is NotSupportedException || ex is NotSupportedException)
+            catch (Exception ex) when (ex is InvalidCastException || ex is NotSupportedException)
             {
                 _data.MethodsToAddToCurrentType.RemoveRange(methodIdx, _data.MethodsToAddToCurrentType.Count - methodIdx);
             }
@@ -211,15 +218,16 @@ namespace Shaman.Roslyn.LinqRewrite
             if (!(node.Expression is MemberAccessExpressionSyntax)) return null;
 
             //var symbol = _data.Semantic.GetSymbolInfo(memberAccess).Symbol as IMethodSymbol;
-            var owner = node.AncestorsAndSelf().FirstOrDefault(x => x is MethodDeclarationSyntax);
+            // TODO: optimize
+            var owner = node.AncestorsAndSelf().OfType<MethodDeclarationSyntax>().FirstOrDefault();
             if (owner == null) return null;
+            if (!IsSupportedMethod(node)) return null;
 
-            _data.CurrentMethodIsStatic = _data.Semantic.GetDeclaredSymbol((MethodDeclarationSyntax) owner).IsStatic;
-            _data.CurrentMethodName = ((MethodDeclarationSyntax) owner).Identifier.ValueText;
+            // _data.CurrentMethodIsStatic = _data.Semantic.GetDeclaredSymbol(owner).IsStatic;
+            _data.CurrentMethodName = owner.Identifier.ValueText;
             //_data.CurrentMethodTypeParameters = ((MethodDeclarationSyntax) owner).TypeParameterList;
             //_data.CurrentMethodConstraintClauses = ((MethodDeclarationSyntax) owner).ConstraintClauses;
 
-            if (!IsSupportedMethod(node)) return null;
             var chain = GetInvocationStepChain(node, out var lastNode);
             if (containingForEach != null) InvocationChainInsertForEach(chain, containingForEach);
 
@@ -304,14 +312,14 @@ namespace Shaman.Roslyn.LinqRewrite
 
         private (bool, ExpressionSyntax, ITypeSymbol) CheckIfRewriteInvocation(List<LinqStep> chain, InvocationExpressionSyntax node, InvocationExpressionSyntax lastNode)
         {
-            if (!chain.Any(x => x.Arguments
-                .Any(y => y is AnonymousFunctionExpressionSyntax)))
-                return (false, null, null);
+            // if (!chain.Any(x => x.Arguments
+            //     .Any(y => y is AnonymousFunctionExpressionSyntax)))
+            //     return (false, null, null);
 
             if (chain.Count == 1 && Constants.RootMethodsThatRequireYieldReturn.Contains(chain[0].MethodName))
                 return (false, null, null);
 
-            var (flowsIn, flowsOut) = GetFlows(chain);
+            // var (flowsIn, flowsOut) = GetFlows(chain);
             _data.CurrentFlow = new VariableCapture[0];
             // _data.CurrentFlow = flowsIn.Union(flowsOut)
             //     .Where(x => (x as IParameterSymbol)?.IsThis != true)
@@ -388,11 +396,12 @@ namespace Shaman.Roslyn.LinqRewrite
         {
             var name = _info.GetMethodFullName(invocation);
             if (!IsSupportedMethod(name)) return false;
-            if (invocation.ArgumentList.Arguments.Count == 0) return true;
-            if (name == Constants.ElementAtMethod || name == Constants.ElementAtOrDefaultMethod || name == Constants.ContainsMethod) return true;
+            return true;
+            //if (invocation.ArgumentList.Arguments.Count == 0) return true;
+            //if (name == Constants.ElementAtMethod || name == Constants.ElementAtOrDefaultMethod || name == Constants.ContainsMethod) return true;
 
             // Passing things like .Select(Method) is not supported.
-            return invocation.ArgumentList.Arguments.All(x => x.Expression is AnonymousFunctionExpressionSyntax);
+            //return invocation.ArgumentList.Arguments.All(x => x.Expression is AnonymousFunctionExpressionSyntax);
         }
 
         private static bool IsSupportedMethod(string v)

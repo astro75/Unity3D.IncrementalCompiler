@@ -17,7 +17,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
 
         public IEnumerable<VariableCapture> CurrentFlow;
         public string CurrentMethodName;
-        public bool CurrentMethodIsStatic;
+        // public bool CurrentMethodIsStatic;
         public TypeParameterListSyntax CurrentMethodTypeParameters;
         public SyntaxList<TypeParameterConstraintClauseSyntax> CurrentMethodConstraintClauses;
 

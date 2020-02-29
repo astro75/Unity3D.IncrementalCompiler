@@ -104,7 +104,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                     SyntaxFactory.VariableDeclaration(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)))
                         .WithVariables(SyntaxFactory.SingletonSeparatedList<VariableDeclaratorSyntax>(
                             SyntaxFactory.VariableDeclarator(SyntaxFactory.Identifier("_index"))
-                                .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(0))))))),
+                                .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(-1))))))),
                 SyntaxFactory.ForEachStatement(
                     SyntaxFactory.IdentifierName("var"),
                     Constants.ItemName,
@@ -135,7 +135,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                         .Concat(prologue)
                         .Concat(new[] { foreachStatement})
                         .Concat(epilogue)))
-                .WithStatic(_data.CurrentMethodIsStatic)
+                // .WithStatic(_data.CurrentMethodIsStatic)
                 .WithTypeParameterList(_data.CurrentMethodTypeParameters)
                 .WithConstraintClauses(_data.CurrentMethodConstraintClauses)
                 .NormalizeWhitespace();

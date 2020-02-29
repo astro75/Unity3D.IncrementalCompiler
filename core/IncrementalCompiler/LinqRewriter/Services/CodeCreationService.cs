@@ -7,6 +7,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Shaman.Roslyn.LinqRewrite.DataStructures;
 using Shaman.Roslyn.LinqRewrite.Extensions;
 using SyntaxExtensions = Shaman.Roslyn.LinqRewrite.Extensions.SyntaxExtensions;
+using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace Shaman.Roslyn.LinqRewrite.Services
 {
@@ -128,18 +129,18 @@ namespace Shaman.Roslyn.LinqRewrite.Services
 
         public ExpressionSyntax InlineOrCreateMethod(Lambda lambda, TypeSyntax returnType, ParameterSyntax param)
         {
-            var p = _info.GetLambdaParameter(lambda, 0).Identifier.ValueText;
+            // var p = _info.GetLambdaParameter(lambda, 0).Identifier.ValueText;
             //var lambdaParameter = semantic.GetDeclaredSymbol(p);
-            var currentFlow = _data.Semantic.AnalyzeDataFlow(lambda.Body);
-            var currentCaptures = currentFlow
-                .DataFlowsOut
-                .Union(currentFlow.DataFlowsIn)
-                .Where(x => x.Name != p && (x as IParameterSymbol)?.IsThis != true)
-                .Select(x => CreateVariableCapture(x, currentFlow.DataFlowsOut))
-                .ToList();
+            // var currentFlow = _data.Semantic.AnalyzeDataFlow(lambda.Body);
+            // var currentCaptures = currentFlow
+            //     .DataFlowsOut
+            //     .Union(currentFlow.DataFlowsIn)
+            //     .Where(x => x.Name != p && (x as IParameterSymbol)?.IsThis != true)
+            //     .Select(x => CreateVariableCapture(x, currentFlow.DataFlowsOut))
+            //     .ToList();
 
             lambda = RenameSymbol(lambda, 0, param.Identifier.ValueText);
-            return InlineOrCreateMethod(lambda.Body, returnType, param, currentCaptures);
+            return InlineOrCreateMethod(lambda.Body, returnType, param, Enumerable.Empty<VariableCapture>());
         }
 
         public ExpressionSyntax InlineOrCreateMethod(CSharpSyntaxNode body, TypeSyntax returnType,
@@ -152,9 +153,6 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 throw new NotSupportedException();
             if (returnType == null) throw new NotSupportedException(); // Anonymous type
 
-            // captures are not needed for local functions
-            captures = new VariableCapture[0];
-
             var method = SyntaxFactory.MethodDeclaration(returnType, fn)
                 .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(
                     new[] { param }
@@ -163,7 +161,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 .WithBody(body as BlockSyntax ?? (body is StatementSyntax statementSyntax
                               ? SyntaxFactory.Block(statementSyntax)
                               : SyntaxFactory.Block(SyntaxFactory.ReturnStatement((ExpressionSyntax) body))))
-                .WithStatic(_data.CurrentMethodIsStatic)
+                // .WithStatic(_data.CurrentMethodIsStatic)
                 .WithTypeParameterList(_data.CurrentMethodTypeParameters)
                 .WithConstraintClauses(_data.CurrentMethodConstraintClauses)
                 .NormalizeWhitespace();
@@ -199,8 +197,17 @@ namespace Shaman.Roslyn.LinqRewrite.Services
 
         private Lambda RenameSymbol(Lambda container, int argIndex, string newname)
         {
+            if (container.Syntax != null)
+            {
+                return new Lambda(SF.InvocationExpression(
+                    container.Syntax,
+                    SF.ArgumentList(SF.SingletonSeparatedList(SF.Argument(SF.IdentifierName(newname))))
+                ), new[] {SF.Parameter(SF.Identifier(newname))});
+            }
+
             var oldParameter = _info.GetLambdaParameter(container, argIndex).Identifier.ValueText;
             //var oldsymbol = semantic.GetDeclaredSymbol(oldparameter);
+
             var tokensToRename = container.Body.DescendantNodesAndSelf()
                 .Where(x =>
             {
