@@ -15,6 +15,7 @@ namespace Shaman.Roslyn.LinqRewrite.DataStructures
         public static Lambda Create(ExpressionSyntax syntax) {
             return syntax switch {
                 AnonymousFunctionExpressionSyntax s => new Lambda(s),
+                // TODO: limit to simple member access
                 { } e => new Lambda(e)
             };
         }

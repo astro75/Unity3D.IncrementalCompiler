@@ -17,7 +17,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
 
         public IEnumerable<VariableCapture> CurrentFlow;
         public string CurrentMethodName;
-        // public bool CurrentMethodIsStatic;
+
         public TypeParameterListSyntax CurrentMethodTypeParameters;
         public SyntaxList<TypeParameterConstraintClauseSyntax> CurrentMethodConstraintClauses;
 
@@ -30,13 +30,15 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         internal delegate StatementSyntax AggregationDelegate(LinqStep invocation, ArgumentListSyntax arguments, ParameterSyntax param);
         internal AggregationDelegate CurrentAggregation;
 
-        public readonly Stack<CSharpSyntaxNode> CurrentTypes = new Stack<CSharpSyntaxNode>();
+        public bool UseStatic => CurrentTypes.Count != 0 && CurrentTypes.Peek().node is TypeDeclarationSyntax;
+
+        public readonly Stack<(CSharpSyntaxNode node, bool useStatic)> CurrentTypes = new Stack<(CSharpSyntaxNode, bool)>();
 
         public void AddMethod(MethodDeclarationSyntax method) {
             if (CurrentTypes.Count > 0)
             {
                 var type = CurrentTypes.Peek();
-                MethodsToAddToCurrentType.Add((type, method));
+                MethodsToAddToCurrentType.Add((type.node, method));
                 UsedNames.Add(method.Identifier.ValueText);
             }
         }

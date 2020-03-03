@@ -8,6 +8,10 @@ using UnityEngine;
 public class LinqTests {
     static int[] array = new[] {1, 2, 3, 4, 5, 6, 7};
 
+    static readonly int staticTwo = 2;
+
+    static readonly object staticInit = array.Select(_ => _ * staticTwo).ToArray();
+    readonly object init = array.Select(_ => _ * staticTwo).ToArray();
 
     public static void aaaaaaa() {
         var arr = new[] {1, 2, 3, 4, 5, 6, 7};
@@ -118,41 +122,6 @@ public class LinqTests {
         var y = x.Select(_ => _ * 2).ToArray();
     }
 
-    class CustomEnum : IEnumerable<int>, ICollection<int> {
-        public IEnumerator<int> GetEnumerator() {
-            throw new NotImplementedException();
-        }
-
-        IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
-
-        #region Implementation of ICollection<int>
-
-        public void Add(int item) {
-            throw new NotImplementedException();
-        }
-
-        public void Clear() {
-            throw new NotImplementedException();
-        }
-
-        public bool Contains(int item) {
-            throw new NotImplementedException();
-        }
-
-        public void CopyTo(int[] array, int arrayIndex) {
-            throw new NotImplementedException();
-        }
-
-        public bool Remove(int item) {
-            throw new NotImplementedException();
-        }
-
-        public int Count { get; }
-        public bool IsReadOnly { get; }
-
-        #endregion
-    }
-
     public static void customEnum() {
         var x = new CustomEnum();
         var y = x.Select(_ => _ * 2).ToArray();
@@ -162,4 +131,77 @@ public class LinqTests {
         int mapper(int val) => val * 2;
         var mapped = array.Select(mapper).ToArray();
     }
+
+    public static void filter(Func<int, bool> f) {
+        var filtered = array.Where(f).ToArray();
+    }
+
+    static void explicitArgumentRenameBug() {
+        // var res = array.Select(_ => _.ToString()).Select(s => int.Parse(s: s)).ToArray();
+    }
+
+    static void localExpression() {
+        void a(int val) => array.Select(_ => _ * val).ToArray();
+    }
+
+    static IEnumerable<int> expressionBody => array.Where(_ => _ > 5).ToArray();
+
+    static void parameterLambda() {
+        void localAct(Action<int> anything) { }
+        localAct(takeMe => array.Select(_ => _ == takeMe).ToArray());
+
+        void localFunc(Func<int, object> anything) { }
+        localFunc(takeMe => array.Select(_ => _ == takeMe).ToArray());
+
+        int localFuncRet(Func<int, object> anything) => 5;
+        var five = localFuncRet(takeMe => array.Select(_ => _ == takeMe).ToArray());
+        var five2 = localFuncRet(takeMe => array.Select(_ => _ == takeMe).OrderBy(_ => _));
+    }
+
+    static void lambdaTakeFromArg() {
+        void localFunc(Func<int[], int, object> anything) { }
+        localFunc((arr, val) => arr.Select(_ => _ == val).ToArray());
+    }
+}
+
+class Constructors {
+    public Constructors() {
+        int[] array = new[] {1, 2, 3, 4, 5, 6, 7};
+        var res = array.Select(_ => _ == 3).ToArray();
+    }
+}
+
+class CustomEnum : IEnumerable<int>, ICollection<int> {
+    public IEnumerator<int> GetEnumerator() {
+        throw new NotImplementedException();
+    }
+
+    IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
+
+    #region Implementation of ICollection<int>
+
+    public void Add(int item) {
+        throw new NotImplementedException();
+    }
+
+    public void Clear() {
+        throw new NotImplementedException();
+    }
+
+    public bool Contains(int item) {
+        throw new NotImplementedException();
+    }
+
+    public void CopyTo(int[] array, int arrayIndex) {
+        throw new NotImplementedException();
+    }
+
+    public bool Remove(int item) {
+        throw new NotImplementedException();
+    }
+
+    public int Count { get; }
+    public bool IsReadOnly { get; }
+
+    #endregion
 }

@@ -64,7 +64,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
             => SyntaxFactory.ParameterList(CreateSeparatedList(items));
 
         public ParameterSyntax CreateParameter(SyntaxToken name, ITypeSymbol type)
-            => SyntaxFactory.Parameter(name).WithType(SyntaxFactory.ParseTypeName(type.ToDisplayString()));
+            => SyntaxFactory.Parameter(name).WithType(SyntaxFactory.ParseTypeName(type.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)));
 
         public ParameterSyntax CreateParameter(SyntaxToken name, TypeSyntax type)
             => SyntaxFactory.Parameter(name).WithType(type);
@@ -107,7 +107,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                                     SyntaxKind.AsExpression,
                                     SyntaxFactory.IdentifierName(Constants.ItemsName),
                                     SyntaxFactory.ParseTypeName(
-                                        $"System.Collections.Generic.ICollection<{itemType.ToDisplayString()}>")
+                                        $"System.Collections.Generic.ICollection<{itemType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>")
                                 )
                             ),
                             SyntaxFactory.MemberBindingExpression(SyntaxFactory.IdentifierName("Count"))
@@ -161,7 +161,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 .WithBody(body as BlockSyntax ?? (body is StatementSyntax statementSyntax
                               ? SyntaxFactory.Block(statementSyntax)
                               : SyntaxFactory.Block(SyntaxFactory.ReturnStatement((ExpressionSyntax) body))))
-                // .WithStatic(_data.CurrentMethodIsStatic)
+                .WithStatic(_data.UseStatic)
                 .WithTypeParameterList(_data.CurrentMethodTypeParameters)
                 .WithConstraintClauses(_data.CurrentMethodConstraintClauses)
                 .NormalizeWhitespace();

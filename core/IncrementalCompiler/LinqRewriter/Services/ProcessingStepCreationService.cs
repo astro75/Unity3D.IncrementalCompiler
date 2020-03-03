@@ -42,9 +42,9 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         private StatementSyntax WhereProcessingStep(List<LinqStep> chain, int chainIndex, TypeSyntax itemType,
             string itemName, ArgumentListSyntax arguments, bool noAggregation, LinqStep step)
         {
-            var lambda = (AnonymousFunctionExpressionSyntax) step.Arguments[0];
+            var lambda = step.Arguments[0];
 
-            var check = _code.InlineOrCreateMethod(new Lambda(lambda), _code.CreatePrimitiveType(SyntaxKind.BoolKeyword), _code.CreateParameter(itemName, itemType));
+            var check = _code.InlineOrCreateMethod(Lambda.Create(lambda), _code.CreatePrimitiveType(SyntaxKind.BoolKeyword), _code.CreateParameter(itemName, itemType));
             var next = CreateProcessingStep(chain, chainIndex - 1, itemType, itemName, arguments,
                 noAggregation);
             return SyntaxFactory.IfStatement(check, next is BlockSyntax ? next : SyntaxFactory.Block(next));

@@ -322,7 +322,8 @@ namespace IncrementalCompiler
                 compilation = MacroProcessor.Run(
                     compilation,
                     compilation.SyntaxTrees,
-                    _sourceMap
+                    _sourceMap,
+                    diagnostic
                 );
                 logTime("Macros completed");
             }
@@ -464,7 +465,8 @@ namespace IncrementalCompiler
                 _compilation = MacroProcessor.Run(
                     _compilation,
                     treesForMacroProcessor,
-                    _sourceMap
+                    _sourceMap,
+                    diagnostic
                 );
                 // emit or reuse prebuilt output
             }

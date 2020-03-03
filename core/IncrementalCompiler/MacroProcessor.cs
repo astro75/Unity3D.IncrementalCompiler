@@ -15,8 +15,12 @@ namespace IncrementalCompiler
 {
     public static class MacroProcessor
     {
-        public static CSharpCompilation Run(CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap)
+        public static CSharpCompilation Run(
+            CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
+            List<Diagnostic> diagnostic)
         {
+
+            /*
             var macrosType = typeof(Macros).FullName;
             var macros = compilation.GetTypeByMetadataName(macrosType);
 
@@ -65,7 +69,7 @@ namespace IncrementalCompiler
                     Console.WriteLine(member.Name);
                 }
             }
-            */
+            #1#
 
             var oldCompilation = compilation;
 
@@ -134,7 +138,31 @@ namespace IncrementalCompiler
                     //     var newTree = tree.WithRootAndOptions(newRoot, tree.Options);
                     //     currentModel = oldCompilation.ReplaceSyntaxTree(tree, newTree).GetSemanticModel(newTree);
                     // }
-                    var rewriter = new LinqRewriter(model);
+                    var rewriter = new LinqRewriter(model, diagnostic);
+                    var rewritten = rewriter.Visit(root);
+                    if (root != rewritten) newRoot = (CompilationUnitSyntax) rewritten;
+                }
+                if (newRoot != root)
+                {
+                    return new[] {(tree, newRoot)};
+                }
+                return Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
+            }).ToArray();*/
+
+            var oldCompilation = compilation;
+            var treeEdits = trees.AsParallel().SelectMany(tree =>
+            {
+                var root = tree.GetCompilationUnitRoot();
+                var model = oldCompilation.GetSemanticModel(tree);
+                var newRoot = root;
+                {
+                    // var currentModel = model;
+                    // if (newRoot != root)
+                    // {
+                    //     var newTree = tree.WithRootAndOptions(newRoot, tree.Options);
+                    //     currentModel = oldCompilation.ReplaceSyntaxTree(tree, newTree).GetSemanticModel(newTree);
+                    // }
+                    var rewriter = new LinqRewriter(model, diagnostic);
                     var rewritten = rewriter.Visit(root);
                     if (root != rewritten) newRoot = (CompilationUnitSyntax) rewritten;
                 }

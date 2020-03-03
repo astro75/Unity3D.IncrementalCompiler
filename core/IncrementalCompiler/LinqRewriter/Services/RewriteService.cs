@@ -135,7 +135,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                         .Concat(prologue)
                         .Concat(new[] { foreachStatement})
                         .Concat(epilogue)))
-                // .WithStatic(_data.CurrentMethodIsStatic)
+                .WithStatic(_data.UseStatic)
                 .WithTypeParameterList(_data.CurrentMethodTypeParameters)
                 .WithConstraintClauses(_data.CurrentMethodConstraintClauses)
                 .NormalizeWhitespace();
