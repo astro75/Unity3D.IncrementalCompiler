@@ -107,5 +107,7 @@ namespace IncrementalCompiler
             underlyingType = t.SpecialType;
             return false;
         }
+
+        public static string firstLetterToUpper(this string str) => char.ToUpper(str[0]) + str.Substring(1);
     }
 }

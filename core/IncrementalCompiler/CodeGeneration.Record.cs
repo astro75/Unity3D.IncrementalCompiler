@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -65,8 +66,8 @@ namespace IncrementalCompiler
                 }
             );
 
-            IEnumerable<MemberDeclarationSyntax> createIf(bool condition, Func<SyntaxList<MemberDeclarationSyntax>> a)
-                => condition ? a() : Enumerable.Empty<MemberDeclarationSyntax>();
+            IReadOnlyList<MemberDeclarationSyntax> createIf(bool condition, Func<SyntaxList<MemberDeclarationSyntax>> a)
+                => condition ? (IReadOnlyList<MemberDeclarationSyntax>) a() : Array.Empty<MemberDeclarationSyntax>();
 
             var toString = createIf(
                 attr.GenerateToString,
@@ -203,6 +204,16 @@ namespace IncrementalCompiler
                 }
             });
 
+            var withers = createIf(constructor.Count > 0 && initializedFieldsAndProps.Length > 1, () =>
+            {
+                // pubilc Type withVal1(int val1) => new Type(val2, val2);
+                var args = initializedFieldsAndProps.joinCommaSeparated(f => f.identifier.Text);
+                return ParseClassMembers(Join("\n", initializedFieldsAndProps.Select(f =>
+                    $"public {typeName} with{f.identifierFirstLetterUpper} ({f.type + " " + f.identifier}) => " +
+                    $"new {typeName}({args});"
+                )));
+            });
+
             var baseList = attr.GenerateComparer
                 // : IEquatable<TypeName>
                 ? SF.BaseList(
@@ -211,7 +222,7 @@ namespace IncrementalCompiler
                             SF.ParseTypeName($"System.IEquatable<{typeName}>")
                 )))
                 : Extensions.EmptyBaseList;
-            var newMembers = constructor.Concat(toString).Concat(getHashCode).Concat(equals);
+            var newMembers = constructor.Concat(toString).Concat(getHashCode).Concat(equals).Concat(withers);
 
             #region Static apply method
 

@@ -538,6 +538,7 @@ namespace IncrementalCompiler
         struct FieldOrProp {
             public readonly TypeSyntax type;
             public readonly SyntaxToken identifier;
+            public readonly string identifierFirstLetterUpper;
             public readonly bool initialized;
             public readonly bool traversable;
 
@@ -549,6 +550,7 @@ namespace IncrementalCompiler
             ) {
                 this.type = type;
                 this.identifier = identifier;
+                identifierFirstLetterUpper = identifier.Text.firstLetterToUpper();
                 this.initialized = initialized;
 
                 bool interfaceInIEnumerable(INamedTypeSymbol info) =>
