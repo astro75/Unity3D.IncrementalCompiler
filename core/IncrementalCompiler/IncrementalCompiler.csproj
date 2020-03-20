@@ -186,6 +186,7 @@
     <Compile Include="Analyzers\AnalyzerAssemblyLoader.cs" />
     <Compile Include="CodeGeneration.cs" />
     <Compile Include="CodeGeneration.Java.cs" />
+    <Compile Include="CodeGeneration.Record.cs" />
     <Compile Include="CompileOptions.cs" />
     <Compile Include="Compiler.cs" />
     <Compile Include="CompileResult.cs" />

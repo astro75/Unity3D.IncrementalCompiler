@@ -4,7 +4,6 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text;
-using Flinq;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -101,7 +100,7 @@ namespace IncrementalCompiler
                 );
             }
 
-            void removeFileJava(string filePath) {
+            void maybeRemoveJavaFile(string filePath) {
                 if (javaFilesDict.ContainsKey(filePath)) {
                     javaFilesDict.Remove(filePath);
                     javaVersion++;
