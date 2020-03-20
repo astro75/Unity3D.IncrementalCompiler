@@ -551,7 +551,7 @@ namespace IncrementalCompiler
             ) {
                 this.type = type;
                 this.identifier = identifier;
-                identifierFirstLetterUpper = identifier.Text.firstLetterToUpper();
+                identifierFirstLetterUpper = identifier.Text.FirstLetterToUpper();
                 this.initialized = initialized;
 
                 bool interfaceInIEnumerable(INamedTypeSymbol info) =>
@@ -571,7 +571,7 @@ namespace IncrementalCompiler
         static string joinCommaSeparated<A>(this IEnumerable<A> collection, Func<A, string> mapper) =>
             collection
             .Select(mapper)
-            .tap(_ => Join(", ", _));
+            .Tap(_ => Join(", ", _));
 
         static SyntaxList<MemberDeclarationSyntax> GenerateStaticApply(
             TypeDeclarationSyntax cds, ICollection<FieldOrProp> props

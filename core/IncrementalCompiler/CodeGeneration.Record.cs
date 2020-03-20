@@ -60,8 +60,8 @@ namespace IncrementalCompiler
                     var params_ = initializedFieldsAndProps.joinCommaSeparated(f => f.type + " " + f.identifier);
                     var body = initializedFieldsAndProps.Any()
                         ? initializedFieldsAndProps
-                            .Select(f => "this." + f.identifier + " = " + f.identifier)
-                            .tap(s => Join(";\n", s) + ";")
+                            .Select(f => $"this.{f.identifier} = {f.identifier}; // {f.typeInfo.Kind} {f.typeInfo.GetType()}")
+                            .Tap(s => Join("\n", s) + "\n")
                         : "";
 
                     return ParseClassMembers($"public {cds.Identifier}({params_}){{{body}}}");
@@ -98,7 +98,7 @@ namespace IncrementalCompiler
 
 
                         string ValueTypeHash(ITypeSymbol t) {
-                            if (t.isEnum(out var underlyingType))
+                            if (t.IsEnum(out var underlyingType))
                             {
                                 switch (underlyingType)
                                 {
@@ -161,7 +161,7 @@ namespace IncrementalCompiler
                         var name = f.identifier.ValueText;
                         var otherName = "other." + name;
 
-                        if (type.isEnum(out _)) return $"{name} == {otherName}";
+                        if (type.IsEnum(out _)) return $"{name} == {otherName}";
 
                         switch (type.SpecialType)
                         {
@@ -206,17 +206,40 @@ namespace IncrementalCompiler
                 }
             });
 
-            var withers = createIf(
-                constructor.Count > 0 && initializedFieldsAndProps.Length > 1 && !symbolInfo.IsAbstract,
-                () => {
-                    // pubilc Type withVal1(int val1) => new Type(val2, val2);
-                    var args = initializedFieldsAndProps.joinCommaSeparated(f => f.identifier.Text);
-                    return ParseClassMembers(Join("\n", initializedFieldsAndProps.Select(f =>
-                        $"public {typeName} with{f.identifierFirstLetterUpper} ({f.type + " " + f.identifier}) => " +
-                        $"new {typeName}({args});"
-                    )));
+
+            var withers = createIf(constructor.Count > 0 && initializedFieldsAndProps.Length >= 1 && !symbolInfo.IsAbstract, () => {
+                // pubilc Type withVal1(int val1) => new Type(val2, val2);
+                var args = initializedFieldsAndProps.joinCommaSeparated(f => f.identifier.Text);
+                return ParseClassMembers(Join("\n", initializedFieldsAndProps.Select(f =>
+                    $"public {typeName} with{f.identifierFirstLetterUpper} ({f.type + " " + f.identifier}) => " +
+                    $"new {typeName}({args});"
+                )));
+            });
+
+            var fieldsForCopy = initializedFieldsAndProps.Where(f => {
+                if (f.typeInfo is ITypeParameterSymbol tp) {
+                    // class Type<A> { A unsupported; }
+                    // class Type<A> where A : class { A supported; }
+                    return tp.HasReferenceTypeConstraint;
                 }
-            );
+                // class Type { int? unsupported; }
+                return !f.typeInfo.IsNullable();
+            }).ToImmutableArray();
+
+            var copy = createIf(constructor.Count > 0 && fieldsForCopy.Length >= 1 && !symbolInfo.IsAbstract, () => {
+                // pubilc Type copy(int? val1 = null, int? val2 = null) => new Type(val2 ?? this.val1, val2 ?? this.val2);
+                var args1 = fieldsForCopy.joinCommaSeparated(f =>
+                    f.typeInfo.IsValueType
+                        ? $"{f.type}? {f.identifier} = null"
+                        : $"{f.type} {f.identifier} = null"
+                );
+                var args2 = initializedFieldsAndProps.joinCommaSeparated(f =>
+                    fieldsForCopy.Contains(f)
+                        ? $"{f.identifier}?? this.{f.identifier}"
+                        : $"this.{f.identifier}"
+                );
+                return ParseClassMembers($"public {typeName} copy({args1}) => new {typeName}({args2});");
+            });
 
             var baseList = attr.GenerateComparer
                 // : IEquatable<TypeName>
@@ -226,7 +249,8 @@ namespace IncrementalCompiler
                             SF.ParseTypeName($"System.IEquatable<{typeName}>")
                 )))
                 : Extensions.EmptyBaseList;
-            var newMembers = constructor.Concat(toString).Concat(getHashCode).Concat(equals).Concat(withers);
+            var newMembers =
+                constructor.Concat(toString).Concat(getHashCode).Concat(equals).Concat(withers).Concat(copy);
 
             #region Static apply method
 

@@ -90,6 +90,9 @@ namespace Assets.Scripts {
     public partial struct CCOneGenericArgument<A> {
         public readonly string name;
         public readonly Func<A, string> get;
+        public readonly A a;
+        public readonly List<A> b;
+        public readonly List<string> c;
     }
 
     [Record(GenerateConstructor = GeneratedConstructor.None)]

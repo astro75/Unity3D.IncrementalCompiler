@@ -91,13 +91,13 @@ namespace IncrementalCompiler
         public static SyntaxList<AttributeListSyntax> EmptyAttributeList = SyntaxFactory.List<AttributeListSyntax>();
         public static SyntaxTriviaList EmptyTriviaList = SyntaxFactory.TriviaList();
 
-        public static B tap<A, B>(this A a, Func<A, B> func) => func(a);
-        public static void voidTap<A>(this A a, Action<A> act) => act(a);
+        public static B Tap<A, B>(this A a, Func<A, B> func) => func(a);
+        public static void VoidTap<A>(this A a, Action<A> act) => act(a);
         public static void ForEach<A>(this IEnumerable<A> enumerable, Action<A> act) {
             foreach (var e in enumerable) act(e);
         }
 
-        public static bool isEnum(this ITypeSymbol t, out SpecialType underlyingType) {
+        public static bool IsEnum(this ITypeSymbol t, out SpecialType underlyingType) {
             if (t is INamedTypeSymbol nt && nt.EnumUnderlyingType != null)
             {
                 underlyingType = nt.EnumUnderlyingType.SpecialType;
@@ -108,6 +108,13 @@ namespace IncrementalCompiler
             return false;
         }
 
-        public static string firstLetterToUpper(this string str) => char.ToUpper(str[0]) + str.Substring(1);
+        public static string FirstLetterToUpper(this string str) => char.ToUpper(str[0]) + str.Substring(1);
+
+        // https://github.com/nventive/Uno.Roslyn/blob/master/src/Uno.RoslynHelpers/Content/cs/any/Microsoft/CodeAnalysis/SymbolExtensions.cs
+        public static bool IsNullable(this ITypeSymbol type)
+        {
+            return ((type as INamedTypeSymbol)?.IsGenericType ?? false)
+                   && type.OriginalDefinition.ToDisplayString().Equals("System.Nullable<T>", StringComparison.OrdinalIgnoreCase);
+        }
     }
 }
