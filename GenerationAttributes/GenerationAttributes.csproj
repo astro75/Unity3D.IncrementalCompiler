@@ -39,7 +39,6 @@
   <ItemGroup>
     <Compile Include="Case.cs" />
     <Compile Include="Helpers.cs" />
-    <Compile Include="Java.cs" />
     <Compile Include="Properties\AssemblyInfo.cs" />
   </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />

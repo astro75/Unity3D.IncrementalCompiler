@@ -21,6 +21,8 @@ Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Macros", "Macros\Macros.csp
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CompilerPlugin.2019.3", "extra\CompilerPlugin.2019.3\CompilerPlugin.2019.3.csproj", "{40074EB9-A109-4E2E-BBA9-7B74276947D9}"
 EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "GenerationAttributes.Java", "GenerationAttributes.Java\GenerationAttributes.Java.csproj", "{D297C774-F1CA-4936-A317-B70AE79F3F1C}"
+EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
 		Debug|Any CPU = Debug|Any CPU
@@ -51,6 +53,10 @@ Global
 		{40074EB9-A109-4E2E-BBA9-7B74276947D9}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{40074EB9-A109-4E2E-BBA9-7B74276947D9}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{40074EB9-A109-4E2E-BBA9-7B74276947D9}.Release|Any CPU.Build.0 = Release|Any CPU
+		{D297C774-F1CA-4936-A317-B70AE79F3F1C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{D297C774-F1CA-4936-A317-B70AE79F3F1C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{D297C774-F1CA-4936-A317-B70AE79F3F1C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{D297C774-F1CA-4936-A317-B70AE79F3F1C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
@@ -62,6 +68,7 @@ Global
 		{0E0E523D-9842-4D2E-A304-59EF5C6CFFFD} = {1C392DEF-0E87-4202-9946-4A087D7AD1ED}
 		{A0D9425D-10B7-443C-90A6-AA6732BBBA96} = {1C392DEF-0E87-4202-9946-4A087D7AD1ED}
 		{40074EB9-A109-4E2E-BBA9-7B74276947D9} = {A22672B3-D1C4-47C0-AB82-6D22BBB94BBB}
+		{D297C774-F1CA-4936-A317-B70AE79F3F1C} = {1C392DEF-0E87-4202-9946-4A087D7AD1ED}
 	EndGlobalSection
 	GlobalSection(ExtensibilityGlobals) = postSolution
 		SolutionGuid = {88A899B4-3F4C-4873-87E6-6D9025ADA54E}

@@ -29,6 +29,7 @@
     <IsWebBootstrapper>false</IsWebBootstrapper>
     <UseApplicationTrust>false</UseApplicationTrust>
     <BootstrapperEnabled>true</BootstrapperEnabled>
+    <Nullable>enable</Nullable>
     <!-- <AutoGenerateBindingRedirects>true</AutoGenerateBindingRedirects> -->
   </PropertyGroup>
   <PropertyGroup Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">
@@ -184,6 +185,7 @@
   <ItemGroup>
     <Compile Include="Analyzers\AnalyzerAssemblyLoader.cs" />
     <Compile Include="CodeGeneration.cs" />
+    <Compile Include="CodeGeneration.Java.cs" />
     <Compile Include="CompileOptions.cs" />
     <Compile Include="Compiler.cs" />
     <Compile Include="CompileResult.cs" />
@@ -210,6 +212,10 @@
     <Analyzer Include="..\..\packages\Microsoft.CodeAnalysis.Analyzers.2.6.3\analyzers\dotnet\cs\Microsoft.CodeAnalysis.CSharp.Analyzers.dll" />
   </ItemGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\GenerationAttributes.Java\GenerationAttributes.Java.csproj">
+      <Project>{d297c774-f1ca-4936-a317-b70ae79f3f1c}</Project>
+      <Name>GenerationAttributes.Java</Name>
+    </ProjectReference>
     <ProjectReference Include="..\..\GenerationAttributes\GenerationAttributes.csproj">
       <Project>{0e0e523d-9842-4d2e-a304-59ef5c6cfffd}</Project>
       <Name>GenerationAttributes</Name>
