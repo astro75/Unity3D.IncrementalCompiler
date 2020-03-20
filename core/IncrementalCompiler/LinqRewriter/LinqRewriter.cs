@@ -4,6 +4,7 @@ using Microsoft.CodeAnalysis.CSharp.Syntax;
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using System.Linq.Expressions;
 using IncrementalCompiler;
 using Shaman.Roslyn.LinqRewrite.DataStructures;
 using Shaman.Roslyn.LinqRewrite.Services;
@@ -71,12 +72,6 @@ namespace Shaman.Roslyn.LinqRewrite
 
             if (HasNoRewriteAttribute(node.AttributeLists)) return node;
 
-            var rootMethod = false;
-            if (!_data.InMethod)
-            {
-                _data.InMethod = true;
-                rootMethod = true;
-            }
             MethodStack.Push(node);
 
             var changed = WrapExpressionToBlock(node, base.VisitMethodDeclaration, (changed, blockElements) =>
@@ -96,11 +91,6 @@ namespace Shaman.Roslyn.LinqRewrite
             });
 
             MethodStack.Pop();
-            if (rootMethod)
-            {
-                _data.InMethod = false;
-                _data.UsedNames.Clear();
-            }
 
             return changed;
         }
@@ -140,7 +130,14 @@ namespace Shaman.Roslyn.LinqRewrite
         SyntaxNode WrapExpressionToBlock<T>(T node, Func<T, SyntaxNode> baseVisit, Func<T, StatementSyntax[], T> convert) where T : CSharpSyntaxNode {
             _data.CurrentTypes.Push((node, useStatic: false));
 
-            var changed = (T) baseVisit(node);
+            var visited = baseVisit(node);
+            if (!(visited is T))
+            {
+                clean();
+                return visited;
+            }
+
+            var changed = (T) visited;
 
             if (_data.MethodsToAddToCurrentType.Count != 0)
             {
@@ -172,9 +169,52 @@ namespace Shaman.Roslyn.LinqRewrite
         }
 
         public override SyntaxNode VisitBlock(BlockSyntax node) {
-            // TODO: HasNoRewriteAttribute
-
             return WrapExpressionToBlock(node, base.VisitBlock, (changed, blockElements) => changed.AddStatements(blockElements));
+        }
+
+        public override SyntaxList<TNode> VisitList<TNode>(SyntaxList<TNode> list) {
+            if (typeof(TNode) != typeof(StatementSyntax)) return base.VisitList(list);
+
+            List<TNode> alternate = null;
+            for (int i = 0, n = list.Count; i < n; i++)
+            {
+                var item = list[i];
+                editedBlock = null;
+                var visited = this.VisitListElement(item);
+                if (item != visited && alternate == null)
+                {
+                    alternate = new List<TNode>();
+                    alternate.AddRange(list.Take(i));
+                }
+
+                if (alternate != null && visited != null && !visited.IsKind(SyntaxKind.None))
+                {
+                    if (editedBlock.HasValue)
+                    {
+                        if (editedBlock.Value.maybeVar != null)
+                        {
+                            alternate.Add((TNode)(SyntaxNode)editedBlock.Value.maybeVar);
+                        }
+                        alternate.Add((TNode)(SyntaxNode)editedBlock.Value.block);
+                        if (editedBlock.Value.keepResult)
+                        {
+                            alternate.Add(visited);
+                        }
+                        editedBlock = null;
+                    }
+                    else
+                    {
+                        alternate.Add(visited);
+                    }
+                }
+            }
+
+            if (alternate != null)
+            {
+                return SF.List(alternate);
+            }
+
+            return list;
         }
 
         SyntaxNode VisitLambda(LambdaExpressionSyntax node) {
@@ -213,7 +253,7 @@ namespace Shaman.Roslyn.LinqRewrite
         public override SyntaxNode VisitClassDeclaration(ClassDeclarationSyntax node)
             => VisitTypeDeclaration(node);
 
-        private ExpressionSyntax TryVisitInvocationExpression(InvocationExpressionSyntax node, ForEachStatementSyntax containingForEach)
+        private CSharpSyntaxNode TryVisitInvocationExpression(InvocationExpressionSyntax node, ForEachStatementSyntax containingForEach)
         {
             if (insideConditionalExpression) return null;
             var methodIdx = _data.MethodsToAddToCurrentType.Count;
@@ -241,7 +281,9 @@ namespace Shaman.Roslyn.LinqRewrite
             return null;
         }
 
-        private ExpressionSyntax VisitInvocationExpression(InvocationExpressionSyntax node,
+        (LocalDeclarationStatementSyntax maybeVar, BlockSyntax block, bool keepResult)? editedBlock;
+
+        private CSharpSyntaxNode VisitInvocationExpression(InvocationExpressionSyntax node,
             ForEachStatementSyntax containingForEach)
         {
             if (!(node.Expression is MemberAccessExpressionSyntax)) return null;
@@ -280,15 +322,77 @@ namespace Shaman.Roslyn.LinqRewrite
             using var parameters = RewriteParametersHolder.BorrowParameters(_rewriteService, _code, _data, _info);
             parameters.SetData(aggregationMethod, collection, returnType, semanticReturnType, chain, node);
 
-            return InvocationRewriter.TryRewrite(parameters, aggregationMethod)
+            var result = InvocationRewriter.TryRewrite(parameters, aggregationMethod)
                 .WithLeadingTrivia(((CSharpSyntaxNode) containingForEach ?? node).GetLeadingTrivia())
                 .WithTrailingTrivia(((CSharpSyntaxNode) containingForEach ?? node).GetTrailingTrivia());
+
+            //return result;
+
+            if (result is InvocationExpressionSyntax invocation && (!Constants.RootMethodsThatRequireYieldReturn.Contains(aggregationMethod)))
+            {
+                // Console.WriteLine(invocation.Expression.ToString());
+                //return result;
+                var name = ((IdentifierNameSyntax) invocation.Expression).Identifier.Text;
+                var argument = invocation.ArgumentList.Arguments[0].Expression;
+                var index = _data.MethodsToAddToCurrentType.FindIndex(s => s.Item2.Identifier.ToString() == name);
+                if (index >= 0)
+                {
+                    var method = _data.MethodsToAddToCurrentType[index].Item2;
+                    var methodParameter = method.ParameterList.Parameters[0].Identifier;
+                    var body = method.Body;
+                    var gotoLabel = "goto_" + name;
+                    var tempVarName = "return_" + name;
+
+                    var isVoid = semanticReturnType.SpecialType == SpecialType.System_Void;
+
+                    if (
+                        (node.Parent is ExpressionStatementSyntax && node.Parent.Parent is BlockSyntax)
+                        || (node.Parent is EqualsValueClauseSyntax && node.Parent.Parent.Parent.Parent.Parent is BlockSyntax)
+                    )
+                    {
+                        LocalDeclarationStatementSyntax maybeVar = null;
+                        if (!isVoid)
+                        {
+                            maybeVar = SF.LocalDeclarationStatement(SF.VariableDeclaration(
+                                returnType, SF.SingletonSeparatedList(SF.VariableDeclarator(tempVarName))));
+                        }
+
+                        var rewriter = new ReturnRewriter(gotoLabel, tempVarName);
+                        var edited = (BlockSyntax) rewriter.Visit(body);
+                        if (rewriter.addedGoto)
+                        {
+                            edited = edited.AddStatements(SF.LabeledStatement(SF.Identifier(gotoLabel), SF.EmptyStatement()));
+                        }
+
+                        var assignment = _code.CreateLocalVariableDeclaration(methodParameter.Text, argument);
+
+                        edited = edited.WithStatements(SF.List(new []{ (StatementSyntax) assignment }).AddRange(edited.Statements));
+                        var keepResult = !isVoid && (node.Parent is EqualsValueClauseSyntax);
+                        editedBlock = (maybeVar, edited, keepResult);
+                        {
+                            _data.MethodsToAddToCurrentType.RemoveAt(index);
+                        }
+                        if (keepResult)
+                        {
+                            return SF.IdentifierName(tempVarName);
+                        }
+                    }
+                }
+            }
+
+            return result;
         }
 
         private SyntaxNode VisitTypeDeclaration(TypeDeclarationSyntax node)
         {
-            if (HasNoRewriteAttribute(node.AttributeLists)) return node;
+            var rootType = false;
+            if (!_data.InType)
+            {
+                _data.InType = true;
+                rootType = true;
+            }
 
+            if (HasNoRewriteAttribute(node.AttributeLists)) return node;
             _data.CurrentTypes.Push((node, useStatic: false));
             var changed = (TypeDeclarationSyntax) (node is ClassDeclarationSyntax declarationSyntax
                 ? base.VisitClassDeclaration(declarationSyntax)
@@ -306,11 +410,20 @@ namespace Shaman.Roslyn.LinqRewrite
                     : ((StructDeclarationSyntax) changed).AddMembers(newMembers);
 
                 _data.MethodsToAddToCurrentType.RemoveAll(x => x.Item1 == node);
-                _data.CurrentTypes.Pop();
+                finish();
                 return withMethods.NormalizeWhitespace();
             }
-            _data.CurrentTypes.Pop();
+            finish();
             return changed;
+
+            void finish() {
+                _data.CurrentTypes.Pop();
+                if (rootType)
+                {
+                    _data.InType = false;
+                    _data.UsedNames.Clear();
+                }
+            }
         }
 
         private SyntaxNode TryVisitForEachStatement(ForEachStatementSyntax node)
@@ -324,7 +437,7 @@ namespace Shaman.Roslyn.LinqRewrite
 
             var expressionSyntax = TryVisitInvocationExpression(collection, node);
             return expressionSyntax != null
-                ? SyntaxFactory.ExpressionStatement(expressionSyntax)
+                ? SyntaxFactory.ExpressionStatement((ExpressionSyntax) expressionSyntax)
                 : base.VisitForEachStatement(node);
         }
 

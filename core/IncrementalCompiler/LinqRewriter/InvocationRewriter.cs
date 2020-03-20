@@ -43,7 +43,7 @@ namespace Shaman.Roslyn.LinqRewrite
                 Constants.SingleOrDefaultWithConditionMethod => RewriteSingleOrDefault.Rewrite(parameters),
                 Constants.ToListMethod                       => RewriteToList.Rewrite(parameters),
                 Constants.ReverseMethod                      => RewriteToList.Rewrite(parameters),
-                Constants.ToDictionaryWithKeyValueMethod     => RewriteToDict.Rewrite(parameters),
+                //Constants.ToDictionaryWithKeyValueMethod     => RewriteToDict.Rewrite(parameters),
                 Constants.ToArrayMethod                      => RewriteToArray.Rewrite(parameters),
                 _ => null
             };

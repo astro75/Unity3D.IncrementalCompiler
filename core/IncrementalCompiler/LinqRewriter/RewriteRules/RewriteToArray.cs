@@ -10,16 +10,16 @@ namespace Shaman.Roslyn.LinqRewrite.RewriteRules
         public static ExpressionSyntax Rewrite(RewriteParameters p)
         {
             var count = p.Chain.All(x => Constants.MethodsThatPreserveCount.Contains(x.MethodName))
-                ? p.Code.CreateCollectionCount(p.Collection, false) : null;
+                ? p.Code.CreateCollectionCount(p.Collection, false, p.Data.uniqueCounter) : null;
 
             if (count != null)
             {
-                var arrayIdentifier = SyntaxFactory.IdentifierName("_array");
+                var arrayIdentifier = SyntaxFactory.IdentifierName("_array" + p.Data.uniqueCounter);
                 return p.Rewrite.RewriteAsLoop(
                     p.ReturnType,
                     new[]
                     {
-                        p.Code.CreateLocalVariableDeclaration("_array",
+                        p.Code.CreateLocalVariableDeclaration("_array" + p.Data.uniqueCounter,
                             SyntaxFactory.ArrayCreationExpression(SyntaxFactory.ArrayType(((ArrayTypeSyntax) p.ReturnType).ElementType,
                                 SyntaxFactory.List(new[]  {SyntaxFactory.ArrayRankSpecifier(p.Code.CreateSeparatedList(count))}))))
                     },
@@ -32,13 +32,13 @@ namespace Shaman.Roslyn.LinqRewrite.RewriteRules
                             SyntaxFactory.IdentifierName(param.Identifier.ValueText))));
             }
 
-            var listIdentifier = SyntaxFactory.IdentifierName("_list");
+            var listIdentifier = SyntaxFactory.IdentifierName("_list" + p.Data.uniqueCounter);
             var listType = SyntaxFactory.ParseTypeName($"System.Collections.Generic.List<{((ArrayTypeSyntax) p.ReturnType).ElementType}>");
             return p.Rewrite.RewriteAsLoop(
                 p.ReturnType,
                 new[]
                 {
-                    p.Code.CreateLocalVariableDeclaration("_list", SyntaxFactory.ObjectCreationExpression(listType, p.Code.CreateArguments(Enumerable.Empty<ArgumentSyntax>()), null))
+                    p.Code.CreateLocalVariableDeclaration("_list" + p.Data.uniqueCounter, SyntaxFactory.ObjectCreationExpression(listType, p.Code.CreateArguments(Enumerable.Empty<ArgumentSyntax>()), null))
                 },
                 new[]
                 {

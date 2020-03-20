@@ -20,12 +20,16 @@ namespace Shaman.Roslyn.LinqRewrite.RewriteRules
                 (inv, arguments, param) =>
                 {
                     var lambda = (LambdaExpressionSyntax) inv.Arguments.First();
-                    return SyntaxFactory.IfStatement(
+                    var newBlock = p.Code.InlineOrCreateMethod(
+                        new Lambda(lambda), p.Code.CreatePrimitiveType(SyntaxKind.BoolKeyword), param, isVoid: false
+                    );
+
+                    var statement = SyntaxFactory.IfStatement(
                         SyntaxFactory.PrefixUnaryExpression(SyntaxKind.LogicalNotExpression,
-                            SyntaxFactory.ParenthesizedExpression(
-                                p.Code.InlineOrCreateMethod(new Lambda(lambda),
-                                    p.Code.CreatePrimitiveType(SyntaxKind.BoolKeyword), param))),
+                            SyntaxFactory.ParenthesizedExpression(newBlock.Item2)),
                         SyntaxFactory.ReturnStatement(SyntaxFactory.LiteralExpression(SyntaxKind.FalseLiteralExpression)));
+
+                    return SyntaxFactory.Block(newBlock.Item1.Concat(new[] {statement}));
                 });
     }
 }

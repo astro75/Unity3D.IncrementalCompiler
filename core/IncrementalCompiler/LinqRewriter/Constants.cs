@@ -49,7 +49,8 @@ namespace Shaman.Roslyn.LinqRewrite
 
         public static readonly HashSet<string> KnownMethods = new HashSet<string>
         {
-            ToDictionaryWithKeyValueMethod, ToArrayMethod, ToListMethod, ReverseMethod,
+            //ToDictionaryWithKeyValueMethod,
+            ToArrayMethod, ToListMethod, ReverseMethod,
 
             FirstMethod, SingleMethod, LastMethod,
             FirstOrDefaultMethod, SingleOrDefaultMethod, LastOrDefaultMethod,

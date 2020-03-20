@@ -36,23 +36,25 @@ namespace Shaman.Roslyn.LinqRewrite.Services
             var old = _data.CurrentAggregation;
             _data.CurrentAggregation = k;
 
+            var counter = _data.uniqueCounter++;
+
             var collectionType = _data.Semantic.GetTypeInfo(collection).Type;
             var collectionItemType = _info.GetItemType(collectionType);
             if (collectionItemType == null) throw new NotSupportedException();
             var collectionSemanticType = _data.Semantic.GetTypeInfo(collection).Type;
 
-            var parameters = new[] {_code.CreateParameter(Constants.ItemsName, collectionSemanticType)}.Concat(
+            var parameters = new[] {_code.CreateParameter(Constants.ItemsName + counter, collectionSemanticType)}.Concat(
                 _data.CurrentFlow.Select(x => _code.CreateParameter(x.Name, _info.GetSymbolType(x.Symbol)).WithRef(x.Changes)));
             if (additionalParameters != null) parameters = parameters.Concat(additionalParameters.Select(x => x.Item1));
 
             var functionName = _info.GetUniqueName($"{_data.CurrentMethodName}_ProceduralLinq");
             var arguments = _code.CreateArguments(
-                new[] {SyntaxFactory.Argument(SyntaxFactory.IdentifierName(Constants.ItemName))}
+                new[] {SyntaxFactory.Argument(SyntaxFactory.IdentifierName(Constants.ItemName + counter))}
                 // .Concat(_data.CurrentFlow.Select(x => SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name)).WithRef(x.Changes)))
                 );
 
             var loopContent = _processingStep.CreateProcessingStep(chain, chain.Count - 1,
-                SyntaxFactory.ParseTypeName(collectionItemType.ToDisplayString()), Constants.ItemName, arguments, noAggregation);
+                SyntaxFactory.ParseTypeName(collectionItemType.ToDisplayString()), Constants.ItemName + counter, arguments, noAggregation);
 
             var displayString = collectionType.ToDisplayString();
             // TODO: check if extends ICollection
@@ -60,8 +62,8 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 displayString.StartsWith("System.Collections.Generic.List<", StringComparison.Ordinal)
                 //|| displayString.StartsWith("System.Collections.Immutable.ImmutableList<", StringComparison.Ordinal)
                 || collectionType is IArrayTypeSymbol
-                    ? GetForStatement(collection, loopContent)
-                    : GetForEachStatement(loopContent);
+                    ? GetForStatement(collection, loopContent, counter)
+                    : GetForEachStatement(loopContent, counter);
 
             var coreFunction = GetCoreMethod(returnType, prologue, epilogue,
                 functionName, parameters, collectionSemanticType, foreachStatement);
@@ -78,7 +80,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
             return inv;
         }
 
-        private StatementSyntax GetForStatement(ExpressionSyntax collection, StatementSyntax loopContent)
+        private StatementSyntax GetForStatement(ExpressionSyntax collection, StatementSyntax loopContent, int uniqueCounter)
             => SyntaxFactory.ForStatement(
                 SyntaxFactory.VariableDeclaration(
                     _code.CreatePrimitiveType(SyntaxKind.IntKeyword), _code.CreateSeparatedList(SyntaxFactory.VariableDeclarator("_index")
@@ -86,19 +88,19 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 default,
                 SyntaxFactory.BinaryExpression(SyntaxKind.LessThanExpression,
                     SyntaxFactory.IdentifierName("_index"),
-                    _code.CreateCollectionCount(collection, false)),
+                    _code.CreateCollectionCount(collection, false, uniqueCounter)),
                 _code.CreateSeparatedList<ExpressionSyntax>(
                     SyntaxFactory.PostfixUnaryExpression(SyntaxKind.PostIncrementExpression,
                         SyntaxFactory.IdentifierName("_index"))),
                 SyntaxFactory.Block(new StatementSyntax[]
                 {
-                    _code.CreateLocalVariableDeclaration(Constants.ItemName,
+                    _code.CreateLocalVariableDeclaration(Constants.ItemName + uniqueCounter,
                         SyntaxFactory.ElementAccessExpression(
-                            SyntaxFactory.IdentifierName(Constants.ItemsName),
+                            SyntaxFactory.IdentifierName(Constants.ItemsName + uniqueCounter),
                             SyntaxFactory.BracketedArgumentList(_code.CreateSeparatedList(SyntaxFactory.Argument(SyntaxFactory.IdentifierName("_index"))))))
                 }.Union((loopContent as BlockSyntax)?.Statements ?? (IEnumerable<StatementSyntax>) new[] {loopContent})));
 
-        private StatementSyntax GetForEachStatement(StatementSyntax loopContent)
+        private StatementSyntax GetForEachStatement(StatementSyntax loopContent, int uniqueCounter)
             => SyntaxFactory.Block(
                 SyntaxFactory.LocalDeclarationStatement(
                     SyntaxFactory.VariableDeclaration(SyntaxFactory.PredefinedType(SyntaxFactory.Token(SyntaxKind.IntKeyword)))
@@ -107,8 +109,8 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                                 .WithInitializer(SyntaxFactory.EqualsValueClause(SyntaxFactory.LiteralExpression(SyntaxKind.NumericLiteralExpression, SyntaxFactory.Literal(-1))))))),
                 SyntaxFactory.ForEachStatement(
                     SyntaxFactory.IdentifierName("var"),
-                    Constants.ItemName,
-                    SyntaxFactory.IdentifierName(Constants.ItemsName),
+                    Constants.ItemName + uniqueCounter,
+                    SyntaxFactory.IdentifierName(Constants.ItemsName + uniqueCounter),
                     SyntaxFactory.Block(
                         SyntaxFactory.ExpressionStatement(SyntaxFactory.PostfixUnaryExpression(SyntaxKind.PostIncrementExpression, SyntaxFactory.IdentifierName("_index"))))
                         .AddStatements((loopContent is BlockSyntax ? loopContent : SyntaxFactory.Block(loopContent))))

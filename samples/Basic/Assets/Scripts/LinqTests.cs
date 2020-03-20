@@ -10,7 +10,18 @@ public class LinqTests {
 
     static readonly int staticTwo = 2;
 
+    static void dictionary4() {
+        var dict = (IDictionary<int, int>) new Dictionary<int, int>();
+        var keys = dict.Select(kv => kv.Key);
+    }
+
+    static void dictionary5() {
+        var dict = (IDictionary<int, int>) new Dictionary<int, int>();
+        var keys = dict.Select(kv => kv.Key);
+    }
+
     static readonly object staticInit = array.Select(_ => _ * staticTwo).ToArray();
+
     readonly object init = array.Select(_ => _ * staticTwo).ToArray();
 
     public static void aaaaaaa() {
@@ -34,13 +45,13 @@ public class LinqTests {
             Debug.Log(str);
         }
         {
-            var strings =  arr.Where(_ => _ % 2 == 0).Select(_ => _ * _).Select(_ => _.ToString());
+            var strings =  arr.Where(_ => _ % 2 == 0).Select(_ => _ * _).Select(_ => _.ToString()).ToArray();
             var str = string.Join(", ", strings);
             Debug.Log(str);
         }
         {
             var enumerable = (IEnumerable<int>) arr;
-            var updated2 = enumerable.Where(_ => _ % 2 == 0).Select(_ => _ * _);
+            var updated2 = enumerable.Where(_ => _ % 2 == 0).Select(_ => _ * _).ToArray();
         }
         {
             var closure = 5;
@@ -76,17 +87,23 @@ public class LinqTests {
 
     public static void unsupportedLink() {
         int x = 0;
-        array.Select(_ => _ * 2).ToList().ForEach(_ => x += _);
-        array.Select(_ => _ * 2).ToList().ForEach(_ => _ += x);
-        array.Select(_ => _ * 2).ToList().ForEach(_ => _ += _);
-        array.Select(_ => _ * 2).ToList().ForEach(_ => {});
+        // array.Select(_ => _ * 2).ToList().ForEach(_ => x += _);
+        // array.Select(_ => _ * 2).ToList().ForEach(_ => _ += x);
+        // array.Select(_ => _ * 2).ToList().ForEach(_ => _ += _);
+        // array.Select(_ => _ * 2).ToList().ForEach(_ => {});
+
+        array.Select(_ => _ * 2).FirstOrDefault(_ => _ > 5);
 
         var list = new List<int>() {1,2,3};
         list.ForEach(_ => x += _);
         list.ForEach(_ => _ += x);
         list.ForEach(_ => _ += _);
         list.ForEach(_ => _.Equals(_));
+    }
 
+    public static void foreachBlock() {
+        var x = 0;
+        var list = array.ToList();
         list.ForEach(_ => {
             x += _;
         });
@@ -161,6 +178,52 @@ public class LinqTests {
     static void lambdaTakeFromArg() {
         void localFunc(Func<int[], int, object> anything) { }
         localFunc((arr, val) => arr.Select(_ => _ == val).ToArray());
+    }
+
+    static void selectBlock() {
+        var x = array.Select(_ => {
+            var z = _ * _;
+            return z * z;
+        }).ToArray();
+    }
+
+    static void nestedFun() {
+        var x = array.Select(_ => {
+            var val = array.Where(_2 => _2 == _).ToArray();
+            return val[0];
+        }).ToArray();
+    }
+
+    static void nestedFun2() {
+        var x = array.SelectMany(_ => array.Where(_2 => _2 > _).ToArray()).ToArray();
+    }
+
+    static void nestedFun3() {
+        var x = array.SelectMany(_ => {
+            return array.Where(_2 => _2 > _).ToArray();
+        }).ToArray();
+    }
+
+    static void dictionary() {
+        var dict = new Dictionary<int, int>();
+        var keys = dict.Select(kv => kv.Key).ToArray();
+    }
+
+    static void dictionary2() {
+        var dict = new Dictionary<int, int>();
+        var keys = dict.Select(kv => kv.Key);
+    }
+
+    static void dictionary3() {
+        var dict = (IDictionary<int, int>) new Dictionary<int, int>();
+        var keys = dict.Select(kv => kv.Key);
+    }
+
+    static void dictionary6() {
+        var dict = (IDictionary<int, int>) new Dictionary<int, int>();
+        var keys = dict.Select(kv => {
+            return kv.Key;
+        });
     }
 }
 

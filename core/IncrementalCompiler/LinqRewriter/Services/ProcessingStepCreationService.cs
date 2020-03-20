@@ -44,10 +44,11 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         {
             var lambda = step.Arguments[0];
 
-            var check = _code.InlineOrCreateMethod(Lambda.Create(lambda), _code.CreatePrimitiveType(SyntaxKind.BoolKeyword), _code.CreateParameter(itemName, itemType));
+            var check = _code.InlineOrCreateMethod(Lambda.Create(lambda), _code.CreatePrimitiveType(SyntaxKind.BoolKeyword), _code.CreateParameter(itemName, itemType), isVoid: false);
             var next = CreateProcessingStep(chain, chainIndex - 1, itemType, itemName, arguments,
                 noAggregation);
-            return SyntaxFactory.IfStatement(check, next is BlockSyntax ? next : SyntaxFactory.Block(next));
+            var statement = SyntaxFactory.IfStatement(check.Item2, next is BlockSyntax ? next : SyntaxFactory.Block(next));
+            return SyntaxFactory.Block(check.Item1.Concat(new[] {statement}));
         }
 
         private StatementSyntax CastProcessingStep(List<LinqStep> chain, int chainIndex, TypeSyntax itemType,
@@ -55,7 +56,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         {
             var newType = ((GenericNameSyntax) ((MemberAccessExpressionSyntax) step.Invocation.Expression).Name)
                 .TypeArgumentList.Arguments.First();
-            var newName = $"_linqitem{++_data.LastId}";
+            var newName = $"_linqitem_inside_{++_data.LastId}";
             var next = CreateProcessingStep(chain, chainIndex - 1, newType, newName, arguments, noAggregation);
 
             var local = _code.CreateLocalVariableDeclaration(newName,
@@ -71,7 +72,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         {
             var newType = ((GenericNameSyntax) ((MemberAccessExpressionSyntax) step.Invocation.Expression).Name)
                 .TypeArgumentList.Arguments.First();
-            var newName = $"_linqitem{++_data.LastId}";
+            var newName = $"_linqitem_inside_{++_data.LastId}";
             var next = CreateProcessingStep(chain, chainIndex - 1, newType, newName, arguments, noAggregation);
 
             var type = _data.Semantic.GetTypeInfo(newType).Type;
@@ -102,22 +103,23 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         {
             var argument = step.Arguments[0];
 
-            var newName = $"_linqitem{++_data.LastId}";
+            var newName = $"_linqitem_inside_{++_data.LastId}";
             var lambdaType = (INamedTypeSymbol) _data.Semantic.GetTypeInfo(argument).ConvertedType;
             var lambdaBodyType = lambdaType.TypeArguments.Last();
             var newType = SyntaxExtensions.IsAnonymousType(lambdaBodyType)
                 ? null
                 : SyntaxFactory.ParseTypeName(lambdaBodyType.ToDisplayString());
 
-            var local = _code.CreateLocalVariableDeclaration(newName,
-                _code.InlineOrCreateMethod(Lambda.Create(argument), newType,
-                    _code.CreateParameter(itemName, itemType)));
+            var newBlock = _code.InlineOrCreateMethod(Lambda.Create(argument), newType,
+                _code.CreateParameter(itemName, itemType), isVoid: false);
+
+            var local = _code.CreateLocalVariableDeclaration(newName, newBlock.Item2);
 
             var next = CreateProcessingStep(chain, chainIndex - 1, newType, newName, arguments, noAggregation);
             var nextStatement = next is BlockSyntax syntax
                 ? syntax.Statements
                 : (IEnumerable<StatementSyntax>) new[] {next};
-            return SyntaxFactory.Block(new[] {local}.Concat(nextStatement));
+            return SyntaxFactory.Block(newBlock.Item1.Concat(new[] {local}).Concat(nextStatement));
         }
     }
 }

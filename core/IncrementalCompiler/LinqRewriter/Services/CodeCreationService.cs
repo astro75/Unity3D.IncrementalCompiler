@@ -4,6 +4,7 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+using MonadLib;
 using Shaman.Roslyn.LinqRewrite.DataStructures;
 using Shaman.Roslyn.LinqRewrite.Extensions;
 using SyntaxExtensions = Shaman.Roslyn.LinqRewrite.Extensions.SyntaxExtensions;
@@ -78,19 +79,19 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         public PredefinedTypeSyntax CreatePrimitiveType(SyntaxKind keyword)
             => SyntaxFactory.PredefinedType(SyntaxFactory.Token(keyword));
 
-        public ExpressionSyntax CreateCollectionCount(ExpressionSyntax collection, bool allowUnknown)
+        public ExpressionSyntax CreateCollectionCount(ExpressionSyntax collection, bool allowUnknown, int uniqueCounter)
         {
             var collectionType = _data.Semantic.GetTypeInfo(collection).Type;
-            if (collectionType is IArrayTypeSymbol) return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName), SyntaxFactory.IdentifierName("Length"));
+            if (collectionType is IArrayTypeSymbol) return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName + uniqueCounter), SyntaxFactory.IdentifierName("Length"));
 
             // if (collectionType.ToDisplayString().StartsWith("System.Collections.Generic.List<"))
             //     return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName), SyntaxFactory.IdentifierName("Count"));
 
             if (collectionType.ToDisplayString().StartsWith("System.Collections.Generic.IReadOnlyCollection<") || collectionType.AllInterfaces.Any(x => x.ToDisplayString().StartsWith("System.Collections.Generic.IReadOnlyCollection<")))
-                return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName), SyntaxFactory.IdentifierName("Count"));
+                return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName + uniqueCounter), SyntaxFactory.IdentifierName("Count"));
 
             if (collectionType.ToDisplayString().StartsWith("System.Collections.Generic.ICollection<") || collectionType.AllInterfaces.Any(x => x.ToDisplayString().StartsWith("System.Collections.Generic.ICollection<")))
-                return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName), SyntaxFactory.IdentifierName("Count"));
+                return SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName(Constants.ItemsName + uniqueCounter), SyntaxFactory.IdentifierName("Count"));
 
             if (!allowUnknown) return null;
             if (collectionType.IsValueType) return null;
@@ -105,7 +106,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                             SyntaxFactory.ParenthesizedExpression(
                                 SyntaxFactory.BinaryExpression(
                                     SyntaxKind.AsExpression,
-                                    SyntaxFactory.IdentifierName(Constants.ItemsName),
+                                    SyntaxFactory.IdentifierName(Constants.ItemsName + uniqueCounter),
                                     SyntaxFactory.ParseTypeName(
                                         $"System.Collections.Generic.ICollection<{itemType.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat)}>")
                                 )
@@ -127,7 +128,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                             .Select(x => SyntaxFactory.ParseTypeName(x.Identifier.ValueText)))))
                 : (NameSyntax) SyntaxFactory.IdentifierName(fn);
 
-        public ExpressionSyntax InlineOrCreateMethod(Lambda lambda, TypeSyntax returnType, ParameterSyntax param)
+        public (ICollection<StatementSyntax>, ExpressionSyntax) InlineOrCreateMethod(Lambda lambda, TypeSyntax returnType, ParameterSyntax param, bool isVoid)
         {
             // var p = _info.GetLambdaParameter(lambda, 0).Identifier.ValueText;
             //var lambdaParameter = semantic.GetDeclaredSymbol(p);
@@ -140,23 +141,24 @@ namespace Shaman.Roslyn.LinqRewrite.Services
             //     .ToList();
 
             lambda = RenameSymbol(lambda, 0, param.Identifier.ValueText);
-            return InlineOrCreateMethod(lambda.Body, returnType, param, Enumerable.Empty<VariableCapture>());
+            return InlineOrCreateMethod(lambda.Body, returnType, param, isVoid);
         }
 
-        public ExpressionSyntax InlineOrCreateMethod(CSharpSyntaxNode body, TypeSyntax returnType,
-            ParameterSyntax param, IEnumerable<VariableCapture> captures)
-        {
-            var fn = _info.GetUniqueName($"{_data.CurrentMethodName}_ProceduralLinqHelper");
-            if (body is ExpressionSyntax syntax) return syntax;
+        public (ICollection<StatementSyntax>, ExpressionSyntax) InlineOrCreateMethod(CSharpSyntaxNode body, TypeSyntax returnType,
+            ParameterSyntax param, bool isVoid
+        ) {
+            if (body is ExpressionSyntax syntax) return (Array.Empty<StatementSyntax>(), syntax);
 
-            if (captures.Any(x => SyntaxExtensions.IsAnonymousType(_info.GetSymbolType(x.Symbol))))
-                throw new NotSupportedException();
+            var name = $"{_data.CurrentMethodName}_ProceduralLinqHelper";
+            var fn = _info.GetUniqueName(name);
+
             if (returnType == null) throw new NotSupportedException(); // Anonymous type
+
+            var argument = SyntaxFactory.IdentifierName(param.Identifier.ValueText);
 
             var method = SyntaxFactory.MethodDeclaration(returnType, fn)
                 .WithParameterList(SyntaxFactory.ParameterList(SyntaxFactory.SeparatedList(
                     new[] { param }
-                        .Union(captures.Select(x => CreateParameter(x.Name, _info.GetSymbolType(x)).WithRef(x.Changes)))
                 )))
                 .WithBody(body as BlockSyntax ?? (body is StatementSyntax statementSyntax
                               ? SyntaxFactory.Block(statementSyntax)
@@ -166,11 +168,40 @@ namespace Shaman.Roslyn.LinqRewrite.Services
                 .WithConstraintClauses(_data.CurrentMethodConstraintClauses)
                 .NormalizeWhitespace();
 
-            _data.AddMethod(method);
-            return SyntaxFactory.InvocationExpression(
-                CreateMethodNameSyntaxWithCurrentTypeParameters(fn),
-                CreateArguments(new[] { SyntaxFactory.Argument(SyntaxFactory.IdentifierName(param.Identifier.ValueText))}
-                    .Union(captures.Select(x =>  SyntaxFactory.Argument(SyntaxFactory.IdentifierName(x.Name)).WithRef(x.Changes)))));
+            {
+                var methodParameter = method.ParameterList.Parameters[0].Identifier;
+                var mBody = method.Body;
+                var gotoLabel = "goto_" + name;
+                var tempVarName = "return_" + name;
+
+                LocalDeclarationStatementSyntax maybeVar = null;
+                if (!isVoid)
+                {
+                    maybeVar = SF.LocalDeclarationStatement(SF.VariableDeclaration(
+                        returnType, SF.SingletonSeparatedList(SF.VariableDeclarator(tempVarName))));
+                }
+
+                var rewriter = new ReturnRewriter(gotoLabel, tempVarName);
+                var edited = (BlockSyntax) rewriter.Visit(mBody);
+                if (rewriter.addedGoto)
+                {
+                    edited = edited.AddStatements(SF.LabeledStatement(SF.Identifier(gotoLabel), SF.EmptyStatement()));
+                }
+
+                //var assignment = CreateLocalVariableDeclaration(methodParameter.Text, argument);
+
+                //edited = edited.WithStatements(SF.List(new []{ (StatementSyntax) assignment }).AddRange(edited.Statements));
+
+                var result = new List<StatementSyntax>();
+                if (maybeVar != null) result.Add(maybeVar);
+                result.Add(edited);
+                return (result, SF.IdentifierName(tempVarName));
+            }
+
+            // _data.AddMethod(method);
+            // return SyntaxFactory.InvocationExpression(
+            //     CreateMethodNameSyntaxWithCurrentTypeParameters(fn),
+            //     CreateArguments(new[] { SyntaxFactory.Argument(argument)}));
         }
 
         public List<LinqStep> MaybeAddFilter(List<LinqStep> chain, bool condition)

@@ -15,6 +15,8 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         public SemanticModel Semantic;
         public int LastId;
 
+        public int uniqueCounter = 0;
+
         public IEnumerable<VariableCapture> CurrentFlow;
         public string CurrentMethodName;
 
@@ -24,7 +26,7 @@ namespace Shaman.Roslyn.LinqRewrite.Services
         public readonly List<(CSharpSyntaxNode, MethodDeclarationSyntax)> MethodsToAddToCurrentType =
             new List<(CSharpSyntaxNode, MethodDeclarationSyntax)>();
 
-        public bool InMethod = false;
+        public bool InType = false;
         public readonly HashSet<string> UsedNames = new HashSet<string>();
 
         internal delegate StatementSyntax AggregationDelegate(LinqStep invocation, ArgumentListSyntax arguments, ParameterSyntax param);

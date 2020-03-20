@@ -17,7 +17,15 @@ namespace Shaman.Roslyn.LinqRewrite.RewriteRules
                 (inv, arguments, param) =>
                 {
                     var lambda = inv.Lambda ?? new Lambda((AnonymousFunctionExpressionSyntax) inv.Arguments.First());
-                    return SyntaxFactory.ExpressionStatement(p.Code.InlineOrCreateMethod(lambda, p.Code.CreatePrimitiveType(SyntaxKind.VoidKeyword), param));
+
+                    var statement = p.Code.InlineOrCreateMethod(lambda,
+                        p.Code.CreatePrimitiveType(SyntaxKind.VoidKeyword), param, isVoid: true);
+
+                    if (statement.Item1.Count > 0)
+                    {
+                        return SyntaxFactory.Block(statement.Item1);
+                    }
+                    return SyntaxFactory.ExpressionStatement(statement.Item2);
                 }
             );
     }

@@ -10,14 +10,14 @@ namespace Shaman.Roslyn.LinqRewrite.RewriteRules
         public static ExpressionSyntax Rewrite(RewriteParameters p)
         {
             var count = p.Chain.All(x => Constants.MethodsThatPreserveCount.Contains(x.MethodName))
-                ? p.Code.CreateCollectionCount(p.Collection, true) : null;
-            
-            var listIdentifier = SyntaxFactory.IdentifierName("_list");
+                ? p.Code.CreateCollectionCount(p.Collection, true, p.Data.uniqueCounter) : null;
+
+            var listIdentifier = SyntaxFactory.IdentifierName("_list" + p.Data.uniqueCounter);
             return p.Rewrite.RewriteAsLoop(
                 p.ReturnType,
                 new[]
                 {
-                    p.Code.CreateLocalVariableDeclaration("_list",
+                    p.Code.CreateLocalVariableDeclaration("_list" + p.Data.uniqueCounter,
                         SyntaxFactory.ObjectCreationExpression(
                             SyntaxFactory.ParseTypeName( $"System.Collections.Generic.List<{p.Info.GetItemType(p.SemanticReturnType).ToDisplayString()}>"),
                             p.Code.CreateArguments(count != null ? new[] {count} : Enumerable.Empty<ExpressionSyntax>()),
@@ -27,7 +27,7 @@ namespace Shaman.Roslyn.LinqRewrite.RewriteRules
                     ? new StatementSyntax[]
                     {
                         SyntaxFactory.ExpressionStatement(SyntaxFactory.InvocationExpression(
-                            SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("_list"), SyntaxFactory.IdentifierName("Reverse")))),
+                            SyntaxFactory.MemberAccessExpression(SyntaxKind.SimpleMemberAccessExpression, SyntaxFactory.IdentifierName("_list" + p.Data.uniqueCounter), SyntaxFactory.IdentifierName("Reverse")))),
                         SyntaxFactory.ReturnStatement(listIdentifier)
                     }
                     : new[] {SyntaxFactory.ReturnStatement(listIdentifier)},
