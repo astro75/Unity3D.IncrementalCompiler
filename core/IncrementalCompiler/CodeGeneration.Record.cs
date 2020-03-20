@@ -20,6 +20,8 @@ namespace IncrementalCompiler
         static CaseClass GenerateCaseClass(
             RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds
         ) {
+            var symbolInfo = model.GetDeclaredSymbol(cds);
+
             var properties = cds.Members.OfType<PropertyDeclarationSyntax>()
                 .Where(prop => prop.Modifiers.HasNot(SyntaxKind.StaticKeyword))
                 .Where(prop => prop.AccessorList?.Accessors.Any(ads =>
@@ -90,7 +92,7 @@ namespace IncrementalCompiler
                 {
                     var hashLines = Join("\n", fieldsAndProps.Select(f =>
                     {
-                        var type = model.GetTypeInfo(f.type).Type;
+                        var type = f.typeInfo;
                         var isValueType = type.IsValueType;
                         var name = f.identifier.ValueText;
 
@@ -155,7 +157,7 @@ namespace IncrementalCompiler
                 {
                     var comparisons = fieldsAndProps.Select(f =>
                     {
-                        var type = model.GetTypeInfo(f.type).Type;
+                        var type = f.typeInfo;
                         var name = f.identifier.ValueText;
                         var otherName = "other." + name;
 
@@ -204,15 +206,17 @@ namespace IncrementalCompiler
                 }
             });
 
-            var withers = createIf(constructor.Count > 0 && initializedFieldsAndProps.Length > 1, () =>
-            {
-                // pubilc Type withVal1(int val1) => new Type(val2, val2);
-                var args = initializedFieldsAndProps.joinCommaSeparated(f => f.identifier.Text);
-                return ParseClassMembers(Join("\n", initializedFieldsAndProps.Select(f =>
-                    $"public {typeName} with{f.identifierFirstLetterUpper} ({f.type + " " + f.identifier}) => " +
-                    $"new {typeName}({args});"
-                )));
-            });
+            var withers = createIf(
+                constructor.Count > 0 && initializedFieldsAndProps.Length > 1 && !symbolInfo.IsAbstract,
+                () => {
+                    // pubilc Type withVal1(int val1) => new Type(val2, val2);
+                    var args = initializedFieldsAndProps.joinCommaSeparated(f => f.identifier.Text);
+                    return ParseClassMembers(Join("\n", initializedFieldsAndProps.Select(f =>
+                        $"public {typeName} with{f.identifierFirstLetterUpper} ({f.type + " " + f.identifier}) => " +
+                        $"new {typeName}({args});"
+                    )));
+                }
+            );
 
             var baseList = attr.GenerateComparer
                 // : IEquatable<TypeName>

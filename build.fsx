@@ -29,6 +29,8 @@ Target "Export" (fun _ ->
 
         "./GenerationAttributes/bin/Release/GenerationAttributes.dll" |> CopyFile pluginsDir
         "./GenerationAttributes/bin/Release/GenerationAttributes.xml" |> CopyFile pluginsDir
+        "./GenerationAttributes.Java/bin/Release/GenerationAttributes.Java.dll" |> CopyFile pluginsDir
+        "./GenerationAttributes.Java/bin/Release/GenerationAttributes.Java.xml" |> CopyFile pluginsDir
         "./Macros/bin/Release/Macros.dll" |> CopyFile pluginsDir
         "./Macros/bin/Release/Macros.xml" |> CopyFile pluginsDir
         "./core/UnityPackage/Assets/Editor/CompilerSettings.cs" |> CopyFile editorDir

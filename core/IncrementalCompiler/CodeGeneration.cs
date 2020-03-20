@@ -537,6 +537,7 @@ namespace IncrementalCompiler
 
         struct FieldOrProp {
             public readonly TypeSyntax type;
+            public readonly ITypeSymbol typeInfo;
             public readonly SyntaxToken identifier;
             public readonly string identifierFirstLetterUpper;
             public readonly bool initialized;
@@ -556,7 +557,7 @@ namespace IncrementalCompiler
                 bool interfaceInIEnumerable(INamedTypeSymbol info) =>
                     info.ContainingNamespace + "." + info.Name + "`" + info.Arity == iEnumName;
 
-                var typeInfo = model.GetTypeInfo(type).Type;
+                typeInfo = model.GetTypeInfo(type).Type;
                 var typeName = typeInfo.ToDisplayString();
 
                 var typeIsIEnumerableItself = typeInfo is INamedTypeSymbol ti && interfaceInIEnumerable(ti);
