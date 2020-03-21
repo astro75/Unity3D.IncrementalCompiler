@@ -137,6 +137,23 @@ namespace IncrementalCompiler
             }
         }
 
+        public static void tryAttribute<A>(AttributeData attr, Action<A> a, List<Diagnostic> diagnostic) where A : Attribute {
+            try {
+                var instance = CreateAttributeByReflection<A>(attr);
+                a(instance);
+            }
+            catch (Exception e) {
+                diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                    "ER0001",
+                    "Error",
+                    $"Compiler error for attribute {typeof(A).Name}: {e.Message}({e.Source}) at {e.StackTrace}",
+                    "Error",
+                    DiagnosticSeverity.Error,
+                    true
+                ), attrLocation(attr)));
+            }
+        }
+
         public static (CSharpCompilation, List<Diagnostic>) Run(
             bool incrementalRun,
             CSharpCompilation compilation,
@@ -155,22 +172,8 @@ namespace IncrementalCompiler
             var oldCompilation = compilation;
             var diagnostic = new List<Diagnostic>();
 
-            void tryAttribute<A>(AttributeData attr, Action<A> a) where A : Attribute {
-                try {
-                    var instance = CreateAttributeByReflection<A>(attr);
-                    a(instance);
-                }
-                catch (Exception e) {
-                    diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
-                        "ER0001",
-                        "Error",
-                        $"Compiler error for attribute {typeof(A).Name}: {e.Message}({e.Source}) at {e.StackTrace}",
-                        "Error",
-                        DiagnosticSeverity.Error,
-                        true
-                    ), attrLocation(attr)));
-                }
-            }
+            void tryAttributeLocal<A>(AttributeData attr, Action<A> a) where A : Attribute =>
+                tryAttribute(attr, a, diagnostic);
 
             var results = trees.AsParallel().SelectMany(originalTree =>
             {
@@ -201,7 +204,7 @@ namespace IncrementalCompiler
                         var attrClassName = attr.AttributeClass.ToDisplayString();
                         if (attrClassName == caseType.FullName)
                         {
-                            tryAttribute<RecordAttribute>(attr, instance => {
+                            tryAttributeLocal<RecordAttribute>(attr, instance => {
                                 newMembers = newMembers.AddRange(
                                     GenerateCaseClass(instance, model, tds)
                                     .Select(generatedClass =>
@@ -213,7 +216,7 @@ namespace IncrementalCompiler
                         if (attrClassName == typeof(SingletonAttribute).FullName)
                         {
                             if (tds is ClassDeclarationSyntax cds) {
-                                tryAttribute<SingletonAttribute>(attr, m =>
+                                tryAttributeLocal<SingletonAttribute>(attr, m =>
                                 {
                                     newMembers = newMembers.Add(
                                         AddAncestors(tds, GenerateSingleton(cds), onlyNamespace: false)
@@ -223,7 +226,7 @@ namespace IncrementalCompiler
                         }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
                         {
-                            tryAttribute<MatcherAttribute>(attr, m => {
+                            tryAttributeLocal<MatcherAttribute>(attr, m => {
                                 newMembers = newMembers.Add(
                                     AddAncestors(tds, GenerateMatcher(model, tds, m, typesInFile), onlyNamespace: true)
                                 );
@@ -231,7 +234,7 @@ namespace IncrementalCompiler
                         }
                         if (attrClassName == typeof(JavaClassAttribute).FullName)
                         {
-                            tryAttribute<JavaClassAttribute>(attr, instance =>
+                            tryAttributeLocal<JavaClassAttribute>(attr, instance =>
                             {
                                 javaClassFile = new JavaClassFile(symbol, module: instance.Module, imports: instance.Imports, classBody: instance.ClassBody, attrLocation(attr));
                                 newMembers = newMembers.Add(AddAncestors(
@@ -243,7 +246,7 @@ namespace IncrementalCompiler
                         }
                         if (attrClassName == typeof(JavaListenerInterfaceAttribute).FullName)
                         {
-                            tryAttribute<JavaListenerInterfaceAttribute>(attr, instance =>
+                            tryAttributeLocal<JavaListenerInterfaceAttribute>(attr, instance =>
                             {
                                 var javaInterface = new JavaClassFile(symbol, module: instance.Module, imports: "", classBody: "", attrLocation(attr));
                                 result = result.Add(new GeneratedJavaFile(
@@ -272,7 +275,7 @@ namespace IncrementalCompiler
                                     var attrClassName = attr.AttributeClass.ToDisplayString();
                                     if (attrClassName == typeof(PublicAccessor).FullName)
                                     {
-                                        tryAttribute<PublicAccessor>(attr, _ =>
+                                        tryAttributeLocal<PublicAccessor>(attr, _ =>
                                         {
                                             newClassMembers = newClassMembers.Add(GenerateAccessor(fieldSymbol, model));
                                         });
@@ -280,7 +283,9 @@ namespace IncrementalCompiler
                                     // TODO: generic way to add new attributes
                                     if (attrClassName == typeof(ThreadStaticAttribute).FullName)
                                     {
-                                        tryAttribute<ThreadStaticAttribute>(attr, _ => throw new Exception($"Can't use {nameof(ThreadStaticAttribute)} in Unity"));
+                                        tryAttributeLocal<ThreadStaticAttribute>(attr, _ =>
+                                            throw new Exception($"Can't use {nameof(ThreadStaticAttribute)} in Unity"
+                                        ));
                                     }
                                 }
                                 break;
@@ -291,7 +296,7 @@ namespace IncrementalCompiler
                                     var attrClassName = attr.AttributeClass.ToDisplayString();
                                     if (attrClassName == typeof(JavaMethodAttribute).FullName)
                                     {
-                                        tryAttribute<JavaMethodAttribute>(attr, instance =>
+                                        tryAttributeLocal<JavaMethodAttribute>(attr, instance =>
                                         {
                                             if (javaClassFile == null) throw new Exception(
                                                 $"must be used together with {nameof(JavaClassAttribute)}"

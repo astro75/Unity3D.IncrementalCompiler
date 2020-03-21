@@ -116,5 +116,28 @@ namespace IncrementalCompiler
             return ((type as INamedTypeSymbol)?.IsGenericType ?? false)
                    && type.OriginalDefinition.ToDisplayString().Equals("System.Nullable<T>", StringComparison.OrdinalIgnoreCase);
         }
+
+        public static IEnumerable<INamedTypeSymbol> GetAllTypes(this Compilation compilation)
+        {
+            return GetAllTypes(compilation.GlobalNamespace);
+        }
+
+        static IEnumerable<INamedTypeSymbol> GetAllTypes(INamespaceSymbol @namespace)
+        {
+            foreach (var type in @namespace.GetTypeMembers())
+            foreach (var nestedType in GetNestedTypes(type))
+                yield return nestedType;
+
+            foreach (var nestedNamespace in @namespace.GetNamespaceMembers())
+            foreach (var type in GetAllTypes(nestedNamespace))
+                yield return type;
+        }
+
+        static IEnumerable<INamedTypeSymbol> GetNestedTypes(INamedTypeSymbol type)
+        {
+            yield return type;
+            foreach (var nestedType in type.GetTypeMembers().SelectMany(GetNestedTypes))
+                yield return nestedType;
+        }
     }
 }

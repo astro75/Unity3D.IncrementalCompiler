@@ -1,8 +1,10 @@
 ﻿using System;
+using System.CodeDom;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading.Tasks;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
@@ -14,7 +16,25 @@ namespace IncrementalCompiler
 {
     public static class MacroProcessor
     {
-        public static CSharpCompilation Run(CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap)
+        struct MacroCtx
+        {
+            public readonly SemanticModel Model;
+            public readonly SyntaxNode Syntax;
+            public readonly IOperation Operation;
+
+            public MacroCtx(SemanticModel model, IOperation operation) {
+                Model = model;
+                Syntax = operation.Syntax;
+                Operation = operation;
+            }
+        }
+
+        delegate (SyntaxNode, SyntaxNode) MacroExecutor(MacroCtx ctx);
+
+        public static CSharpCompilation Run(
+            CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
+            List<Diagnostic> diagnostic
+        )
         {
             var macrosType = typeof(Macros).FullName;
             var macros = compilation.GetTypeByMetadataName(macrosType);
@@ -26,25 +46,121 @@ namespace IncrementalCompiler
                 // throw new Exception($"Could not find type {macrosType} in project.");
             }
 
-            var builder = ImmutableDictionary.CreateBuilder<ISymbol, MacroRewriter.PropertyMacro>();
+            var simpleMethodMacroType = compilation.GetTypeByMetadataName(typeof(SimpleMethodMacro).FullName);
+            var varMethodMacroType = compilation.GetTypeByMetadataName(typeof(VarMethodMacro).FullName);
+            var allMethods = compilation.GetAllTypes().SelectMany(t => t.GetMembers().OfType<IMethodSymbol>());
+
+            var builder = ImmutableDictionary.CreateBuilder<ISymbol, MacroExecutor>();
 
             ISymbol macroSymbol(string name) => macros.GetMembers(name).First();
 
             builder.Add(
                 macroSymbol(nameof(Macros.className)),
-                (model, syntax) =>
+                ctx =>
                 {
-                    var enclosingSymbol = model.GetEnclosingSymbol(syntax.SpanStart);
-                    return enclosingSymbol.ContainingType.ToDisplayString().StringLiteral();
+                    var enclosingSymbol = ctx.Model.GetEnclosingSymbol(ctx.Syntax.SpanStart);
+                    return (ctx.Syntax, enclosingSymbol.ContainingType.ToDisplayString().StringLiteral());
                 });
 
             builder.Add(
                 macroSymbol(nameof(Macros.classAndMethodName)),
-                (model, syntax) =>
+                ctx =>
                 {
-                    var enclosingSymbol = model.GetEnclosingSymbol(syntax.SpanStart);
-                    return enclosingSymbol.ToDisplayString().StringLiteral();
+                    var enclosingSymbol = ctx.Model.GetEnclosingSymbol(ctx.Syntax.SpanStart);
+                    return (ctx.Syntax, enclosingSymbol.ToDisplayString().StringLiteral());
                 });
+
+            foreach (var method in allMethods)
+            foreach (var attribute in method.GetAttributes())
+            {
+                if (attribute.AttributeClass == simpleMethodMacroType)
+                {
+                    CodeGeneration.tryAttribute<SimpleMethodMacro>(
+                        attribute, a =>
+                        {
+                            builder.Add(method, ctx =>
+                            {
+                                if (ctx.Operation is IInvocationOperation op)
+                                {
+                                    try {
+                                        var sb = new StringBuilder();
+                                        sb.Append(a.Pattern);
+                                        for (var i = 0; i < op.Arguments.Length; i++)
+                                        {
+                                            sb.Replace("${expr" + (i + 1) + "}", op.Arguments[i].Syntax.ToString());
+                                        }
+
+                                        if (op.Instance != null) sb.Replace("${expr0}", op.Instance.Syntax.ToString());
+                                        return (ctx.Syntax, SyntaxFactory.ParseExpression(sb.ToString()));
+                                    }
+                                    catch (Exception e) {
+                                        diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                                            "ER0001",
+                                            "Error",
+                                            $"Error for macro {method.Name}: {e.Message}({e.Source}) at {e.StackTrace}",
+                                            "Error",
+                                            DiagnosticSeverity.Error,
+                                            true
+                                        ), ctx.Syntax.GetLocation()));
+                                    }
+                                }
+                                return (ctx.Syntax, ctx.Syntax);
+                            });
+                        }, diagnostic);
+                }
+
+                if (attribute.AttributeClass == varMethodMacroType)
+                {
+                    CodeGeneration.tryAttribute<VarMethodMacro>(
+                        attribute, a =>
+                        {
+                            builder.Add(method, ctx =>
+                            {
+                                if (ctx.Operation is IInvocationOperation op)
+                                {
+                                    try
+                                    {
+                                        var parent = op.Parent?.Parent?.Parent?.Parent;
+                                        if (parent is IVariableDeclarationGroupOperation vdg)
+                                        {
+                                            if (vdg.Declarations.Length != 1) throw new Exception(
+                                                $"Expected a single variable declaration"
+                                            );
+                                            var varDecl = (IVariableDeclaratorOperation) op.Parent.Parent;
+
+                                            var sb = new StringBuilder();
+                                            sb.Append(a.Pattern);
+
+                                            for (var i = 0; i < op.Arguments.Length; i++)
+                                                sb.Replace("${expr" + (i + 1) + "}", op.Arguments[i].Syntax.ToString());
+                                            if (op.Instance != null) sb.Replace("${expr0}", op.Instance.Syntax.ToString());
+
+                                            sb.Replace("${varName}", varDecl.Symbol.ToString());
+                                            sb.Replace("${varType}", varDecl.Symbol.Type.Name);
+
+                                            return (vdg.Syntax, SyntaxFactory.ParseStatement(sb.ToString()));
+                                        }
+                                        else
+                                        {
+                                            throw new Exception($"Expected {nameof(IVariableDeclarationGroupOperation)}, got {parent?.GetType()}");
+                                        }
+                                    }
+                                    catch (Exception e) {
+                                        diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                                            "ER0001",
+                                            "Error",
+                                            $"Error for macro {method.Name}: {e.Message}({e.Source}) at {e.StackTrace}",
+                                            "Error",
+                                            DiagnosticSeverity.Error,
+                                            true
+                                        ), ctx.Syntax.GetLocation()));
+                                    }
+                                }
+                                return (ctx.Syntax, ctx.Syntax);
+                            });
+                        }, diagnostic);
+                }
+            }
 
             var allMacros = builder.ToImmutable();
 
@@ -82,16 +198,37 @@ namespace IncrementalCompiler
 
                 foreach (var operation in opFinder.results)
                 {
-//                    Console.WriteLine("Found Operation: " + operation);
-//                    Console.WriteLine(operation.Syntax);
+                    // Console.WriteLine("Found Operation: " + operation);
+                    // Console.WriteLine(operation.Syntax);
 
-                    var props = operation.DescendantsAndSelf().OfType<IPropertyReferenceOperation>();
+                    var descendants = operation.DescendantsAndSelf().ToArray();
 
-                    foreach (var prop in props) {
-                        if (allMacros.TryGetValue(prop.Property, out var fn)) {
-                            changes.Add(prop.Syntax, fn(model, prop.Syntax));
+                    foreach (var op in descendants.OfType<IPropertyReferenceOperation>()) {
+                        if (allMacros.TryGetValue(op.Property, out var fn))
+                        {
+                            var res = fn(new MacroCtx(model, op));
+                            changes.Add(res.Item1, res.Item2);
                         }
                     }
+
+                    foreach (var op in descendants.OfType<IInvocationOperation>()) {
+                        if (allMacros.TryGetValue(op.TargetMethod, out var fn)) {
+                            var res = fn(new MacroCtx(model, op));
+                            changes.Add(res.Item1, res.Item2);
+                        }
+                    }
+
+                    // foreach (var op in descendants.OfType<IAssignmentOperation>()) {
+                    //     if (allMacros.TryGetValue(op.Value, out var fn)) {
+                    //         changes.Add(op.Syntax, fn(new MacroCtx(model, op)));
+                    //     }
+                    // }
+
+                    // foreach (var method in descendants.OfType<IMem>()) {
+                    //     if (allMacros.TryGetValue(method., out var fn)) {
+                    //         changes.Add(prop.Syntax, fn(model, prop.Syntax));
+                    //     }
+                    // }
 
 //                    Console.WriteLine(op?.Type?.ToString() ?? "null");
 //                    var symbol = model.GetDeclaredSymbol(classDecl);
@@ -146,7 +283,7 @@ namespace IncrementalCompiler
                 var editedFilePath = Path.Combine(CodeGeneration.GENERATED_FOLDER, "compile-time", originalFilePath);
 
                 var newTree = tree.WithRootAndOptions(syntax, tree.Options).WithFilePath(editedFilePath);
-                sourceMap[newTree.FilePath] = newTree;
+                sourceMap[tree.FilePath] = newTree;
                 compilation = compilation.ReplaceSyntaxTree(tree, newTree);
                 Directory.CreateDirectory(Path.GetDirectoryName(editedFilePath));
                 File.WriteAllText(editedFilePath, newTree.GetText().ToString());
