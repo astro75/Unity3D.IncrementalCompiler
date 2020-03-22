@@ -15,13 +15,13 @@ public class TestScript : MonoBehaviour {
     }
 
     [SimpleMethodMacro(@"""${expr1} = "" + (${expr1})")]
-    public static string testExpr(int expr1) => throw new NotImplementedException();
+    public static string testExpr(int value) => throw new NotImplementedException();
 
     public class ExprClass {
         [SimpleMethodMacro(@"Debug.LogWarning(""${expr0}"")")]
         public void testClassExpr() => throw new NotImplementedException();
 
-        [VarMethodMacro(@"int ${varName}_backup = 10;{ ${varType} ${varName} = ${varName}_backup + 2; return; }")]
+        [VarMethodMacro(@"int ${varName}_backup = 10; { ${varType} ${varName} = ${varName}_backup + 2; return; }")]
         public int testClassExpr2() => throw new NotImplementedException();
     }
 }

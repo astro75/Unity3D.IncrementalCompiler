@@ -197,6 +197,7 @@
     <Compile Include="Extensions.cs" />
     <Compile Include="FileTimeList.cs" />
     <Compile Include="MacroProcessor.cs" />
+    <Compile Include="MacroReplacer.cs" />
     <Compile Include="MacroRewriter.cs" />
     <Compile Include="PlatformHelper.cs" />
     <Compile Include="Program.cs" />
