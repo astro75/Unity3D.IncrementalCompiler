@@ -1,6 +1,4 @@
-﻿using System.ServiceModel;
-using System.ServiceModel.Channels;
-
+﻿
 namespace IncrementalCompiler
 {
     public static class CompilerServiceHelper
@@ -16,7 +14,7 @@ namespace IncrementalCompiler
             }
         }
 
-        public static Binding GetBinding()
+        /*public static Binding GetBinding()
         {
             if (PlatformHelper.CurrentPlatform == Platform.Mac)
             {
@@ -34,6 +32,6 @@ namespace IncrementalCompiler
                     MaxReceivedMessageSize = int.MaxValue
                 };
             }
-        }
+        }*/
     }
 }

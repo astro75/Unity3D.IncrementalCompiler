@@ -4,7 +4,6 @@ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Threading;
-using System.ServiceModel;
 using NLog;
 using NLog.Config;
 using NLog.Targets;
@@ -116,6 +115,8 @@ namespace IncrementalCompiler
             // it does not work on mac for some reason
             useCompilationServer &= PlatformHelper.CurrentPlatform == Platform.Windows;
 
+            useCompilationServer = false;
+
             Process serverProcess = null;
             while (true)
             {
@@ -141,7 +142,7 @@ namespace IncrementalCompiler
                     }
                     return result.Succeeded ? 0 : 1;
                 }
-                catch (EndpointNotFoundException)
+                catch (TimeoutException)
                 {
                     if (serverProcess == null)
                     {

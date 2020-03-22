@@ -67,6 +67,11 @@ internal class Program
 
 	    var compiler = CreateCompiler(logger, projectDir);
 
+        if (compiler == null)
+        {
+            logger?.Append($"ERROR: Compiler is null");
+        }
+
         logger?.Append($"Compiler: {compiler.Name}");
 		logger?.Append("");
 		logger?.Append("- Compilation -----------------------------------------------");
@@ -86,7 +91,11 @@ internal class Program
     // TODO: clean this mess
     private static Compiler CreateCompiler(Logger logger, string projectDir)
     {
+        logger?.Append("Create Compiler");
+
         var compilerDirectory = Path.Combine(projectDir, LANGUAGE_SUPPORT_DIR);
+
+        logger?.Append("Compiler directory: " + compilerDirectory);
         return new Incremental60Compiler(logger, compilerDirectory);
     }
 

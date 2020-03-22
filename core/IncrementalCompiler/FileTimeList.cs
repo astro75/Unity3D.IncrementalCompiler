@@ -26,7 +26,7 @@ namespace IncrementalCompiler
                 {
                     return Tuple.Create(file, File.GetLastWriteTime(file));
                 }
-                catch (Exception e)
+                catch (Exception)
                 {
                     throw new Exception("Could not read time from file: " + file);
                 }

@@ -3,7 +3,6 @@ using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Threading;
-using System.ServiceModel;
 using NLog;
 
 namespace IncrementalCompiler
@@ -46,6 +45,8 @@ namespace IncrementalCompiler
 
             Process serverProcess = null;
 
+            // new Thread(() => CompilerServiceServer.Run(logger, parentProcessId)).Start();
+
             while (true)
             {
                 try
@@ -54,11 +55,12 @@ namespace IncrementalCompiler
                     w.Start();
                     Console.WriteLine("Run");
 
-                    var result = CompilerServiceClient.Request(parentProcessId, curPath, options, false);
+                    var result = CompilerServiceClient.Request(parentProcessId, curPath, options, true);
 
                     w.Stop();
 
-                    Console.WriteLine("Done: Succeeded={0}. Duration={1}sec. ", result.Succeeded, w.Elapsed.TotalSeconds);
+                    Console.WriteLine("Done: Succeeded={0}. Duration={1}sec. ", result.Succeeded,
+                        w.Elapsed.TotalSeconds);
                     foreach (var warning in result.Warnings)
                         Console.WriteLine(warning);
                     foreach (var error in result.Errors)
@@ -66,22 +68,22 @@ namespace IncrementalCompiler
 
                     Console.ReadLine();
                 }
-                catch (EndpointNotFoundException)
+                catch (TimeoutException)
                 {
                     if (serverProcess == null)
                     {
                         var a = new Thread(() => CompilerServiceServer.Run(logger, parentProcessId));
                         a.Start();
                         serverProcess = Process.GetCurrentProcess();
-                        /*
-                        serverProcess = Process.Start(
-                            new ProcessStartInfo
-                            {
-                                FileName = Assembly.GetEntryAssembly().Location,
-                                Arguments = "-server " + parentProcessId,
-                                WindowStyle = ProcessWindowStyle.Hidden
-                            });
-                        */
+
+                        // serverProcess = Process.Start(
+                        //     new ProcessStartInfo
+                        //     {
+                        //         FileName = Assembly.GetEntryAssembly().Location,
+                        //         Arguments = "-server " + parentProcessId,
+                        //         WindowStyle = ProcessWindowStyle.Hidden
+                        //     });
+                        //
                         Thread.Sleep(100);
                     }
                     else

@@ -9,15 +9,13 @@ internal abstract class Compiler
 	public abstract string Name { get; }
 
 	protected readonly Logger logger;
-	protected readonly string compilerPath;
 
 	protected readonly List<string> outputLines = new List<string>();
 	protected readonly List<string> errorLines = new List<string>();
 
-	protected Compiler(Logger logger, string compilerPath)
+	protected Compiler(Logger logger)
 	{
 		this.logger = logger;
-		this.compilerPath = compilerPath;
 	}
 
 	public int Compile(Platform platform, string unityEditorDataDir, string targetProfileDir, string responseFile)
@@ -112,4 +110,15 @@ internal abstract class Compiler
 
 		return startInfo;
 	}
+    protected static ProcessStartInfo CreateStartInfo(string processPath, string processArguments)
+    {
+        var startInfo = new ProcessStartInfo(processPath, processArguments) {
+            RedirectStandardError = true,
+            RedirectStandardOutput = true,
+            UseShellExecute = false
+        };
+
+        return startInfo;
+    }
+
 }

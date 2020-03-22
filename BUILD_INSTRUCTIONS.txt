@@ -1,4 +1,9 @@
-open cmd and execute: ./build.cmd export
+Open IncrementalCompiler.sln
+Select Release configuration
+Click Build > Rebuild Solution
+delete /bin
+run ./build.cmd export
+
 this will build the project and move all needed files to bin/UnityCompiler folder.
 
 to move these files to sample project, navigate to samples/Basic and run InstalCompilerNotBundled.bat
