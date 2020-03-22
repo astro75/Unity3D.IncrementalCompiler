@@ -1,6 +1,4 @@
-﻿#if UNITY_5
-
-using System;
+﻿using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Linq;
@@ -92,6 +90,9 @@ namespace Assets.Scripts {
     public partial struct CCOneGenericArgument<A> {
         public readonly string name;
         public readonly Func<A, string> get;
+        public readonly A a;
+        public readonly List<A> b;
+        public readonly List<string> c;
     }
 
     [Record(GenerateConstructor = GeneratedConstructor.None)]
@@ -230,5 +231,15 @@ namespace Assets.Scripts {
         //        [ThreadStatic]
         static int nonono;
     }
+
+    [Record(GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
+    public readonly partial struct ReadonlyApply<A> {
+        public readonly int val;
+    }
+
+    [Record]
+    public partial struct EmptyStruct { }
+
+    [Singleton]
+    public partial class Singleton { }
 }
-#endif

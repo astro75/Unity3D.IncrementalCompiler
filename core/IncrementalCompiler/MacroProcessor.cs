@@ -116,11 +116,18 @@ namespace IncrementalCompiler
 //                    ? new[] {(tree, newRoot)}
 //                    : Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
 
+                var newRoot = root;
+
                 if (changes.Any())
                 {
                     var updatedTree = root.ReplaceNodes(changes.Keys, (a, b) => changes[a]);
 //                    Console.WriteLine(updatedTree.GetText());
-                    return new[] {(tree, updatedTree)};
+                    newRoot = updatedTree;
+                }
+
+                if (newRoot != root)
+                {
+                    return new[] {(tree, newRoot)};
                 }
                 return Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
             }).ToArray();
@@ -135,10 +142,12 @@ namespace IncrementalCompiler
         ) {
             foreach (var (tree, syntax) in treeEdits)
             {
-                var newTree = tree.WithRootAndOptions(syntax, tree.Options);
+                var originalFilePath = tree.FilePath;
+                var editedFilePath = Path.Combine(CodeGeneration.GENERATED_FOLDER, "compile-time", originalFilePath);
+
+                var newTree = tree.WithRootAndOptions(syntax, tree.Options).WithFilePath(editedFilePath);
                 sourceMap[newTree.FilePath] = newTree;
                 compilation = compilation.ReplaceSyntaxTree(tree, newTree);
-                var editedFilePath = Path.Combine(CodeGeneration.GENERATED_FOLDER, "compile-time", newTree.FilePath);
                 Directory.CreateDirectory(Path.GetDirectoryName(editedFilePath));
                 File.WriteAllText(editedFilePath, newTree.GetText().ToString());
             }

@@ -31,7 +31,7 @@ namespace IncrementalCompiler
         }
     }
 
-    public static class CodeGeneration
+    public static partial class CodeGeneration
     {
         public const string GENERATED_FOLDER = "Generated";
         static readonly Type caseType = typeof(RecordAttribute);
@@ -39,12 +39,9 @@ namespace IncrementalCompiler
             SyntaxKind.PublicKeyword, SyntaxKind.InternalKeyword, SyntaxKind.PrivateKeyword
         });
 
-        public class GeneratedFilesMapping
+        public partial class GeneratedFilesMapping
         {
             public Dictionary<string, List<string>> filesDict = new Dictionary<string, List<string>>();
-            public Dictionary<string, List<JavaFile>> javaFilesDict = new Dictionary<string, List<JavaFile>>();
-            int javaVersion = 1, lastUsedJavaVersion;
-            SyntaxTree prevousTree;
 
             static void addValue<A>(Dictionary<string, List<A>> dict, string key, A value) {
                 if (!dict.ContainsKey(key)) dict[key] = new List<A>();
@@ -56,70 +53,8 @@ namespace IncrementalCompiler
 
             public void add(string key, string value) => addValue(filesDict, key, value);
 
-            public bool tryAddJavaFile(string key, JavaFile value)
-            {
-                if (enumerate(javaFilesDict).Any(jf => jf.Module == value.Module && jf.Path == value.Path))
-                {
-                    return false;
-                }
-                else
-                {
-                    javaVersion++;
-                    addValue(javaFilesDict, key, value);
-                    return true;
-                }
-            }
-
-            public CSharpCompilation updateCompilation(CSharpCompilation compilation, CSharpParseOptions options, string assemblyName, string generatedFilesDir) {
-                if (lastUsedJavaVersion != javaVersion)
-                {
-                    lastUsedJavaVersion = javaVersion;
-                    var newTree = generateTree(options, assemblyName, generatedFilesDir);
-                    var path = newTree.FilePath;
-                    {
-                        if (File.Exists(path)) File.Delete(path);
-                        Directory.CreateDirectory(Path.GetDirectoryName(path));
-                        File.WriteAllText(path, newTree.GetText().ToString());
-                    }
-                    // this code smells a little
-                    filesDict["GENERATED_JAVA"] = new List<string>(new []{ path });
-                    var result =
-                        prevousTree == null
-                        ? compilation.AddSyntaxTrees(newTree)
-                        : compilation.ReplaceSyntaxTree(prevousTree, newTree);
-                    prevousTree = newTree;
-                    return result;
-                }
-                return compilation;
-            }
-
             static string asVerbatimString(string str) => $"@\"{str.Replace("\"", "\"\"")}\"";
 
-            SyntaxTree generateTree(CSharpParseOptions options, string assemblyName, string generatedFilesDir) {
-                var className = assemblyName.Replace("-", "").Replace(".", "");
-                var data = enumerate(javaFilesDict).Select(jf =>
-                    $"new JavaFile(module: \"{jf.Module}\", path: {asVerbatimString(jf.Path)}, contents: {asVerbatimString(jf.Contents)})"
-                );
-                var ns = "com.tinylabproductions.generated.java";
-                var tree = CSharpSyntaxTree.ParseText(
-                    "#if UNITY_EDITOR\n" +
-                    "using GenerationAttributes;\n" +
-                    $"namespace {ns} {{\n" +
-                    $"public static class {className} {{\n" +
-                    "public static readonly JavaFile[] javaFiles = {" +
-                    Join(", ", data) +
-                    "}; }}\n" +
-                    "#endif",
-                    options,
-                    path: Path.Combine(generatedFilesDir, ns.Replace('.', Path.DirectorySeparatorChar), className + ".cs")
-                );
-                return CSharpSyntaxTree.Create(
-                    tree.GetCompilationUnitRoot().NormalizeWhitespace(),
-                    options,
-                    path: tree.FilePath,
-                    encoding: Encoding.UTF8
-                );
-            }
 
             public void removeFiles(IEnumerable<string> filesToRemove) {
                 foreach (var filePath in filesToRemove) {
@@ -129,10 +64,8 @@ namespace IncrementalCompiler
                         }
                         filesDict.Remove(filePath);
                     }
-                    if (javaFilesDict.ContainsKey(filePath)) {
-                        javaFilesDict.Remove(filePath);
-                        javaVersion++;
-                    }
+
+                    maybeRemoveJavaFile(filePath);
                 }
             }
         }
@@ -161,14 +94,6 @@ namespace IncrementalCompiler
             }
         }
 
-        class GeneratedJavaFile : GeneratedFile
-        {
-            public readonly JavaFile JavaFile;
-
-            public GeneratedJavaFile(string sourcePath, Location location, JavaFile javaFile) : base(sourcePath, location) {
-                JavaFile = javaFile;
-            }
-        }
 
         class GeneratedCsFile : GeneratedFile
         {
@@ -179,202 +104,6 @@ namespace IncrementalCompiler
                 Tree = tree;
                 FilePath = tree.FilePath;
                 Contents = tree.GetText().ToString();
-            }
-        }
-
-        // TODO: clean this class
-        // refactor parts to tlplib
-        class JavaClassFile
-        {
-            public readonly Location Location;
-            public readonly string Module, Imports, ClassBody;
-            readonly INamedTypeSymbol Symbol;
-            readonly List<string> Methods = new List<string>();
-            string Package => "com.generated." + Module;
-            public string PackageWithClass => Package + "." + Symbol.Name;
-            readonly IMethodSymbol[] allMethods;
-
-            public JavaClassFile(INamedTypeSymbol symbol, string module, string imports, string classBody, Location location) {
-                Symbol = symbol;
-                Module = module;
-                Imports = imports;
-                ClassBody = classBody;
-                allMethods = AllInterfaceMembers(symbol).OfType<IMethodSymbol>().ToArray();
-                Location = location;
-            }
-
-            static ImmutableArray<ISymbol> AllInterfaceMembers(INamedTypeSymbol symbol) =>
-                symbol.GetMembers().AddRange(symbol.AllInterfaces.SelectMany(i => i.GetMembers()));
-
-            public void AddMethod(string methodBody, IMethodSymbol methodSymbol) {
-                var isConstructor = methodSymbol.MethodKind == MethodKind.Constructor;
-                var modifier = methodSymbol.IsStatic ? "static " : "";
-                var parameters = Join(", ",
-                    methodSymbol.Parameters.Select(p => $"final {ToJavaType(p.Type)} {p.Name}").ToArray());
-                var typeAndName = isConstructor
-                    ? Symbol.Name
-                    : $"{ToJavaType(methodSymbol.ReturnType)} {methodSymbol.Name}";
-                Methods.Add(
-                    $"public {modifier}{typeAndName}({parameters}) {{\n" +
-                    $"{methodBody}\n" +
-                    "}\n"
-                );
-            }
-
-            public string GenerateJava() {
-                return $"package {Package};\n\n" +
-                       Imports +
-                       $"public class {Symbol.Name} {{\n" +
-                       $"{ClassBody}\n" +
-                       Join("\n", Methods) +
-                       "}";
-            }
-
-            public IEnumerable<MemberDeclarationSyntax> GenerateMembers() {
-                var line = $"static UnityEngine.AndroidJavaClass jc = UnityEngine.Application.isEditor ? null : " +
-                           $"new UnityEngine.AndroidJavaClass(\"{PackageWithClass}\");";
-                var secondLine = Symbol.IsStatic ? "" : "readonly UnityEngine.AndroidJavaObject jo;";
-                return ParseClassMembers(line + "\n" + secondLine);
-            }
-
-            static bool isSubType(ITypeSymbol type, string baseType) {
-                if (type == null) return false;
-                if (type.ToDisplayString() == baseType)
-                    return true;
-                return isSubType(type.BaseType, baseType);
-            }
-
-            public BaseMethodDeclarationSyntax GenerateMethod(IMethodSymbol symbol, BaseMethodDeclarationSyntax syntax) {
-                var isConstructor = symbol.MethodKind == MethodKind.Constructor;
-                var isVoid = symbol.ReturnType.SpecialType == SpecialType.System_Void;
-                var returnStatement = isVoid ? "" : "return ";
-                var callStetement = isConstructor ? "jo = new UnityEngine.AndroidJavaObject" : (symbol.IsStatic ? "jc.CallStatic" : "jo.Call");
-                var firstParam = $"\"{(isConstructor ? PackageWithClass : symbol.Name)}\"";
-
-                string parameterName(IParameterSymbol ps) {
-                    var type = ps.Type;
-                    var name = ps.Name;
-                    if (isSubType(type, "com.tinylabproductions.TLPLib.Android.Bindings.Binding"))
-                        return name + ".java";
-                    return name;
-                }
-
-                var remainingParams = symbol.Parameters.Select(parameterName);
-                var arguments = Join(", ", new []{firstParam}.Concat(remainingParams));
-
-                switch (syntax)
-                {
-                    case MethodDeclarationSyntax mds:
-                        var genericReturn = isVoid ? "" : "<" + mds.ReturnType + ">";
-                        return mds
-                            .WithBody(ParseBlock($"{returnStatement}{callStetement}{genericReturn}({arguments});"))
-                            .WithExpressionBody(null)
-                            .WithSemicolonToken(SF.Token(SyntaxKind.None));
-                    case ConstructorDeclarationSyntax cds:
-                        return cds
-                            .WithBody(ParseBlock($"{returnStatement}{callStetement}({arguments});"))
-                            .WithExpressionBody(null)
-                            .WithSemicolonToken(SF.Token(SyntaxKind.None));
-                }
-                throw new Exception("Wrong syntax type: " + syntax.GetType());
-            }
-
-            static string ToJavaType(ITypeSymbol type) {
-                if (!type.IsDefinition) return ToJavaType(type.OriginalDefinition);
-                switch (type.SpecialType) {
-                    case SpecialType.System_String: return "String";
-                    case SpecialType.System_Boolean: return "boolean";
-                    case SpecialType.System_Byte: return "byte";
-                    case SpecialType.System_Char: return "char";
-                    case SpecialType.System_Int16: return "short";
-                    case SpecialType.System_Int32: return "int";
-                    case SpecialType.System_Int64: return "long";
-                    case SpecialType.System_Single: return "float";
-                    case SpecialType.System_Double: return "double";
-                    case SpecialType.System_Void: return "void";
-                    case SpecialType.System_Nullable_T:
-                        var arguments = type.BaseType.TypeArguments;
-                        if (arguments.Length == 0) break;
-                        switch (type.BaseType.TypeArguments[0].SpecialType) {
-                            // this code is never reached.
-                            // TODO: find a way to detect nullable types in C# (int?, bool?, ...)
-                            case SpecialType.System_Boolean: return "Boolean";
-                            case SpecialType.System_Byte:    return "Byte";
-                            case SpecialType.System_Char:    return "Character";
-                            case SpecialType.System_Int16:   return "Short";
-                            case SpecialType.System_Int32:   return "Integer";
-                            case SpecialType.System_Int64:   return "Long";
-                            case SpecialType.System_Single:  return "Float";
-                            case SpecialType.System_Double:  return "Double";
-                        }
-                        break;
-                }
-
-
-                foreach (var attrData in type.GetAttributes()) {
-                    if (attrData.AttributeClass.ToDisplayString() == typeof(JavaBindingAttribute).FullName) {
-                        var instance = CreateAttributeByReflection<JavaBindingAttribute>(attrData);
-                        return instance.JavaClass;
-                    }
-                }
-
-                if (isSubType(type, "UnityEngine.AndroidJavaProxy") || isSubType(type, "UnityEngine.AndroidJavaObject")) {
-                    return "Object";
-                }
-
-                throw new Exception($"Unsupported type: {type.ToDisplayString()}");
-            }
-
-            IEnumerable<string> InterfaceMethods() {
-                return allMethods.Select(m =>
-                {
-                    var parameters = m.Parameters.Select(p => $"final {ToJavaType(p.Type)} {p.Name}");
-                    return $"void {m.Name}({Join(", ", parameters)});";
-                });
-            }
-
-            public string GenerateJavaInterface() =>
-                $"package {Package};\n\n" +
-                $"public interface {Symbol.Name} " + Block(InterfaceMethods());
-
-            public string JavaFilePath() =>
-                PackageWithClass.Replace('.', Path.DirectorySeparatorChar) + ".java";
-
-            public ClassDeclarationSyntax GetInterfaceClass() {
-                return ParseClass(
-                    // JavaBinding attribute does nothing here.
-                    // Compiler does all code generation in one step,
-                    // so we can't depend on generated classes when generating other code
-                    // $"[GenerationAttributes.JavaBinding(\"{PackageWithClass}\")]\n" +
-                    $"public class {Symbol.Name}Proxy : com.tinylabproductions.TLPLib.Android.JavaListenerProxy" +
-                    Block(
-                        Join("\n", allMethods.Select(m =>
-                        {
-                            if (m.ReturnType.SpecialType != SpecialType.System_Void) throw new Exception("Return type must be void");
-                            var parameterTypes = m.Parameters.Select(p => p.Type.ToString()).ToArray();
-                            var genericArgs = parameterTypes.Length == 0 ? "" : $"<{Join(", ", parameterTypes)}>";
-                            return $"public event System.Action{genericArgs} {m.Name};";
-                        })),
-                        $"public {Symbol.Name}Proxy() : base(\"{PackageWithClass}\"){{}}" +
-                            "protected override void invokeOnMain(string methodName, object[] args)" + Block(
-                            "  switch(methodName)" + Block(
-                                allMethods.Select(m => {
-                                    var invokeParams = Join(", ", m.Parameters.Select((p, idx) => $"({p.Type.ToString()}) args[{idx}]"));
-                                    return $"case \"{m.Name}\": {m.Name}?.Invoke({invokeParams}); return;";
-                                })
-                            ),
-                            "base.invokeOnMain(methodName, args);"
-                        ),
-                        "public void registerLogger(string prefix, com.tinylabproductions.TLPLib.Logger.ILog log)" + Block(
-                            allMethods.Select(m =>
-                            {
-                                var paramNames = m.Parameters.Select(p => p.Name).ToArray();
-                                var paramsStr = paramNames.Length == 0 ? "\"\"" : Join(" + \", \" + ", paramNames.Select(p => $"{p}.ToString()"));
-                                return $"{m.Name} += ({Join(", ", paramNames)}) => com.tinylabproductions.TLPLib.Logger.ILogExts.debug(log, prefix + \"{m.Name}(\" + {paramsStr} + \")\");";
-                            })
-                        )
-                    )
-                );
             }
         }
 
@@ -480,6 +209,17 @@ namespace IncrementalCompiler
                                     )
                                 );
                             });
+                        }
+                        if (attrClassName == typeof(SingletonAttribute).FullName)
+                        {
+                            if (tds is ClassDeclarationSyntax cds) {
+                                tryAttribute<SingletonAttribute>(attr, m =>
+                                {
+                                    newMembers = newMembers.Add(
+                                        AddAncestors(tds, GenerateSingleton(cds), onlyNamespace: false)
+                                    );
+                                });
+                            }
                         }
                         if (attrClassName == typeof(MatcherAttribute).FullName)
                         {
@@ -604,6 +344,7 @@ namespace IncrementalCompiler
                     var nt = CSharpSyntaxTree.Create(
                         SF.CompilationUnit()
                             .WithUsings(cleanUsings(root.Usings))
+                            .WithLeadingTrivia(SyntaxTriviaList.Create(SyntaxFactory.Comment("// ReSharper disable all")))
                             .WithMembers(SF.List(newMembers))
                             .NormalizeWhitespace(),
                         path: Path.Combine(generatedProjectFilesDirectory, tree.FilePath),
@@ -691,7 +432,17 @@ namespace IncrementalCompiler
             return $"public {type} {newName} => {name};";
         }
 
-        private static MemberDeclarationSyntax GenerateMatcher(
+        static MemberDeclarationSyntax GenerateSingleton(
+            ClassDeclarationSyntax tds
+        ) {
+            var members = ParseClassMembers(
+                $"private {tds.Identifier}(){{}}" +
+                $"public static readonly {tds.Identifier} instance = new {tds.Identifier}();");
+            var partialClass = CreatePartial(tds, members, Extensions.EmptyBaseList);
+            return partialClass;
+        }
+
+        static MemberDeclarationSyntax GenerateMatcher(
             SemanticModel model, TypeDeclarationSyntax tds,
             MatcherAttribute attribute, ImmutableArray<TypeDeclarationSyntax> typesInFile
         ) {
@@ -786,7 +537,9 @@ namespace IncrementalCompiler
 
         struct FieldOrProp {
             public readonly TypeSyntax type;
+            public readonly ITypeSymbol typeInfo;
             public readonly SyntaxToken identifier;
+            public readonly string identifierFirstLetterUpper;
             public readonly bool initialized;
             public readonly bool traversable;
 
@@ -798,12 +551,13 @@ namespace IncrementalCompiler
             ) {
                 this.type = type;
                 this.identifier = identifier;
+                identifierFirstLetterUpper = identifier.Text.FirstLetterToUpper();
                 this.initialized = initialized;
 
                 bool interfaceInIEnumerable(INamedTypeSymbol info) =>
                     info.ContainingNamespace + "." + info.Name + "`" + info.Arity == iEnumName;
 
-                var typeInfo = model.GetTypeInfo(type).Type;
+                typeInfo = model.GetTypeInfo(type).Type;
                 var typeName = typeInfo.ToDisplayString();
 
                 var typeIsIEnumerableItself = typeInfo is INamedTypeSymbol ti && interfaceInIEnumerable(ti);
@@ -814,226 +568,10 @@ namespace IncrementalCompiler
             }
         }
 
-        static CaseClass GenerateCaseClass(
-            RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds
-        ) {
-            var properties = cds.Members.OfType<PropertyDeclarationSyntax>()
-                .Where(prop => prop.Modifiers.HasNot(SyntaxKind.StaticKeyword))
-                .Where(prop => prop.AccessorList?.Accessors.Any(ads =>
-                    ads.IsKind(SyntaxKind.GetAccessorDeclaration)
-                    && ads.Body == null
-                    && ads.ExpressionBody == null
-                ) ?? false)
-                .Select(prop => new FieldOrProp(
-                    prop.Type, prop.Identifier, prop.Initializer != null, model
-                ));
-
-            var fields =
-                cds.Members.OfType<FieldDeclarationSyntax>()
-                .Where(field => {
-                    var modifiers = field.Modifiers;
-                    return modifiers.HasNot(SyntaxKind.StaticKeyword)
-                        && modifiers.HasNot(SyntaxKind.ConstKeyword);
-                })
-                .SelectMany(field => {
-                    var decl = field.Declaration;
-                    var type = decl.Type;
-                    return decl.Variables.Select(varDecl => new FieldOrProp(
-                        type, varDecl.Identifier, varDecl.Initializer != null, model
-                    ));
-                });
-
-            var fieldsAndProps = fields.Concat(properties).ToArray();
-
-            if (!fieldsAndProps.Any()) throw new Exception("The record has no fields and therefore cannot be created");
-
-            var initializedFieldsAndProps = fieldsAndProps.Where(_ => !_.initialized).ToImmutableArray();
-
-            var constructor = createIf(
-                attr.GenerateConstructor.generateConstructor(),
-                () => {
-                    var params_ = initializedFieldsAndProps.joinCommaSeparated(f => f.type + " " + f.identifier);
-                    var body = initializedFieldsAndProps.Any()
-                        ? initializedFieldsAndProps
-                            .Select(f => "this." + f.identifier + " = " + f.identifier)
-                            .tap(s => Join(";\n", s) + ";")
-                        : "";
-
-                    return ParseClassMembers($"public {cds.Identifier}({params_}){{{body}}}");
-                }
-            );
-
-            IEnumerable<MemberDeclarationSyntax> createIf(bool condition, Func<IEnumerable<MemberDeclarationSyntax>> a)
-                => condition ? a() : Enumerable.Empty<MemberDeclarationSyntax>();
-
-            var toString = createIf(
-                attr.GenerateToString,
-                () => {
-                    var returnString = fieldsAndProps
-                        .joinCommaSeparated(f => f.traversable
-                            ? f.identifier.ValueText +
-                                ": [\" + Helpers.enumerableToString(" + f.identifier.ValueText + ") + \"]"
-                            : f.identifier.ValueText +
-                                ": \" + " + f.identifier.ValueText + " + \""
-                        );
-
-                    return ParseClassMembers(
-                        $"public override string ToString() => \"{cds.Identifier.ValueText}({returnString})\";"
-                    );
-                });
-
-            var getHashCode = createIf(attr.GenerateGetHashCode, () => {
-                var hashLines = Join("\n", fieldsAndProps.Select(f => {
-                    var type = model.GetTypeInfo(f.type).Type;
-                    var isValueType = type.IsValueType;
-                    var name = f.identifier.ValueText;
-
-
-                    string ValueTypeHash(ITypeSymbol t)
-                    {
-                        if (t.isEnum(out var underlyingType))
-                        {
-                            switch (underlyingType)
-                            {
-                                case SpecialType.System_Int64:
-                                case SpecialType.System_UInt64:
-                                    return $"{name}.GetHashCode()";
-                                default:
-                                    return $"(int) {name}";
-                            }
-                        }
-
-                        var sType = t.SpecialType;
-                        switch (sType)
-                        {
-                            case SpecialType.System_Byte:
-                            case SpecialType.System_SByte:
-                            case SpecialType.System_Int16:
-                            case SpecialType.System_Int32: return name;
-                            case SpecialType.System_UInt32: return "(int) " + name;
-                            default: return name + ".GetHashCode()";
-                        }
-                    }
-
-                    var fieldHashCode = isValueType
-                        ? ValueTypeHash(type)
-                        : $"({name} == null ? 0 : {name}.GetHashCode())";
-                    return $"hashCode = (hashCode * 397) ^ {(fieldHashCode)}; // {type.SpecialType}";
-                }));
-                return ParseClassMembers(
-                $@"public override int GetHashCode() {{
-                    unchecked {{
-                        var hashCode = 0;
-                        {hashLines}
-                        return hashCode;
-                    }}
-                }}");
-            });
-
-            /*
-            TODO: generic fields
-            EqualityComparer<B>.Default.GetHashCode(valClass);
-            EqualityComparer<B>.Default.Equals(valClass, other.valClass);
-            */
-
-            var typeName = cds.Identifier.ValueText + cds.TypeParameterList;
-
-            var equals = createIf(attr.GenerateComparer, () => {
-                var isStruct = cds.Kind() == SyntaxKind.StructDeclaration;
-                var comparisons = fieldsAndProps.Select(f =>
-                {
-                    var type = model.GetTypeInfo(f.type).Type;
-                    var name = f.identifier.ValueText;
-                    var otherName = "other." + name;
-
-                    if (type.isEnum(out _)) return $"{name} == {otherName}";
-
-                    switch (type.SpecialType)
-                    {
-                        case SpecialType.System_Byte:
-                        case SpecialType.System_SByte:
-                        case SpecialType.System_Int16:
-                        case SpecialType.System_UInt16:
-                        case SpecialType.System_Int32:
-                        case SpecialType.System_UInt32:
-                        case SpecialType.System_Int64:
-                        case SpecialType.System_UInt64: return $"{name} == {otherName}";
-                        case SpecialType.System_String: return $"string.Equals({name}, {otherName})";
-                        default:
-                            return $"{name}.Equals({otherName})";
-                    }
-                });
-                var equalsExpr = isStruct ? "left.Equals(right)" : "Equals(left, right)";
-                return ParseClassMembers(
-                    $"public bool Equals({typeName} other) {{" +
-                    (!isStruct
-                        ? "if (ReferenceEquals(null, other)) return false;" +
-                          "if (ReferenceEquals(this, other)) return true;"
-                        : ""
-                    ) +
-                    $"return {Join(" && ", comparisons)};" +
-                    $"}}" +
-                    $"public override bool Equals(object obj) {{" +
-                    $"  if (ReferenceEquals(null, obj)) return false;" +
-                    (!isStruct ? "if (ReferenceEquals(this, obj)) return true;" : "") +
-                    $"  return obj is {typeName} && Equals(({typeName}) obj);" +
-                    $"}}" +
-                    $"public static bool operator ==({typeName} left, {typeName} right) => {equalsExpr};" +
-                    $"public static bool operator !=({typeName} left, {typeName} right) => !{equalsExpr};");
-            });
-
-            var baseList = attr.GenerateComparer
-                // : IEquatable<TypeName>
-                ? SF.BaseList(
-                    SF.SingletonSeparatedList<BaseTypeSyntax>(
-                        SF.SimpleBaseType(
-                            SF.ParseTypeName($"System.IEquatable<{typeName}>")
-                )))
-                : Extensions.EmptyBaseList;
-            var newMembers = constructor.Concat(toString).Concat(getHashCode).Concat(equals);
-
-            #region Static apply method
-
-
-            var companion = Maybe.MZero<TypeDeclarationSyntax>();
-            {
-                if (attr.GenerateConstructor == GeneratedConstructor.ConstructorAndApply) {
-                    if (cds.TypeParameterList == null) {
-                        newMembers = newMembers.Concat(GenerateStaticApply(cds, initializedFieldsAndProps));
-                    }
-                    else {
-                        companion = Maybe.Just(GenerateCaseClassCompanion(cds, initializedFieldsAndProps));
-                    }
-                }
-            }
-
-            #endregion
-
-            var caseclass = CreatePartial(cds, newMembers, baseList);
-            return new CaseClass(caseclass, companion);
-        }
-
-        static TypeDeclarationSyntax GenerateCaseClassCompanion(
-            TypeDeclarationSyntax cds, ICollection<FieldOrProp> props
-        ) {
-            // add and remove partial modifier because rider prints
-            // warning if partial keyword is not right before class keyword
-            var classModifiers =
-                cds.Modifiers
-                .RemoveOfKind(SyntaxKind.PartialKeyword)
-                .Add(SyntaxKind.StaticKeyword)
-                .Add(SyntaxKind.PartialKeyword);
-
-            var applyMethod = GenerateStaticApply(cds, props);
-            return SF.ClassDeclaration(cds.Identifier)
-                    .WithModifiers(classModifiers)
-                    .WithMembers(applyMethod);
-        }
-
         static string joinCommaSeparated<A>(this IEnumerable<A> collection, Func<A, string> mapper) =>
             collection
             .Select(mapper)
-            .tap(_ => Join(", ", _));
+            .Tap(_ => Join(", ", _));
 
         static SyntaxList<MemberDeclarationSyntax> GenerateStaticApply(
             TypeDeclarationSyntax cds, ICollection<FieldOrProp> props

@@ -311,7 +311,7 @@ namespace IncrementalCompiler
                     parseOptions,
                     assemblyNameNoExtension,
                     ref _filesMapping, _sourceMap
-                ).tap((compAndDiag) =>
+                ).Tap((compAndDiag) =>
                 {
                     diagnostic.AddRange(compAndDiag.Item2);
                     return compAndDiag.Item1;
@@ -446,7 +446,7 @@ namespace IncrementalCompiler
             {
                 _compilation = CodeGeneration.Run(
                     true, _compilation, allAddedTrees, parseOptions, assemblyNameNoExtension, ref _filesMapping, _sourceMap
-                ).tap(t =>
+                ).Tap(t =>
                 {
                     diagnostic.AddRange(t.Item2);
                     return t.Item1;

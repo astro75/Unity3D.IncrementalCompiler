@@ -17,32 +17,52 @@ namespace IncrementalCompiler
         private Logger _logger = LogManager.GetLogger("CompilerService");
         private string _projectPath;
         private Dictionary<string, Compiler> _compilerMap;
+        readonly object _lockObj = new object();
 
         public CompileResult Build(string projectPath, CompileOptions options)
         {
             _logger.Info("Build(projectPath={0}, output={1})", projectPath, options.Output);
 
-            if (string.IsNullOrEmpty(_projectPath) || _projectPath != projectPath)
-            {
-                // create new one
-                _compilerMap = new Dictionary<string, Compiler>();
-                if (string.IsNullOrEmpty(_projectPath) == false)
-                    _logger.Info("Flush old project. (Project={0})", _projectPath);
-            }
-
-            _projectPath = projectPath;
-
             Compiler compiler;
-            if (_compilerMap.TryGetValue(options.Output, out compiler) == false)
+
+            if (options.IsUnityPackage)
             {
+                // do not cache packages in ram, because they do not change
                 compiler = new Compiler();
-                _compilerMap.Add(options.Output, compiler);
-                _logger.Info("Add new project. (Project={0})", _projectPath);
+            }
+            else
+            {
+                lock (_lockObj)
+                {
+                    if (string.IsNullOrEmpty(_projectPath) || _projectPath != projectPath)
+                    {
+                        // create new one
+                        _projectPath = projectPath;
+                        _compilerMap = new Dictionary<string, Compiler>();
+                        if (string.IsNullOrEmpty(_projectPath) == false)
+                            _logger.Info("Flush old project. (Project={0})", _projectPath);
+                    }
+
+                    if (_compilerMap.TryGetValue(options.Output, out compiler) == false)
+                    {
+                        compiler = new Compiler();
+                        _compilerMap.Add(options.Output, compiler);
+                        _logger.Info("Add new project. (Project={0})", _projectPath);
+                    }
+                }
             }
 
             try
             {
-                return compiler.Build(options);
+                lock (compiler)
+                {
+                    var result = compiler.Build(options);
+                    if (options.IsUnityPackage)
+                    {
+                        compiler.Dispose();
+                    }
+                    return result;
+                }
             }
             catch (Exception e)
             {
