@@ -1,0 +1,1 @@
+XCOPY bin\2019.3\* samples\Basic /S /Y 

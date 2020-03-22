@@ -24,7 +24,9 @@ namespace IncrementalCompiler
                 }
                 else
                 {
-                    rewritten = base.Visit(node);
+                    rewritten = base.Visit(node)
+                        .WithLeadingTrivia(node.GetLeadingTrivia())
+                        .WithTrailingTrivia(node.GetTrailingTrivia());
                 }
             }
             return rewritten;
@@ -49,9 +51,17 @@ namespace IncrementalCompiler
 
                 if (replaced)
                 {
-                    foreach (var replacement in replacementList)
+                    for (var index = 0; index < replacementList.Count; index++)
                     {
-                        alternate.Add((TNode)(SyntaxNode) replacement);
+                        // TODO: finish whitespace logic
+                        var replacement = replacementList[index].NormalizeWhitespace();
+                        if (index == 0)
+                            replacement = replacement.WithLeadingTrivia(item.GetLeadingTrivia());
+                        if (index == replacementList.Count - 1)
+                            replacement = replacement.WithTrailingTrivia(item.GetTrailingTrivia());
+                        else
+                            replacement = replacement.WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
+                        alternate.Add((TNode) (SyntaxNode) replacement);
                     }
                 }
 
@@ -61,7 +71,7 @@ namespace IncrementalCompiler
                 }
             }
 
-            return alternate != null ? SyntaxFactory.List(alternate.Select(x => x.NormalizeWhitespace())) : list;
+            return alternate != null ? SyntaxFactory.List(alternate) : list;
         }
     }
 }

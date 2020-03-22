@@ -204,13 +204,16 @@ namespace IncrementalCompiler
 
                     var descendants = operation.DescendantsAndSelf().ToArray();
 
-                    foreach (var op in descendants.OfType<IPropertyReferenceOperation>()) {
-                        if (macrosExpressions.TryGetValue(op.Property, out var act)) act(ctx, op);
+                    foreach (var op in descendants.OfType<IPropertyReferenceOperation>())
+                    {
+                        if (macrosExpressions.TryGetValue(op.Property.OriginalDefinition, out var act)) act(ctx, op);
                     }
 
-                    foreach (var op in descendants.OfType<IInvocationOperation>()) {
-                        { if (macrosExpressions.TryGetValue(op.TargetMethod, out var act)) act(ctx, op); }
-                        { if (macrosStatements.TryGetValue(op.TargetMethod, out var act)) act(ctx, op); }
+                    foreach (var op in descendants.OfType<IInvocationOperation>())
+                    {
+                        var method = op.TargetMethod.OriginalDefinition;
+                        { if (macrosExpressions.TryGetValue(method, out var act)) act(ctx, op); }
+                        { if (macrosStatements.TryGetValue(method, out var act)) act(ctx, op); }
                     }
 
                     // foreach (var op in descendants.OfType<IAssignmentOperation>()) {
@@ -255,7 +258,9 @@ namespace IncrementalCompiler
 
                 if (newRoot != root)
                 {
-                    return new[] {(tree, newRoot)};
+                    // TODO: do not normalize whitespace for the whole file
+                    // need to fix whitespace in MacroReplacer first
+                    return new[] {(tree, newRoot.NormalizeWhitespace())};
                 }
                 return Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
             }).ToArray();
@@ -271,7 +276,7 @@ namespace IncrementalCompiler
             foreach (var (tree, syntax) in treeEdits)
             {
                 var originalFilePath = tree.FilePath;
-                var editedFilePath = Path.Combine(CodeGeneration.GENERATED_FOLDER, "compile-time", originalFilePath);
+                var editedFilePath = Path.Combine(CodeGeneration.GENERATED_FOLDER, "_macros", originalFilePath);
 
                 var newTree = tree.WithRootAndOptions(syntax, tree.Options).WithFilePath(editedFilePath);
                 sourceMap[tree.FilePath] = newTree;
