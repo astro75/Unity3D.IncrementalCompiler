@@ -34,7 +34,6 @@
     <ProjectReference Include="..\..\GenerationAttributes.Java\GenerationAttributes.Java.csproj" />
     <ProjectReference Include="..\..\GenerationAttributes\GenerationAttributes.csproj" />
     <ProjectReference Include="..\..\Macros\Macros.csproj" />
-    <Compile Include="MacroReplacer.cs" />
   </ItemGroup>
   <ItemGroup>
     <Content Include="IncrementalCompiler.xml">
