@@ -75,6 +75,11 @@ namespace IncrementalCompiler
             options.ParseArgument(args);
             options.WorkDirectory = currentPath;
             options.References = options.References.Distinct().ToList();
+            logger.Info("Args:");
+            foreach (var arg in options.rawArgs) {
+                logger.Info(arg);
+            }
+            logger.Info("Args done.");
             options.Files = options.Files.Distinct().ToList();
             options.PrebuiltOutputReuse = settings.PrebuiltOutputReuse;
 
@@ -87,34 +92,35 @@ namespace IncrementalCompiler
                 return 1;
             }
 
-            // Get unity process ID
-
-            var parentProcessId = 0;
-            var pd = options.Defines.FirstOrDefault(d => d.StartsWith("__UNITY_PROCESSID__"));
-            if (pd != null)
-            {
-                int.TryParse(pd.Substring(19), out parentProcessId);
-            }
-            else
-            {
-                var parentProcess = Process.GetProcessesByName("Unity").FirstOrDefault();
-                if (parentProcess != null)
-                    parentProcessId = parentProcess.Id;
-            }
-
-            if (parentProcessId == 0)
-            {
-                logger.Error("No parent process");
-                return 1;
-            }
-
-            logger.Info("Parent process ID: {0}", parentProcessId);
-
-            // Run
-
             var useCompilationServer = true;
             // it does not work on mac for some reason
             useCompilationServer &= PlatformHelper.CurrentPlatform == Platform.Windows;
+            var isCsc = Process.GetCurrentProcess().ProcessName == "csc";
+            if (isCsc) useCompilationServer = false;
+            logger.Info($"isCsc: {isCsc}, process name: {Process.GetCurrentProcess().ProcessName}, useCompilationServer={useCompilationServer}");
+            
+            // Get unity process ID
+            var parentProcessId = 0;
+            if (useCompilationServer) {
+                var pd = options.Defines.FirstOrDefault(d => d.StartsWith("__UNITY_PROCESSID__"));
+                if (pd != null) {
+                    int.TryParse(pd.Substring(19), out parentProcessId);
+                }
+                else {
+                    var parentProcess = Process.GetProcessesByName("Unity").FirstOrDefault();
+                    if (parentProcess != null)
+                        parentProcessId = parentProcess.Id;
+                }
+
+                if (parentProcessId == 0) {
+                    logger.Error("No parent process");
+                    return 1;
+                }
+
+                logger.Info("Parent process ID: {0}", parentProcessId);
+            }
+
+            // Run
 
             Process serverProcess = null;
             while (true)
@@ -123,7 +129,7 @@ namespace IncrementalCompiler
                 {
                     var w = new Stopwatch();
                     w.Start();
-                    logger.Info("Request to server");
+                    logger.Info(useCompilationServer ? "Request to server" : "Building");
                     var result = CompilerServiceClient.Request(parentProcessId, currentPath, options, useCompilationServer);
                     w.Stop();
                     logger.Info("Done: Succeeded={0}. Duration={1}sec.", result.Succeeded, w.Elapsed.TotalSeconds);

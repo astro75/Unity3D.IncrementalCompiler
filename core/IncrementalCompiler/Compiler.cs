@@ -284,7 +284,6 @@ namespace IncrementalCompiler
                     sourceReferenceResolver: new SourceFileResolver(ImmutableArray<string>.Empty, _options.WorkDirectory),
                     optimizationLevel: options.Optimize ? OptimizationLevel.Release : OptimizationLevel.Debug
                 )
-
             );
             logTime("Compilation created");
 

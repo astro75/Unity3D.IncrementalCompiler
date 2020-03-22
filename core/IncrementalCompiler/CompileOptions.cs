@@ -1,141 +1,134 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.IO;
-using System.Linq;
 using System.Runtime.Serialization;
 using Microsoft.CodeAnalysis;
 
-namespace IncrementalCompiler
-{
-    public enum DebugSymbolFileType
-    {
-        None,
-        Pdb,
-        PdbToMdb
-    }
+namespace IncrementalCompiler {
+  public enum DebugSymbolFileType {
+    None,
+    Pdb,
+    PdbToMdb
+  }
 
-    public enum PrebuiltOutputReuseType
-    {
-        None,
-        WhenNoChange,
-        WhenNoSourceChange
-    }
+  public enum PrebuiltOutputReuseType {
+    None,
+    WhenNoChange,
+    WhenNoSourceChange
+  }
 
-    [DataContract]
-    public class CompileOptions
-    {
-        [DataMember] public string WorkDirectory;
-        [DataMember] public string AssemblyName;
-        [DataMember] public string Output;
-        [DataMember] public bool IsUnityPackage;
-        [DataMember] public List<string> Defines = new List<string>();
-        [DataMember] public List<string> References = new List<string>();
-        [DataMember] public List<string> Files = new List<string>();
-        [DataMember] public List<string> NoWarnings = new List<string>();
-        [DataMember] public List<string> Options = new List<string>();
-        [DataMember] public DebugSymbolFileType DebugSymbolFile = DebugSymbolFileType.Pdb;
-        [DataMember] public bool Optimize, Unsafe;
-        [DataMember] public PrebuiltOutputReuseType PrebuiltOutputReuse;
+  [DataContract]
+  public class CompileOptions {
+    [DataMember] public string WorkDirectory;
+    [DataMember] public string AssemblyName;
+    [DataMember] public string Output;
+    [DataMember] public bool IsUnityPackage;
+    [DataMember] public List<string> Defines = new List<string>();
+    [DataMember] public List<string> References = new List<string>();
+    [DataMember] public List<string> Files = new List<string>();
+    [DataMember] public List<string> NoWarnings = new List<string>();
+    [DataMember] public List<string> Options = new List<string>();
+    [DataMember] public string[] rawArgs;
+    [DataMember] public DebugSymbolFileType DebugSymbolFile = DebugSymbolFileType.Pdb;
+    [DataMember] public bool Optimize, Unsafe;
+    [DataMember] public PrebuiltOutputReuseType PrebuiltOutputReuse;
 
-        static string trimQuotes(string value) => value.Trim('"');
+    static string trimQuotes(string value) => value.Trim('"');
 
-        public void ParseArgument(string[] args)
-        {
-            foreach (var arg in args)
-            {
-                if (arg.StartsWith("-"))
-                {
-                    string command;
-                    string value;
+    public void ParseArgument(string[] args) {
+      rawArgs = args;
+      
+      var isArg =
+        PlatformHelper.CurrentPlatform == Platform.Windows
+        ? new Func<string, bool>(arg => arg.StartsWith("-") || arg.StartsWith("/"))
+        : arg => arg.StartsWith("-");
+      
+      foreach (var arg in args) {
+        if (isArg(arg)) {
+          string command;
+          string value;
 
-                    var valueIdx = arg.IndexOf(':');
-                    if (valueIdx != -1)
-                    {
-                        command = arg.Substring(1, valueIdx - 1).ToLower();
-                        value = arg.Substring(valueIdx + 1);
-                    }
-                    else
-                    {
-                        command = arg.Substring(1).ToLower();
-                        value = "";
-                    }
+          var valueIdx = arg.IndexOf(':');
+          if (valueIdx != -1) {
+            command = arg.Substring(1, valueIdx - 1).ToLower();
+            value = arg.Substring(valueIdx + 1);
+          }
+          else {
+            command = arg.Substring(1).ToLower();
+            value = "";
+          }
 
-                    switch (command)
-                    {
-                        case "r":
-                        case "reference":
-                            References.Add(trimQuotes(value));
-                            break;
+          switch (command) {
+            case "r":
+            case "reference":
+              References.Add(trimQuotes(value));
+              break;
 
-                        case "define":
-                            Defines.Add(value.Trim());
-                            break;
+            case "define":
+              Defines.Add(value.Trim());
+              break;
 
-                        case "out":
-                            Output = trimQuotes(value);
-                            AssemblyName = Path.GetFileNameWithoutExtension(value);
-                            break;
+            case "out":
+              Output = trimQuotes(value);
+              AssemblyName = Path.GetFileNameWithoutExtension(value);
+              break;
 
-                        case "nowarn":
-                            foreach (var id in value.Split(new[] { ',', ';', ' ' },
-                                                           StringSplitOptions.RemoveEmptyEntries))
-                            {
-                                NoWarnings.Add(int.TryParse(id, out var num) ? $"CS{num:0000}" : id);
-                            }
-                            break;
+            case "nowarn":
+              foreach (var id in value.Split(new[] {',', ';', ' '}, StringSplitOptions.RemoveEmptyEntries)) {
+                NoWarnings.Add(int.TryParse(id, out var num) ? $"CS{num:0000}" : id);
+              }
 
-                        case "custom-option-mdb":
-                            DebugSymbolFile = DebugSymbolFileType.PdbToMdb;
-                            break;
+              break;
 
-                        case "optimize":
-                        case "optimize+":
-                            Optimize = true;
-                            break;
+            case "custom-option-mdb":
+              DebugSymbolFile = DebugSymbolFileType.PdbToMdb;
+              break;
 
-                        case "optimize-":
-                            Optimize = false;
-                            break;
+            case "optimize":
+            case "optimize+":
+              Optimize = true;
+              break;
 
-                        case "unsafe":
-                            Unsafe = true;
-                            break;
+            case "optimize-":
+              Optimize = false;
+              break;
 
-                        default:
-                            Options.Add(arg);
-                            break;
-                    }
-                }
-                else if (arg.StartsWith("@"))
-                {
-                    var subArgs = new List<string>();
-                    foreach (var line in File.ReadAllLines(arg.Substring(1)))
-                    {
-                        subArgs.AddRange(CommandLineParser.SplitCommandLineIntoArguments(line, removeHashComments: true));
-                    }
-                    ParseArgument(subArgs.ToArray());
-                }
-                else
-                {
-                    var path = trimQuotes(arg);
-                    if (path.Length > 0)
-                        Files.Add(path);
-                }
-            }
+            case "unsafe":
+            case "unsafe+":
+              Unsafe = true;
+              break;
 
-            foreach (var file in Files)
-            {
-                if (
-                       file.Contains("/Library/PackageCache/")
-                    || file.Contains("\\Library\\PackageCache\\")
-                    || file.Contains("/BuiltInPackages/")
-                    || file.Contains("\\BuiltInPackages\\")
-                )
-                {
-                    IsUnityPackage = true;
-                    break;
-                }
-            }
+            default:
+              Options.Add(arg);
+              break;
+          }
         }
+        else if (arg.StartsWith("@")) {
+          var subArgs = new List<string>();
+          foreach (var line in File.ReadAllLines(arg.Substring(1))) {
+            subArgs.AddRange(CommandLineParser.SplitCommandLineIntoArguments(line, removeHashComments: true));
+          }
+
+          ParseArgument(subArgs.ToArray());
+        }
+        else {
+          var path = trimQuotes(arg);
+          if (path.Length > 0)
+            Files.Add(path);
+        }
+      }
+
+      foreach (var file in Files) {
+        if (
+          file.Contains("/Library/PackageCache/")
+          || file.Contains("\\Library\\PackageCache\\")
+          || file.Contains("/BuiltInPackages/")
+          || file.Contains("\\BuiltInPackages\\")
+        ) {
+          IsUnityPackage = true;
+          break;
+        }
+      }
     }
+  }
 }
