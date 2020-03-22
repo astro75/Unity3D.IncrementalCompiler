@@ -1,0 +1,4 @@
+Open IncrementalCompiler.sln
+Click Build > Rebuild Solution
+delete /bin
+run ./build.cmd export

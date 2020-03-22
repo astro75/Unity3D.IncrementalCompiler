@@ -115,6 +115,8 @@ namespace IncrementalCompiler
             // it does not work on mac for some reason
             useCompilationServer &= PlatformHelper.CurrentPlatform == Platform.Windows;
 
+            useCompilationServer = false;
+
             Process serverProcess = null;
             while (true)
             {

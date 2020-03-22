@@ -114,7 +114,7 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
 
     private static void SetUpCorrectLangVersion(XDocument xdoc)
     {
-        var csharpVersion = "7.3";
+        var csharpVersion = "8";
         /*
         if (Directory.Exists("CSharp70Support"))
         {
