@@ -31,6 +31,7 @@
     <LangVersion>7.3</LangVersion>
   </PropertyGroup>
   <ItemGroup>
+    <ProjectReference Include="..\..\GenerationAttributes.Java\GenerationAttributes.Java.csproj" />
     <ProjectReference Include="..\..\GenerationAttributes\GenerationAttributes.csproj" />
     <ProjectReference Include="..\..\Macros\Macros.csproj" />
   </ItemGroup>
