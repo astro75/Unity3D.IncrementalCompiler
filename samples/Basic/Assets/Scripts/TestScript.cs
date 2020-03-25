@@ -12,14 +12,18 @@ public class TestScript : MonoBehaviour {
         c.testClassExpr();
         new ExprClass().testClassExpr();
         var x = c.testClassExpr2();
+        c.statementMacro();
     }
 
-    [SimpleMethodMacro(@"""${expr1} = "" + (${expr1})")]
+    [SimpleMethodMacro(@"""${value} = "" + (${value})")]
     public static string testExpr(int value) => throw new NotImplementedException();
 
     public class ExprClass {
-        [SimpleMethodMacro(@"Debug.LogWarning(""${expr0}"")")]
+        [SimpleMethodMacro(@"Debug.LogWarning(""${this}"")")]
         public void testClassExpr() => throw new NotImplementedException();
+
+        [StatementMethodMacro(@"if (true) Debug.LogWarning(""${this}"");")]
+        public void statementMacro() => throw new NotImplementedException();
 
         [VarMethodMacro(@"int ${varName}_backup = 10; { ${varType} ${varName} = ${varName}_backup + 2; return; }")]
         public int testClassExpr2() => throw new NotImplementedException();

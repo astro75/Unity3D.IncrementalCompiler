@@ -134,15 +134,23 @@ namespace IncrementalCompiler
                                 {
                                     tryMacro(op, method, () =>
                                     {
-                                        var sb = new StringBuilder();
-                                        sb.Append("{");
-                                        sb.Append(a.pattern);
-                                        sb.Append("}");
+                                        var parent = op.Parent;
+                                        if (parent is IExpressionStatementOperation statementOperation)
+                                        {
+                                            var sb = new StringBuilder();
+                                            sb.Append("{");
+                                            sb.Append(a.pattern);
+                                            sb.Append("}");
 
-                                        replaceArguments(sb, iop);
+                                            replaceArguments(sb, iop);
 
-                                        // var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
-                                        // ctx.changedStatements.Add(vdgop.Syntax, parsedBlock.Statements);
+                                            var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
+                                            ctx.changedStatements.Add(statementOperation.Syntax, parsedBlock.Statements);
+                                        }
+                                        else
+                                        {
+                                            throw new Exception($"Expected {nameof(IExpressionStatementOperation)}, got {parent?.GetType()}");
+                                        }
                                     });
                                 }
                             });
@@ -160,8 +168,8 @@ namespace IncrementalCompiler
                                 {
                                     tryMacro(op, method, () =>
                                     {
-                                        var parent = op.Parent?.Parent?.Parent?.Parent;
-                                        if (parent is IVariableDeclarationGroupOperation vdgop)
+                                        var parent4 = op.Parent?.Parent?.Parent?.Parent;
+                                        if (parent4 is IVariableDeclarationGroupOperation vdgop)
                                         {
                                             if (vdgop.Declarations.Length != 1) throw new Exception(
                                                 $"Expected a single variable declaration"
@@ -183,7 +191,7 @@ namespace IncrementalCompiler
                                         }
                                         else
                                         {
-                                            throw new Exception($"Expected {nameof(IVariableDeclarationGroupOperation)}, got {parent?.GetType()}");
+                                            throw new Exception($"Expected {nameof(IVariableDeclarationGroupOperation)}, got {parent4?.GetType()}");
                                         }
                                     });
                                 }

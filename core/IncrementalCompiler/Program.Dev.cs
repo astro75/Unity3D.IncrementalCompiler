@@ -55,7 +55,7 @@ namespace IncrementalCompiler
                     w.Start();
                     Console.WriteLine("Run");
 
-                    var result = CompilerServiceClient.Request(parentProcessId, curPath, options, true);
+                    var result = CompilerServiceClient.Request(parentProcessId, curPath, options, false);
 
                     w.Stop();
 
