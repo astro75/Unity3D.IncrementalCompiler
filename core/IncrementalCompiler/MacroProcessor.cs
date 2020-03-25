@@ -30,7 +30,7 @@ namespace IncrementalCompiler
         }
 
         public static CSharpCompilation Run(
-            CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
+            bool isUnity, CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
             List<Diagnostic> diagnostic
         )
         {
@@ -45,6 +45,7 @@ namespace IncrementalCompiler
             }
 
             var simpleMethodMacroType = compilation.GetTypeByMetadataName(typeof(SimpleMethodMacro).FullName);
+            var statementMethodMacroType = compilation.GetTypeByMetadataName(typeof(StatementMethodMacro).FullName);
             var varMethodMacroType = compilation.GetTypeByMetadataName(typeof(VarMethodMacro).FullName);
             var allMethods = compilation.GetAllTypes().SelectMany(t => t.GetMembers().OfType<IMethodSymbol>());
 
@@ -69,6 +70,35 @@ namespace IncrementalCompiler
                     ctx.changedNodes.Add(op.Syntax, enclosingSymbol.ToDisplayString().StringLiteral());
                 });
 
+            void tryMacro(IOperation op, IMethodSymbol method, Action act) {
+                try
+                {
+                    act();
+                }
+                catch (Exception e)
+                {
+                    diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                        "ER0001",
+                        "Error",
+                        $"Error for macro {method.Name}: {e.Message}({e.Source}) at {e.StackTrace}",
+                        "Error",
+                        DiagnosticSeverity.Error,
+                        true
+                    ), op.Syntax.GetLocation()));
+                }
+            }
+
+            void replaceArguments(StringBuilder sb, IInvocationOperation iop) {
+                for (var i = 0; i < iop.Arguments.Length; i++)
+                {
+                    var arg = iop.Arguments[i];
+                    var expr = arg.Syntax.ToString();
+                    sb.Replace("${" + arg.Parameter.Name + "}", expr);
+                    sb.Replace("${expr" + (i) + "}", expr);
+                }
+                if (iop.Instance != null) sb.Replace("${this}", iop.Instance.Syntax.ToString());
+            }
+
             foreach (var method in allMethods)
             foreach (var attribute in method.GetAttributes())
             {
@@ -81,27 +111,39 @@ namespace IncrementalCompiler
                             {
                                 if (op is IInvocationOperation iop)
                                 {
-                                    try {
+                                    tryMacro(op, method, () =>
+                                    {
                                         var sb = new StringBuilder();
-                                        sb.Append(a.Pattern);
-                                        for (var i = 0; i < iop.Arguments.Length; i++)
-                                        {
-                                            sb.Replace("${expr" + (i + 1) + "}", iop.Arguments[i].Syntax.ToString());
-                                        }
-
-                                        if (iop.Instance != null) sb.Replace("${expr0}", iop.Instance.Syntax.ToString());
+                                        sb.Append(a.pattern);
+                                        replaceArguments(sb, iop);
                                         ctx.changedNodes.Add(iop.Syntax, SyntaxFactory.ParseExpression(sb.ToString()));
-                                    }
-                                    catch (Exception e) {
-                                        diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
-                                            "ER0001",
-                                            "Error",
-                                            $"Error for macro {method.Name}: {e.Message}({e.Source}) at {e.StackTrace}",
-                                            "Error",
-                                            DiagnosticSeverity.Error,
-                                            true
-                                        ), op.Syntax.GetLocation()));
-                                    }
+                                    });
+                                }
+                            });
+                        }, diagnostic);
+                }
+
+                if (attribute.AttributeClass == statementMethodMacroType)
+                {
+                    CodeGeneration.tryAttribute<StatementMethodMacro>(
+                        attribute, a =>
+                        {
+                            builderExpressions.Add(method, (ctx, op) =>
+                            {
+                                if (op is IInvocationOperation iop)
+                                {
+                                    tryMacro(op, method, () =>
+                                    {
+                                        var sb = new StringBuilder();
+                                        sb.Append("{");
+                                        sb.Append(a.pattern);
+                                        sb.Append("}");
+
+                                        replaceArguments(sb, iop);
+
+                                        // var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
+                                        // ctx.changedStatements.Add(vdgop.Syntax, parsedBlock.Statements);
+                                    });
                                 }
                             });
                         }, diagnostic);
@@ -116,7 +158,7 @@ namespace IncrementalCompiler
                             {
                                 if (op is IInvocationOperation iop)
                                 {
-                                    try
+                                    tryMacro(op, method, () =>
                                     {
                                         var parent = op.Parent?.Parent?.Parent?.Parent;
                                         if (parent is IVariableDeclarationGroupOperation vdgop)
@@ -128,15 +170,13 @@ namespace IncrementalCompiler
 
                                             var sb = new StringBuilder();
                                             sb.Append("{");
-                                            sb.Append(a.Pattern);
+                                            sb.Append(a.pattern);
                                             sb.Append("}");
 
-                                            for (var i = 0; i < iop.Arguments.Length; i++)
-                                                sb.Replace("${expr" + (i + 1) + "}", iop.Arguments[i].Syntax.ToString());
-                                            if (iop.Instance != null) sb.Replace("${expr0}", iop.Instance.Syntax.ToString());
+                                            replaceArguments(sb, iop);
 
                                             sb.Replace("${varName}", varDecl.Symbol.ToString());
-                                            sb.Replace("${varType}", varDecl.Symbol.Type.Name);
+                                            sb.Replace("${varType}", varDecl.Symbol.Type.ToDisplayString());
 
                                             var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
                                             ctx.changedStatements.Add(vdgop.Syntax, parsedBlock.Statements);
@@ -145,17 +185,7 @@ namespace IncrementalCompiler
                                         {
                                             throw new Exception($"Expected {nameof(IVariableDeclarationGroupOperation)}, got {parent?.GetType()}");
                                         }
-                                    }
-                                    catch (Exception e) {
-                                        diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
-                                            "ER0001",
-                                            "Error",
-                                            $"Error for macro {method.Name}: {e.Message}({e.Source}) at {e.StackTrace}",
-                                            "Error",
-                                            DiagnosticSeverity.Error,
-                                            true
-                                        ), op.Syntax.GetLocation()));
-                                    }
+                                    });
                                 }
                             });
                         }, diagnostic);
@@ -264,18 +294,19 @@ namespace IncrementalCompiler
                 }
                 return Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
             }).ToArray();
-            compilation = EditTrees(compilation, sourceMap, treeEdits);
+            compilation = EditTrees(isUnity: isUnity, compilation, sourceMap, treeEdits);
             return compilation;
         }
 
         public static CSharpCompilation EditTrees(
+            bool isUnity,
             CSharpCompilation compilation,
             Dictionary<string, SyntaxTree> sourceMap,
             IEnumerable<(SyntaxTree, CompilationUnitSyntax)> treeEdits
         ) {
             foreach (var (tree, syntax) in treeEdits)
             {
-                var originalFilePath = tree.FilePath;
+                var originalFilePath = CodeGeneration.getRelativePath(isUnity, tree.FilePath);
                 var editedFilePath = Path.Combine(CodeGeneration.GENERATED_FOLDER, "_macros", originalFilePath);
 
                 var newTree = tree.WithRootAndOptions(syntax, tree.Options).WithFilePath(editedFilePath);

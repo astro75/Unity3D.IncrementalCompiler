@@ -33,7 +33,11 @@ namespace IncrementalCompiler
 
     public static partial class CodeGeneration
     {
-        public const string GENERATED_FOLDER = "Generated";
+        public const string GENERATED_FOLDER = "generated-by-compiler";
+        public static string getRelativePath(bool isUnity, string path) => isUnity
+            ? path
+            : new Uri(Directory.GetCurrentDirectory()).MakeRelativeUri(new Uri(path)).ToString();
+
         static readonly Type caseType = typeof(RecordAttribute);
         static readonly HashSet<SyntaxKind> kindsForExtensionClass = new HashSet<SyntaxKind>(new[] {
             SyntaxKind.PublicKeyword, SyntaxKind.InternalKeyword, SyntaxKind.PrivateKeyword
@@ -155,6 +159,7 @@ namespace IncrementalCompiler
         }
 
         public static (CSharpCompilation, List<Diagnostic>) Run(
+            bool isUnity,
             bool incrementalRun,
             CSharpCompilation compilation,
             ImmutableArray<SyntaxTree> trees,
@@ -346,16 +351,17 @@ namespace IncrementalCompiler
                 }
                 if (newMembers.Any())
                 {
+                    var treePath = getRelativePath(isUnity, tree.FilePath);
                     var nt = CSharpSyntaxTree.Create(
                         SF.CompilationUnit()
                             .WithUsings(cleanUsings(root.Usings))
                             .WithLeadingTrivia(SyntaxTriviaList.Create(SyntaxFactory.Comment("// ReSharper disable all")))
                             .WithMembers(SF.List(newMembers))
                             .NormalizeWhitespace(),
-                        path: Path.Combine(generatedProjectFilesDirectory, tree.FilePath),
+                        path: Path.Combine(generatedProjectFilesDirectory, treePath),
                         options: parseOptions,
                         encoding: Encoding.UTF8);
-                    result = result.Add(new GeneratedCsFile(sourcePath: tree.FilePath, tree: nt, location: root.GetLocation()));
+                    result = result.Add(new GeneratedCsFile(sourcePath: treePath, tree: nt, location: root.GetLocation()));
                 }
                 return result.ToArray();
             }).ToArray();
@@ -389,7 +395,7 @@ namespace IncrementalCompiler
             }
 
             compilation = MacroProcessor.EditTrees(
-                compilation, sourceMap, results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
+                isUnity: isUnity, compilation, sourceMap, results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
             );
             compilation = filesMapping.updateCompilation(compilation, parseOptions, assemblyName: assemblyName, generatedFilesDir: generatedProjectFilesDirectory);
             File.WriteAllLines(

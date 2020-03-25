@@ -304,7 +304,10 @@ namespace IncrementalCompiler
                 //analyzers = Analyzers(diagnostic);
                 logTime("Loaded analyzers");
 
+                const bool isUnity = true;
+
                 compilation = CodeGeneration.Run(
+                    isUnity: isUnity,
                     false,
                     compilation,
                     compilation.SyntaxTrees,
@@ -320,6 +323,7 @@ namespace IncrementalCompiler
                 logTime("Code generated");
 
                 compilation = MacroProcessor.Run(
+                    isUnity: isUnity,
                     compilation,
                     compilation.SyntaxTrees,
                     _sourceMap,
@@ -445,8 +449,11 @@ namespace IncrementalCompiler
             }
             else
             {
+                const bool isUnity = true;
+
                 _compilation = CodeGeneration.Run(
-                    true, _compilation, allAddedTrees, parseOptions, assemblyNameNoExtension, ref _filesMapping, _sourceMap
+                    isUnity: isUnity, true, _compilation, allAddedTrees, parseOptions, assemblyNameNoExtension,
+                    ref _filesMapping, _sourceMap
                 ).Tap(t =>
                 {
                     diagnostic.AddRange(t.Item2);
@@ -454,6 +461,7 @@ namespace IncrementalCompiler
                 });
 
                 //TODO: macros on new generated files
+
 
                 var treeSet = allAddedTrees.Select(t => t.FilePath).ToImmutableHashSet();
                 var treesForMacroProcessor =
@@ -463,6 +471,7 @@ namespace IncrementalCompiler
                         .ToImmutableArray();
 
                 _compilation = MacroProcessor.Run(
+                    isUnity: isUnity,
                     _compilation,
                     treesForMacroProcessor,
                     _sourceMap,
