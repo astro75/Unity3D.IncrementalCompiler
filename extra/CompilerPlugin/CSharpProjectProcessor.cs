@@ -56,7 +56,7 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
             .OfType<string>()
             .ToArray();
 
-        var commonPrefix = findCommonPrefix(allCsPaths);
+        var commonPrefix = allCsPaths.Length > 1 ? findCommonPrefix(allCsPaths) : "";
 
         {
             if (commonPrefix.Length > 0)

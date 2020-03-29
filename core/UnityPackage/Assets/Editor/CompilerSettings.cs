@@ -3,7 +3,8 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using System.Diagnostics;
-using System.IO;
+ using System.Globalization;
+ using System.IO;
 using System.Linq;
 using System.Reflection;
 using System.Xml.Linq;
@@ -38,18 +39,30 @@ public class CompilerSettings : EditorWindow
         public PrebuiltOutputReuseType PrebuiltOutputReuse;
     }
 
-    private readonly string[] BuildTargets = { "Assembly-CSharp-firstpass", "Assembly-CSharp", "Assembly-CSharp-Editor" };
-    private const string UcsFilePath = "./Compiler/UniversalCompiler.xml";
-    private const string UcLogFilePath = "./Compiler/Temp/UniversalCompiler.log";
-    private const string IcsFilePath = "./Compiler/IncrementalCompiler.xml";
+    struct LogElement {
+        public readonly string target;
+        public readonly long durationMs;
+        public readonly DateTime time;
 
-    private DateTime _ucsLastWriteTime;
-    private UniversalCompilerSettings _ucs;
-    private string _ucVersion;
-    private string[] _ucLastBuildLog = { "", "", "" };
-    private DateTime _icsLastWriteTime;
-    private IncrementalCompilerSettings _ics;
-    private Process _icProcess;
+        public LogElement(string target, long durationMs, DateTime time) {
+            this.target = target;
+            this.durationMs = durationMs;
+            this.time = time;
+        }
+    }
+
+    const string UcsFilePath = "./Compiler/UniversalCompiler.xml";
+    const string UcLogFilePath = "./Compiler/Temp/UniversalCompiler.log";
+    const string IcsFilePath = "./Compiler/IncrementalCompiler.xml";
+
+    DateTime _ucsLastWriteTime;
+    UniversalCompilerSettings _ucs;
+    string _ucVersion;
+    LogElement[] _ucLastBuildLog = new LogElement[0];
+    DateTime _icsLastWriteTime;
+    DateTime _ucLogLastWriteTime;
+    IncrementalCompilerSettings _ics;
+    Process _icProcess;
 
     [MenuItem("Assets/Open C# Compiler Settings...")]
     public static void ShowWindow()
@@ -70,20 +83,21 @@ public class CompilerSettings : EditorWindow
         OnGUI_Compiler();
         OnGUI_IncrementalCompilerSettings();
         OnGUI_IncrementalCompilerStatus();
+        OnGUI_BuildTime();
     }
 
-    private void OnGUI_Compiler()
+    void OnGUI_Compiler()
     {
         GUILayout.Label("Compiler", EditorStyles.boldLabel);
 
-        LoadUniversalCompilerSettings();
-        UniversalCompilerSettings ucs;
-        ucs.Compiler = (CompilerType)EditorGUILayout.EnumPopup("Compiler:", _ucs.Compiler);
-        if (ucs.Equals(_ucs) == false)
-        {
-            _ucs = ucs;
-            SaveUniversalCompilerSettings();
-        }
+        // LoadUniversalCompilerSettings();
+        // UniversalCompilerSettings ucs;
+        // ucs.Compiler = (CompilerType)EditorGUILayout.EnumPopup("Compiler:", _ucs.Compiler);
+        // if (ucs.Equals(_ucs) == false)
+        // {
+        //     _ucs = ucs;
+        //     SaveUniversalCompilerSettings();
+        // }
 
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.LabelField("Version", GetUniversalCompilerVersion());
@@ -92,19 +106,32 @@ public class CompilerSettings : EditorWindow
             ShowUniversalCompilerClientLog();
         EditorGUI.EndDisabledGroup();
         EditorGUILayout.EndHorizontal();
+    }
 
+    void OnGUI_BuildTime()
+    {
         var durations = GetUniversalCompilerLastBuildLogs();
-        GUILayout.Label("Last Build Time");
+        GUILayout.Label("Last Build Times");
         EditorGUI.indentLevel += 1;
-        foreach (var duration in durations) {
-            EditorGUILayout.LabelField(duration);
+        var now = DateTime.UtcNow;
+        for (var index = 0; index < durations.Length; index++) {
+            var duration = durations[index];
+            if (index > 0) {
+                var prevDuration = durations[index - 1];
+                if ((prevDuration.time - duration.time).TotalSeconds > 15) {
+                    // insert space between different compilation runs
+                    EditorGUILayout.LabelField("---");
+                }
+            }
+            var ago = now - duration.time;
+            var seconds = (int) ago.TotalSeconds;
+            EditorGUILayout.LabelField($"{seconds,4} s ago, {duration.durationMs:N0} ms, {duration.target}");
         }
-        //for (var i=0; i< BuildTargets.Length; i++)
-        //    EditorGUILayout.LabelField("Assembly" + BuildTargets[i].Substring(15), durations[i]);
+
         EditorGUI.indentLevel -= 1;
     }
 
-    private void LoadUniversalCompilerSettings()
+    void LoadUniversalCompilerSettings()
     {
         var ucsLastWriteTime = GetFileLastWriteTime(UcsFilePath);
         if (_ucsLastWriteTime == ucsLastWriteTime)
@@ -131,7 +158,7 @@ public class CompilerSettings : EditorWindow
         }
     }
 
-    private void SaveUniversalCompilerSettings()
+    void SaveUniversalCompilerSettings()
     {
         try
         {
@@ -157,7 +184,7 @@ public class CompilerSettings : EditorWindow
         }
     }
 
-    private string GetUniversalCompilerVersion()
+    string GetUniversalCompilerVersion()
     {
         if (_ucVersion != null) {
             return _ucVersion;
@@ -168,57 +195,41 @@ public class CompilerSettings : EditorWindow
         return _ucVersion;
     }
 
-    private void ShowUniversalCompilerClientLog()
+    void ShowUniversalCompilerClientLog()
     {
         Process.Start(Path.GetFullPath(UcLogFilePath));
     }
 
-    private string[] GetUniversalCompilerLastBuildLogs()
+    LogElement[] GetUniversalCompilerLastBuildLogs()
     {
-        var icsLastWriteTime = GetFileLastWriteTime(UcLogFilePath);
-        if (icsLastWriteTime == _icsLastWriteTime)
-            return _ucLastBuildLog;
+        if (!File.Exists(UcLogFilePath)) return _ucLastBuildLog;
+        var ucLogLastWriteTime = GetFileLastWriteTime(UcLogFilePath);
+        if (ucLogLastWriteTime == _ucLogLastWriteTime) return _ucLastBuildLog;
+        _ucLogLastWriteTime = ucLogLastWriteTime;
 
-        var result = new List<string>();
-        //_ucLastBuildLog = new[] {"", "", ""};
-        if (!File.Exists(UcLogFilePath)) {
-            return _ucLastBuildLog;
-        }
-
+        var result = new List<LogElement>();
         try
         {
             var lines = File.ReadAllLines(UcLogFilePath);
 
             var totalFound = 0;
-            var elapsed = 0.0;
             foreach (var line in lines.Reverse())
             {
-                if (line.StartsWith("Target assembly:"))
-                {
-                    // "Target assembly: Assembly-CSharp-Editor.dll";
-                    var target = Path.GetFileNameWithoutExtension(line.Substring(17).Trim());
-                    //var idx = Array.FindIndex(BuildTargets, x => x == target);
-                    //if (idx != -1)
-                    //{
-                    //    if (lastIdx <= idx)
-                    //        break;
-                    //    _ucLastBuildLog[idx] = elapsed.ToString("0.00") + " sec";
-                    //    lastIdx = idx;
-                    //}
+                Debug.Log(line);
+                if (line.StartsWith("compilation-info;", StringComparison.Ordinal)) {
+                    var split = line.Split(';');
+                    Debug.Log(line);
+                    if (split.Length < 4) continue;
 
-                    result.Add($"{elapsed:0.00} sec {target}");
+                    var target = split[1];
+                    var elapsed = long.TryParse(split[2], out var res) ? res : 0;
+                    var dateTime = DateTime.TryParse(
+                        split[3], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt
+                    ) ? dt : DateTime.UtcNow;
+                    result.Add(new LogElement(target, elapsed, dateTime));
 
                     totalFound++;
                     if (totalFound >= 30) break;
-
-                    elapsed = 0;
-                }
-                else if (line.StartsWith("Elapsed time:"))
-                {
-                    // "Elapsed time: 0.82 sec";
-                    double sec;
-                    double.TryParse(line.Substring(13).Trim().Split()[0], out sec);
-                    elapsed += sec;
                 }
             }
         }
@@ -232,7 +243,7 @@ public class CompilerSettings : EditorWindow
         return _ucLastBuildLog;
     }
 
-    private void OnGUI_IncrementalCompilerSettings()
+    void OnGUI_IncrementalCompilerSettings()
     {
         GUILayout.Label("Incremental Compiler Settings", EditorStyles.boldLabel);
 
@@ -246,7 +257,7 @@ public class CompilerSettings : EditorWindow
         }
     }
 
-    private void LoadIncrementalCompilerSettings()
+    void LoadIncrementalCompilerSettings()
     {
         var icsLastWriteTime = GetFileLastWriteTime(IcsFilePath);
         if (icsLastWriteTime == _icsLastWriteTime)
@@ -274,7 +285,7 @@ public class CompilerSettings : EditorWindow
         }
     }
 
-    private void SaveIncrementalCompilerSettings()
+    void SaveIncrementalCompilerSettings()
     {
         try
         {
@@ -300,7 +311,7 @@ public class CompilerSettings : EditorWindow
         }
     }
 
-    private void OnGUI_IncrementalCompilerStatus()
+    void OnGUI_IncrementalCompilerStatus()
     {
         GUILayout.Label("Incremental Compiler Status", EditorStyles.boldLabel);
 
@@ -330,13 +341,13 @@ public class CompilerSettings : EditorWindow
         EditorGUILayout.EndHorizontal();
     }
 
-    private string GetIncrementalCompilerVersion()
+    string GetIncrementalCompilerVersion()
     {
         var assemblyName = AssemblyName.GetAssemblyName("./Compiler/IncrementalCompiler.exe");
         return assemblyName != null ? assemblyName.Version.ToString() : "";
     }
 
-    private Process GetIncrementalCompilerProcess()
+    Process GetIncrementalCompilerProcess()
     {
         if (_icProcess != null && _icProcess.HasExited == false)
             return _icProcess;
@@ -362,19 +373,19 @@ public class CompilerSettings : EditorWindow
         }
     }
 
-    private void ShowIncrementalCompilerClientLog()
+    void ShowIncrementalCompilerClientLog()
     {
         Process.Start(Path.GetFullPath(@"./Compiler/Temp/IncrementalCompiler.log"));
     }
 
-    private void ShowIncrementalCompilerServerLog()
+    void ShowIncrementalCompilerServerLog()
     {
         Process.Start(Path.GetFullPath(@"./Compiler/Temp/IncrementalCompiler-Server.log"));
     }
 
     // workaround for Xelement.SetElementValue bug at Unity3D
     // http://stackoverflow.com/questions/26429930/xelement-setelementvalue-overwrites-elements
-    private void SetXmlElementValue(XElement xel, XName name, string value)
+    void SetXmlElementValue(XElement xel, XName name, string value)
     {
         var element = xel.Element(name);
         if (element != null)
@@ -383,7 +394,7 @@ public class CompilerSettings : EditorWindow
             xel.Add(new XElement(name, value));
     }
 
-    private DateTime GetFileLastWriteTime(string path)
+    DateTime GetFileLastWriteTime(string path)
     {
         try
         {

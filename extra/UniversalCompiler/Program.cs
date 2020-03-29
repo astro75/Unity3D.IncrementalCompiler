@@ -77,6 +77,8 @@ internal class Program
 		stopwatch.Stop();
 
 		logger?.Append($"Elapsed time: {stopwatch.ElapsedMilliseconds / 1000f:F2} sec");
+        // this line will be parsed by code in CompilerSettings.cs
+		logger?.Append($"compilation-info;{targetAssembly};{stopwatch.ElapsedMilliseconds};{DateTime.UtcNow:O}");
 		logger?.Append("");
 		compiler.PrintCompilerOutputAndErrors();
         return exitCode;
