@@ -24,7 +24,7 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
     {
     }
 
-	string GetUniversalCompilerPath()
+	string? GetUniversalCompilerPath()
 	{
 		var basePath = Path.Combine(Directory.GetCurrentDirectory(), "Compiler");
 		var compilerPath = Path.Combine(basePath, "UniversalCompiler.exe");

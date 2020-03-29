@@ -53,7 +53,7 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
 
         var allCsPaths = xdoc.Descendants(compileName)
             .Select(element => element.Attribute(includeName)?.Value)
-            .Where(element => element != null)
+            .OfType<string>()
             .ToArray();
 
         var commonPrefix = findCommonPrefix(allCsPaths);

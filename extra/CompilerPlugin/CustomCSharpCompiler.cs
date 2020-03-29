@@ -25,7 +25,7 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
         this.island = island;
     }
 
-    private string[] GetAdditionalReferences()
+    private string[]? GetAdditionalReferences()
 	{
 		// calling base method via reflection
 		var bindingFlags = BindingFlags.Instance | BindingFlags.NonPublic;
@@ -44,7 +44,7 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
 		return result;
 	}
 
-	private string GetUniversalCompilerPath()
+	private string? GetUniversalCompilerPath()
 	{
 		var basePath = Path.Combine(Directory.GetCurrentDirectory(), "Compiler");
 		var compilerPath = Path.Combine(basePath, "UniversalCompiler.exe");

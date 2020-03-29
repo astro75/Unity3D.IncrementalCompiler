@@ -15,17 +15,18 @@
     </ItemGroup>
     
     <Target Name="Package">
-        <ItemGroup>
-            <OldFiles Include="..\bin2\**\*" />
-        </ItemGroup>
-        <Delete Files="@(OldFiles)" />
-        
         <PropertyGroup>
-            <TargetDir>..\bin2\</TargetDir>
+            <TargetDir>..\bin\</TargetDir>
             <EditorDir>$(TargetDir)\Assets\CSharp vNext Support\Editor\</EditorDir>
             <PluginsDir>$(TargetDir)\Plugins\Incremental Compiler\</PluginsDir>
             <CompilerDir>$(TargetDir)\Compiler\</CompilerDir>
         </PropertyGroup>
+        
+        <ItemGroup>
+            <OldFiles Include="$(TargetDir)\**\*" />
+        </ItemGroup>
+        <!-- do not delete folders, because it fails on windows if the folder is open in file explorer -->
+        <Delete Files="@(OldFiles)" />
         
         <Copy SourceFiles="..\extra\CompilerPlugin.2019.3\bin\$(Configuration)\Unity.PureCSharpTests.dll" DestinationFiles="$(EditorDir)\CSharpVNextSupport.dll" />
         <Copy SourceFiles="..\core\UnityPackage\Assets\Editor\CompilerSettings.cs" DestinationFolder="$(EditorDir)" />

@@ -17,7 +17,7 @@ namespace CompilationExtensionCodeGenerator {
             return diagnostics;
         }
 
-        public const string GENERATED_FOLDER = "generated-by-compiler";
+        const string GENERATED_FOLDER = "generated-by-compiler";
 
         static (IEnumerable<Diagnostic>, CSharpCompilation) processTypeSafe(CSharpCompilation compilation) {
             var mapping = new CodeGeneration.GeneratedFilesMapping();
