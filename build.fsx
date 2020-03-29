@@ -27,21 +27,21 @@ let export = for (target, target2, useHarmony) in [("2018", "Unity5", true); ("2
     CreateDir editorDir
     CreateDir pluginsDir
 
-    "./GenerationAttributes/bin/Debug/GenerationAttributes.dll" |> CopyFile pluginsDir
-    "./GenerationAttributes/bin/Debug/GenerationAttributes.xml" |> CopyFile pluginsDir
-    "./GenerationAttributes.Java/bin/Debug/GenerationAttributes.Java.dll" |> CopyFile pluginsDir
-    "./GenerationAttributes.Java/bin/Debug/GenerationAttributes.Java.xml" |> CopyFile pluginsDir
-    "./Macros/bin/Debug/Macros.dll" |> CopyFile pluginsDir
-    "./Macros/bin/Debug/Macros.xml" |> CopyFile pluginsDir
+    "./GenerationAttributes/bin/Release/GenerationAttributes.dll" |> CopyFile pluginsDir
+    "./GenerationAttributes/bin/Release/GenerationAttributes.xml" |> CopyFile pluginsDir
+    "./GenerationAttributes.Java/bin/Release/GenerationAttributes.Java.dll" |> CopyFile pluginsDir
+    "./GenerationAttributes.Java/bin/Release/GenerationAttributes.Java.xml" |> CopyFile pluginsDir
+    "./Macros/bin/Release/Macros.dll" |> CopyFile pluginsDir
+    "./Macros/bin/Release/Macros.xml" |> CopyFile pluginsDir
     "./core/UnityPackage/Assets/Editor/CompilerSettings.cs" |> CopyFile editorDir
     if useHarmony then "./tools/0Harmony.dll" |> CopyFile editorDir
     "./core/IncrementalCompiler/IncrementalCompiler.xml" |> CopyFile compilerDir
-    "./extra/CompilerPlugin." + target2 + "/bin/Debug/Unity.PureCSharpTests.dll" |> CopyFile (editorDir @@ "CSharpVNextSupport.dll")
-    "./extra/UniversalCompiler/bin/Debug/UniversalCompiler.exe" |> CopyFile compilerDir
+    "./extra/CompilerPlugin." + target2 + "/bin/Release/Unity.PureCSharpTests.dll" |> CopyFile (editorDir @@ "CSharpVNextSupport.dll")
+    "./extra/UniversalCompiler/bin/Release/UniversalCompiler.exe" |> CopyFile compilerDir
     "./extra/UniversalCompiler/UniversalCompiler.xml" |> CopyFile compilerDir
     "./tools/pdb2mdb/pdb2mdb.exe" |> CopyFile compilerDir
 
-    let dir = System.IO.DirectoryInfo("./core/IncrementalCompiler/bin/Debug/net471")
+    let dir = System.IO.DirectoryInfo("./core/IncrementalCompiler/bin/Release/net471")
     filesInDir dir |> Array.iter (fun f -> f.FullName |> CopyFile compilerDir)
 
     // IO.Shell.rename (compilerDir @@ "IncrementalCompiler.exe") (compilerDir @@ "IncrementalCompiler.dll")

@@ -31,12 +31,22 @@ namespace IncrementalCompiler
         }
     }
 
+    public class GenerationSettings
+    {
+        public readonly string partialsFolder, macrosFolder;
+        public readonly string? txtForPartials;
+
+        public GenerationSettings(string partialsFolder, string macrosFolder, string? txtForPartials) {
+            this.partialsFolder = partialsFolder;
+            this.macrosFolder = macrosFolder;
+            this.txtForPartials = txtForPartials;
+        }
+    }
+
     public static partial class CodeGeneration
     {
-        public const string GENERATED_FOLDER = "generated-by-compiler";
-        public static string getRelativePath(bool isUnity, string path) => isUnity
-            ? path
-            : new Uri(Directory.GetCurrentDirectory()).MakeRelativeUri(new Uri(path)).ToString();
+        public static string getRelativePath(string path) =>
+            new Uri(Directory.GetCurrentDirectory()).MakeRelativeUri(new Uri(Path.GetFullPath(path))).ToString();
 
         static readonly Type caseType = typeof(RecordAttribute);
         static readonly HashSet<SyntaxKind> kindsForExtensionClass = new HashSet<SyntaxKind>(new[] {
@@ -159,21 +169,20 @@ namespace IncrementalCompiler
         }
 
         public static (CSharpCompilation, List<Diagnostic>) Run(
-            bool isUnity,
             bool incrementalRun,
             CSharpCompilation compilation,
             ImmutableArray<SyntaxTree> trees,
             CSharpParseOptions parseOptions,
             string assemblyName,
-            ref GeneratedFilesMapping filesMapping,
-            Dictionary<string, SyntaxTree> sourceMap
+            GeneratedFilesMapping filesMapping,
+            Dictionary<string, SyntaxTree> sourceMap,
+            GenerationSettings settings
         ) {
-            var generatedProjectFilesDirectory = Path.Combine(GENERATED_FOLDER, assemblyName);
-            if (!incrementalRun && Directory.Exists(generatedProjectFilesDirectory))
+            if (!incrementalRun && Directory.Exists(settings.partialsFolder))
             {
-                DeleteFilesAndFoldersRecursively(generatedProjectFilesDirectory);
+                DeleteFilesAndFoldersRecursively(settings.partialsFolder);
             }
-            Directory.CreateDirectory(generatedProjectFilesDirectory);
+            Directory.CreateDirectory(settings.partialsFolder);
             var oldCompilation = compilation;
             var diagnostic = new List<Diagnostic>();
 
@@ -199,13 +208,11 @@ namespace IncrementalCompiler
 
                 foreach (var tds in typesInFile)
                 {
-                    bool treeContains(SyntaxReference syntaxRef) =>
-                        tree == syntaxRef.SyntaxTree && tds.Span.Contains(syntaxRef.Span);
-
                     var symbol = model.GetDeclaredSymbol(tds);
-                    JavaClassFile javaClassFile = null;
+                    if (symbol == null) continue;
+                    JavaClassFile? javaClassFile = null;
                     foreach (var attr in symbol.GetAttributes()) {
-                        if (!treeContains(attr.ApplicationSyntaxReference)) continue;
+                        if (!treeContains(attr.ApplicationSyntaxReference, tree, tds)) continue;
                         var attrClassName = attr.AttributeClass.ToDisplayString();
                         if (attrClassName == caseType.FullName)
                         {
@@ -276,7 +283,7 @@ namespace IncrementalCompiler
                             case IFieldSymbol fieldSymbol:
                                 foreach (var attr in fieldSymbol.GetAttributes())
                                 {
-                                    if (!treeContains(attr.ApplicationSyntaxReference)) continue;
+                                    if (!treeContains(attr.ApplicationSyntaxReference, tree, tds)) continue;
                                     var attrClassName = attr.AttributeClass.ToDisplayString();
                                     if (attrClassName == typeof(PublicAccessor).FullName)
                                     {
@@ -297,7 +304,7 @@ namespace IncrementalCompiler
                             case IMethodSymbol methodSymbol:
                                 foreach (var attr in methodSymbol.GetAttributes())
                                 {
-                                    if (!treeContains(attr.ApplicationSyntaxReference)) continue;
+                                    if (!treeContains(attr.ApplicationSyntaxReference, tree, tds)) continue;
                                     var attrClassName = attr.AttributeClass.ToDisplayString();
                                     if (attrClassName == typeof(JavaMethodAttribute).FullName)
                                     {
@@ -351,14 +358,14 @@ namespace IncrementalCompiler
                 }
                 if (newMembers.Any())
                 {
-                    var treePath = getRelativePath(isUnity, tree.FilePath);
+                    var treePath = getRelativePath(tree.FilePath);
                     var nt = CSharpSyntaxTree.Create(
                         SF.CompilationUnit()
                             .WithUsings(cleanUsings(root.Usings))
                             .WithLeadingTrivia(SyntaxTriviaList.Create(SyntaxFactory.Comment("// ReSharper disable all")))
                             .WithMembers(SF.List(newMembers))
                             .NormalizeWhitespace(),
-                        path: Path.Combine(generatedProjectFilesDirectory, treePath),
+                        path: Path.Combine(settings.partialsFolder, treePath),
                         options: parseOptions,
                         encoding: Encoding.UTF8);
                     result = result.Add(new GeneratedCsFile(sourcePath: treePath, tree: nt, location: root.GetLocation()));
@@ -395,15 +402,24 @@ namespace IncrementalCompiler
             }
 
             compilation = MacroProcessor.EditTrees(
-                isUnity: isUnity, compilation, sourceMap, results.OfType<ModifiedFile>().Select(f => (f.From, f.To))
+                compilation, sourceMap, results.OfType<ModifiedFile>().Select(f => (f.From, f.To)), settings
             );
-            compilation = filesMapping.updateCompilation(compilation, parseOptions, assemblyName: assemblyName, generatedFilesDir: generatedProjectFilesDirectory);
-            File.WriteAllLines(
-                Path.Combine(GENERATED_FOLDER, $"Generated-files-{assemblyName}.txt"),
-                filesMapping.filesDict.Values
-                    .SelectMany(_ => _)
-                    .Select(path => path.Replace("/", "\\")));
+            compilation = filesMapping.updateCompilation(compilation, parseOptions, assemblyName: assemblyName, generatedFilesDir: settings.partialsFolder);
+            if (settings.txtForPartials != null)
+            {
+                File.WriteAllLines(
+                    settings.txtForPartials,
+                    filesMapping.filesDict.Values
+                        .SelectMany(_ => _)
+                        .Select(path => path.Replace("/", "\\")));
+            }
             return (compilation, diagnostic);
+        }
+
+        static bool treeContains(SyntaxReference syntaxRef, SyntaxTree tree, TypeDeclarationSyntax tds) {
+            return tree == syntaxRef.SyntaxTree
+                   &&
+                   tds.Span.Contains(syntaxRef.Span);
         }
 
         static Location attrLocation(AttributeData attr) => attr.ApplicationSyntaxReference.GetSyntax().GetLocation();
@@ -460,17 +476,18 @@ namespace IncrementalCompiler
             // TODO: ban extending this class in different files
             // TODO: generics ?
 
-            var baseTypeSymbol = model.GetDeclaredSymbol(tds);
+            var baseTypeSymbol = model.GetDeclaredSymbol(tds) ?? throw new Exception($"Could not find symbol for {tds}");
             var symbols = typesInFile
                 .Select(t => model.GetDeclaredSymbol(t))
+                .OfType<INamedTypeSymbol>()
                 // move current symbol to back
-                .OrderBy(s => s.Equals(baseTypeSymbol));
+                .OrderBy(s => SymbolEqualityComparer.Default.Equals(s, baseTypeSymbol));
 
             IEnumerable<INamedTypeSymbol> findTypes() { switch (tds) {
                 case ClassDeclarationSyntax _:
                     return symbols.Where(s => {
-                        if (!baseTypeSymbol.IsAbstract && s.Equals(baseTypeSymbol)) return true;
-                        return s.BaseType?.Equals(baseTypeSymbol) ?? false;
+                        if (!baseTypeSymbol.IsAbstract && SymbolEqualityComparer.Default.Equals(s, baseTypeSymbol)) return true;
+                        return SymbolEqualityComparer.Default.Equals(s.BaseType, baseTypeSymbol);
                     });
                 case InterfaceDeclarationSyntax _:
                     return symbols.Where(s => s.Interfaces.Contains(baseTypeSymbol));
@@ -568,7 +585,8 @@ namespace IncrementalCompiler
                 bool interfaceInIEnumerable(INamedTypeSymbol info) =>
                     info.ContainingNamespace + "." + info.Name + "`" + info.Arity == iEnumName;
 
-                typeInfo = model.GetTypeInfo(type).Type;
+                var typeInfoLocal = model.GetTypeInfo(type).Type;
+                typeInfo = typeInfoLocal ?? throw new Exception($"Type info not found for {identifier}");
                 var typeName = typeInfo.ToDisplayString();
 
                 var typeIsIEnumerableItself = typeInfo is INamedTypeSymbol ti && interfaceInIEnumerable(ti);
@@ -598,7 +616,7 @@ namespace IncrementalCompiler
         }
 
         private static TypeDeclarationSyntax CreatePartial(
-            TypeDeclarationSyntax originalType, IEnumerable<MemberDeclarationSyntax> newMembers, BaseListSyntax baseList
+            TypeDeclarationSyntax originalType, IEnumerable<MemberDeclarationSyntax> newMembers, BaseListSyntax? baseList
         ) =>
             CreateType(
                 originalType.Kind(),
@@ -621,8 +639,8 @@ namespace IncrementalCompiler
             .WithMembers(SF.List(newMembers));
 
         public static TypeDeclarationSyntax CreateType(
-            SyntaxKind kind, SyntaxToken identifier, SyntaxTokenList modifiers, TypeParameterListSyntax typeParams,
-            SyntaxList<MemberDeclarationSyntax> members, BaseListSyntax baseList
+            SyntaxKind kind, SyntaxToken identifier, SyntaxTokenList modifiers, TypeParameterListSyntax? typeParams,
+            SyntaxList<MemberDeclarationSyntax> members, BaseListSyntax? baseList
         ) {
             switch (kind)
             {

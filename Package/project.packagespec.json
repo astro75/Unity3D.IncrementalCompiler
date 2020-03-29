@@ -1,0 +1,25 @@
+﻿{
+  "version": "1.0.0",
+  "restore": {
+    "projectUniqueName": "C:\\work\\compiler\\Unity3D.IncrementalCompiler\\Package\\Package.csproj",
+    "projectName": "Package",
+    "projectPath": "C:\\work\\compiler\\Unity3D.IncrementalCompiler\\Package\\Package.csproj",
+    "outputPath": "C:\\work\\compiler\\Unity3D.IncrementalCompiler\\Package\\",
+    "projectStyle": "PackageReference",
+    "originalTargetFrameworks": [
+      "net471"
+    ],
+    "sources": {
+      "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+      "https://api.nuget.org/v3/index.json": {}
+    },
+    "frameworks": {
+      "net471": {
+        "projectReferences": {}
+      }
+    }
+  },
+  "frameworks": {
+    "net471": {}
+  }
+}

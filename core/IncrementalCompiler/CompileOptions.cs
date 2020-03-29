@@ -11,7 +11,6 @@ namespace IncrementalCompiler
     {
         None,
         Pdb,
-        PdbToMdb
     }
 
     public enum PrebuiltOutputReuseType
@@ -24,10 +23,10 @@ namespace IncrementalCompiler
     [DataContract]
     public class CompileOptions
     {
-        [DataMember] public string WorkDirectory;
-        [DataMember] public string AssemblyName;
-        [DataMember] public string Output;
-        [DataMember] public bool IsUnityPackage;
+        [DataMember] public string WorkDirectory = "**Uninitialized**";
+        [DataMember] public string AssemblyName = "**Uninitialized**";
+        [DataMember] public string Output = "**Uninitialized**";
+        [DataMember] public bool IsUnityPackage = false;
         [DataMember] public List<string> Defines = new List<string>();
         [DataMember] public List<string> References = new List<string>();
         [DataMember] public List<string> Files = new List<string>();
@@ -82,10 +81,6 @@ namespace IncrementalCompiler
                             {
                                 NoWarnings.Add(int.TryParse(id, out var num) ? $"CS{num:0000}" : id);
                             }
-                            break;
-
-                        case "custom-option-mdb":
-                            DebugSymbolFile = DebugSymbolFileType.PdbToMdb;
                             break;
 
                         case "optimize":

@@ -3,6 +3,7 @@ using System.IO;
 using System.Linq;
 using System.Text;
 using System.Xml.Linq;
+using IncrementalCompiler;
 using JetBrains.Annotations;
 using UnityEditor;
 using UnityEngine;
@@ -11,34 +12,8 @@ using UnityEngine;
 // 1) enables unsafe code,
 // 2) removes C# 4.0 version restriction introduced by Visual Studio Tools for Unity.
 
-[InitializeOnLoad]
 public class CSharpProjectPostprocessor : AssetPostprocessor
 {
-    // We need to run this after Rider postprocessor, because we override LangVersion
-    // Rider postprocessor has order of 10
-    public override int GetPostprocessOrder() => 11;
-
-    // In case VSTU is installed
-    static CSharpProjectPostprocessor() {
-        if (unityVersion >= new Version(2018, 1)) return;
-        OnGeneratedCSProjectFiles();
-    }
-
-    public static Version unityVersion => new Version(Application.unityVersion.Split(".".ToCharArray()).Take(2).Aggregate((a, b) => a + "." + b));
-
-    // In case VSTU is not installed
-    private static void OnGeneratedCSProjectFiles()
-    {
-        Debug.Log("Incremental compiler: " + nameof(OnGeneratedCSProjectFiles));
-
-        foreach (string projectFile in Directory.GetFiles(Directory.GetCurrentDirectory(), "*.csproj"))
-        {
-            string content = File.ReadAllText(projectFile);
-            content = ModifyProjectFile(content);
-            File.WriteAllText(projectFile, content);
-        }
-    }
-
     [UsedImplicitly]
     public static string OnGeneratedCSProject(string path, string contents)
     {
@@ -48,12 +23,12 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         }
         catch (Exception ex)
         {
-            Debug.LogError((object) ex);
+            Debug.LogError(ex);
             return contents;
         }
     }
 
-    private static string ModifyProjectFile(string content)
+    static string ModifyProjectFile(string content)
     {
         var xdoc = XDocument.Parse(content);
 
@@ -62,12 +37,45 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         RemoveAnnoyingReferences(xdoc);
 
         AddDefine(xdoc, CustomCSharpCompiler.COMPILER_DEFINE);
+
+        if (xdoc.Root == null)
         {
-            var ns = xdoc.Root.GetDefaultNamespace();
-            var compileName = ns + "Compile";
-            var includeName = (XName) "Include";
-            const string GENERATED = "Generated";
-            var generatedPathStart = GENERATED + Path.DirectorySeparatorChar;
+            Debug.LogError("Project file root not found");
+            return content;
+        }
+
+        var ns = xdoc.Root.GetDefaultNamespace();
+
+        var compileName = ns + "Compile";
+        var noneName = ns + "None";
+        var includeName = (XName) "Include";
+        var linkName = (XName) "Link";
+
+        var allCsPaths = xdoc.Descendants(compileName)
+            .Select(element => element.Attribute(includeName)?.Value)
+            .Where(element => element != null)
+            .ToArray();
+
+        var commonPrefix = findCommonPrefix(allCsPaths);
+
+        {
+            if (commonPrefix.Length > 0)
+            {
+                foreach (var fileElement in xdoc.Descendants(compileName).Concat(xdoc.Descendants(noneName)))
+                {
+                    var includeAttribute = fileElement.Attribute(includeName);
+                    if (includeAttribute != null)
+                    {
+                        fileElement.SetAttributeValue(
+                            linkName,
+                            EnsureDoesNotStartWith(includeAttribute.Value, commonPrefix));
+                    }
+                }
+            }
+        }
+
+        {
+            var generatedPathStart = SharedData.GeneratedFolder + Path.DirectorySeparatorChar;
 
             void RemoveOldGeneratedFiles() {
                 var toRemove = xdoc.Root.Descendants(compileName).Where(fileNode =>
@@ -82,12 +90,27 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
                 var assemblyName = xdoc.Root.Descendants(ns + "AssemblyName").Select(el => el.Value).First();
                 // .dll suffix appears here if we select VS2017 in unity preferences
                 assemblyName = EnsureDoesNotEndWith(assemblyName, ".dll");
-                var filename = Path.Combine(GENERATED, $"Generated-files-{assemblyName}.txt");
+                var filename = Path.Combine(SharedData.GeneratedFolder, SharedData.GeneratedFilesListTxt(assemblyName));
                 if (!File.Exists(filename)) return;
                 var filesToAdd = File.ReadAllLines(filename);
                 var newFiles = filesToAdd.Select(
-                    file => (object)new XElement(compileName, new XAttribute(includeName, file))
+                    file => (object)new XElement(
+                        compileName,
+                        new XAttribute(includeName, file),
+                        new XAttribute(linkName, convertLink(file))
+                    )
                 );
+
+                string convertLink(string file) {
+                    file = EnsureDoesNotEndWith(file, ".cs") + ".partials.cs";
+                    var assetsIdx = file.IndexOf("Assets", StringComparison.Ordinal);
+                    if (assetsIdx != -1)
+                    {
+                        file = file.Substring(assetsIdx);
+                    }
+                    return EnsureDoesNotStartWith(file, commonPrefix);
+                }
+
                 xdoc.Root.Add(new XElement(ns + "ItemGroup", newFiles.ToArray()));
             }
 
@@ -100,42 +123,40 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         return writer.ToString();
     }
 
-
+    static string findCommonPrefix(string[] paths) {
+        if (paths.Length == 0) return "";
+        var result = paths[0];
+        foreach (var path in paths)
+        {
+            while (result.Length > 0 && !path.StartsWith(result, StringComparison.Ordinal))
+            {
+                result = result.Substring(0, result.Length - 1);
+            }
+        }
+        return result;
+    }
 
     static string EnsureDoesNotEndWith(string s, string suffix) =>
-        s.EndsWith(suffix, StringComparison.Ordinal)
-        ? s.Substring(s.Length - suffix.Length)
-        : s;
+        s.EndsWith(suffix, StringComparison.Ordinal) ? s.Substring(0, s.Length - suffix.Length) : s;
 
-    private class Utf8StringWriter : StringWriter
+    static string EnsureDoesNotStartWith(string s, string prefix) =>
+        s.StartsWith(prefix, StringComparison.Ordinal) ? s.Substring(prefix.Length) : s;
+
+    class Utf8StringWriter : StringWriter
     {
         public override Encoding Encoding => Encoding.UTF8;
     }
 
-    private static void SetUpCorrectLangVersion(XDocument xdoc)
+    static void SetUpCorrectLangVersion(XDocument xdoc)
     {
-        var csharpVersion = "8";
-        /*
-        if (Directory.Exists("CSharp70Support"))
-        {
-            csharpVersion = "7";
-        }
-        else if (Directory.Exists("CSharp60Support"))
-        {
-            csharpVersion = "6";
-        }
-        else
-        {
-            csharpVersion = "default";
-        }*/
-
+        const string csharpVersion = "8";
         var ns = xdoc.Root.GetDefaultNamespace();
         xdoc.Descendants(ns + "LangVersion").Remove();
         var propertyGroupElement = xdoc.Descendants(ns + "PropertyGroup").First();
         propertyGroupElement.Add(new XElement(ns + "LangVersion", csharpVersion));
     }
 
-    private static void EnableUnsafeCode(XDocument xdoc)
+    static void EnableUnsafeCode(XDocument xdoc)
     {
         var ns = xdoc.Root.GetDefaultNamespace();
         xdoc.Descendants(ns + "AllowUnsafeBlocks").Remove();
@@ -143,17 +164,17 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         propertyGroup.Add(new XElement(ns + "AllowUnsafeBlocks", "True"));
     }
 
-    private static void RemoveAnnoyingReferences(XDocument xdoc)
+    static void RemoveAnnoyingReferences(XDocument xdoc)
     {
         var ns = xdoc.Root.GetDefaultNamespace();
-
-        (from element in xdoc.Descendants(ns + "Reference")
-         let include = element.Attribute("Include").Value
-         where include == "Boo.Lang" || include == "UnityScript.Lang"
-         select element).Remove();
+        xdoc.Descendants(ns + "Reference").Where(element =>
+        {
+            var include = element.Attribute("Include")?.Value;
+            return include == "Boo.Lang" || include == "UnityScript.Lang";
+        }).Remove();
     }
 
-    private static void AddDefine(XDocument xdoc, string define)
+    static void AddDefine(XDocument xdoc, string define)
     {
         var ns = xdoc.Root.GetDefaultNamespace();
         foreach (var defines in xdoc.Descendants(ns + "DefineConstants"))

@@ -117,7 +117,7 @@ namespace IncrementalCompiler
 
             useCompilationServer = false;
 
-            Process serverProcess = null;
+            Process? serverProcess = null;
             while (true)
             {
                 try

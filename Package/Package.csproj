@@ -1,0 +1,52 @@
+<Project DefaultTargets="Package">
+
+    <ItemGroup>
+        <ProjectReference Include="..\core\IncrementalCompiler\IncrementalCompiler.csproj" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\extra\CompilerPlugin.2019.3\CompilerPlugin.2019.3.csproj" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\extra\CompilerPlugin.Unity5\CompilerPlugin.Unity5.csproj" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\extra\UniversalCompiler\UniversalCompiler.csproj" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\GenerationAttributes.Java\GenerationAttributes.Java.csproj" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\GenerationAttributes\GenerationAttributes.csproj" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\Macros\Macros.csproj" ReferenceOutputAssembly="false" />
+    </ItemGroup>
+
+    <ItemGroup>
+        <Deps Include="..\*\*\*\$(Configuration)\*.*" />
+    </ItemGroup>
+    
+    <Target Name="Package">
+        <ItemGroup>
+            <OldFiles Include="..\bin2\**\*" />
+        </ItemGroup>
+        <Delete Files="@(OldFiles)" />
+        
+        <PropertyGroup>
+            <TargetDir>..\bin2\</TargetDir>
+            <EditorDir>$(TargetDir)\Assets\CSharp vNext Support\Editor\</EditorDir>
+            <PluginsDir>$(TargetDir)\Plugins\Incremental Compiler\</PluginsDir>
+            <CompilerDir>$(TargetDir)\Compiler\</CompilerDir>
+        </PropertyGroup>
+        
+        <Copy SourceFiles="..\extra\CompilerPlugin.2019.3\bin\$(Configuration)\Unity.PureCSharpTests.dll" DestinationFiles="$(EditorDir)\CSharpVNextSupport.dll" />
+        <Copy SourceFiles="..\core\UnityPackage\Assets\Editor\CompilerSettings.cs" DestinationFolder="$(EditorDir)" />
+        
+        <Copy SourceFiles="..\GenerationAttributes\bin\$(Configuration)\GenerationAttributes.dll" DestinationFolder="$(PluginsDir)" />
+        <Copy SourceFiles="..\GenerationAttributes\bin\$(Configuration)\GenerationAttributes.xml" DestinationFolder="$(PluginsDir)" />
+        <Copy SourceFiles="..\GenerationAttributes.Java\bin\$(Configuration)\GenerationAttributes.Java.dll" DestinationFolder="$(PluginsDir)" />
+        <Copy SourceFiles="..\GenerationAttributes.Java\bin\$(Configuration)\GenerationAttributes.Java.xml" DestinationFolder="$(PluginsDir)" />
+        <Copy SourceFiles="..\Macros\bin\Release\Macros.dll" DestinationFolder="$(PluginsDir)" />
+        <Copy SourceFiles="..\Macros\bin\Release\Macros.xml" DestinationFolder="$(PluginsDir)" />
+        
+        <Copy SourceFiles="..\core\IncrementalCompiler\IncrementalCompiler.xml" DestinationFolder="$(CompilerDir)" />
+        <Copy SourceFiles="..\extra\UniversalCompiler\bin\$(Configuration)\UniversalCompiler.exe" DestinationFolder="$(CompilerDir)" />
+        <Copy SourceFiles="..\extra\UniversalCompiler\UniversalCompiler.xml" DestinationFolder="$(CompilerDir)" />
+        
+        <ItemGroup>
+            <CompiledCompiler Include="..\core\IncrementalCompiler\bin\$(Configuration)\net471\*" />
+        </ItemGroup>
+        <Copy SourceFiles="@(CompiledCompiler)" DestinationFolder="$(CompilerDir)" />
+
+        <Message Importance="high" Text="Exported successfully" />
+    </Target>
+
+</Project>

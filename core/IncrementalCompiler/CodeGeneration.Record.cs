@@ -21,6 +21,7 @@ namespace IncrementalCompiler
             RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds
         ) {
             var symbolInfo = model.GetDeclaredSymbol(cds);
+            if (symbolInfo == null) throw new Exception("Could not find symbol");
 
             var properties = cds.Members.OfType<PropertyDeclarationSyntax>()
                 .Where(prop => prop.Modifiers.HasNot(SyntaxKind.StaticKeyword))

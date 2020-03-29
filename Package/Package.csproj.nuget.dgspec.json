@@ -1,0 +1,38 @@
+{
+  "format": 1,
+  "restore": {
+    "C:\\work\\compiler\\Unity3D.IncrementalCompiler\\Package\\Package.csproj": {}
+  },
+  "projects": {
+    "C:\\work\\compiler\\Unity3D.IncrementalCompiler\\Package\\Package.csproj": {
+      "version": "1.0.0",
+      "restore": {
+        "projectUniqueName": "C:\\work\\compiler\\Unity3D.IncrementalCompiler\\Package\\Package.csproj",
+        "projectName": "Package",
+        "projectPath": "C:\\work\\compiler\\Unity3D.IncrementalCompiler\\Package\\Package.csproj",
+        "packagesPath": "C:\\Users\\Evaldas\\.nuget\\packages\\",
+        "outputPath": "C:\\work\\compiler\\Unity3D.IncrementalCompiler\\Package\\",
+        "projectStyle": "PackageReference",
+        "configFilePaths": [
+          "C:\\Users\\Evaldas\\AppData\\Roaming\\NuGet\\NuGet.Config",
+          "C:\\Program Files (x86)\\NuGet\\Config\\Microsoft.VisualStudio.Offline.config"
+        ],
+        "originalTargetFrameworks": [
+          "net471"
+        ],
+        "sources": {
+          "C:\\Program Files (x86)\\Microsoft SDKs\\NuGetPackages\\": {},
+          "https://api.nuget.org/v3/index.json": {}
+        },
+        "frameworks": {
+          "net471": {
+            "projectReferences": {}
+          }
+        }
+      },
+      "frameworks": {
+        "net471": {}
+      }
+    }
+  }
+}

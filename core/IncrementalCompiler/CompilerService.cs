@@ -14,9 +14,9 @@ namespace IncrementalCompiler
     //[ServiceBehavior(InstanceContextMode = InstanceContextMode.Single, IncludeExceptionDetailInFaults = true)]
     public class CompilerService : ICompilerService
     {
-        private Logger _logger = LogManager.GetLogger("CompilerService");
-        private string _projectPath;
-        private Dictionary<string, Compiler> _compilerMap;
+        Logger _logger = LogManager.GetLogger("CompilerService");
+        string? _projectPath;
+        Dictionary<string, Compiler> _compilerMap = new Dictionary<string, Compiler>();
         readonly object _lockObj = new object();
 
         public CompileResult Build(string projectPath, CompileOptions options)
@@ -28,7 +28,7 @@ namespace IncrementalCompiler
             if (options.IsUnityPackage)
             {
                 // do not cache packages in ram, because they do not change
-                compiler = new Compiler();
+                compiler = new Compiler(options);
             }
             else
             {
@@ -45,7 +45,7 @@ namespace IncrementalCompiler
 
                     if (_compilerMap.TryGetValue(options.Output, out compiler) == false)
                     {
-                        compiler = new Compiler();
+                        compiler = new Compiler(options);
                         _compilerMap.Add(options.Output, compiler);
                         _logger.Info("Add new project. (Project={0})", _projectPath);
                     }

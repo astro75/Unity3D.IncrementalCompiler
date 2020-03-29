@@ -110,11 +110,6 @@ internal class CustomCSharpCompiler : MonoCSharpCompiler {
             arguments.Add("-r:" + PrepareFileName(fileName));
         }
 
-        if (Application.unityVersion.StartsWith("5."))
-        {
-            arguments.Add("-custom-option-mdb");
-        }
-
         if (!island._development_player && (!buildingForEditor() || !EditorPrefs.GetBool("AllowAttachedDebuggingOfEditor", true)))
         {
             arguments.Add("-optimize+");

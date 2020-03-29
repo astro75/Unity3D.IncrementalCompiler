@@ -29,7 +29,7 @@ namespace IncrementalCompiler
             public Dictionary<string, List<JavaFile>> javaFilesDict = new Dictionary<string, List<JavaFile>>();
 
             int javaVersion = 1, lastUsedJavaVersion;
-            SyntaxTree prevousTree;
+            SyntaxTree? prevousTree;
 
             public bool tryAddJavaFile(string key, JavaFile value)
             {
@@ -163,7 +163,7 @@ namespace IncrementalCompiler
                 return ParseClassMembers(line + "\n" + secondLine);
             }
 
-            static bool isSubType(ITypeSymbol type, string baseType) {
+            static bool isSubType(ITypeSymbol? type, string baseType) {
                 if (type == null) return false;
                 if (type.ToDisplayString() == baseType)
                     return true;
@@ -219,9 +219,11 @@ namespace IncrementalCompiler
                     case SpecialType.System_Double: return "double";
                     case SpecialType.System_Void: return "void";
                     case SpecialType.System_Nullable_T:
-                        var arguments = type.BaseType.TypeArguments;
+                        var baseType = type.BaseType;
+                        if (baseType == null) break;
+                        var arguments = baseType.TypeArguments;
                         if (arguments.Length == 0) break;
-                        switch (type.BaseType.TypeArguments[0].SpecialType) {
+                        switch (arguments[0].SpecialType) {
                             // this code is never reached.
                             // TODO: find a way to detect nullable types in C# (int?, bool?, ...)
                             case SpecialType.System_Boolean: return "Boolean";

@@ -8,9 +8,7 @@ using System.Linq;
 using System.Reflection;
 using System.Text;
 using System.Threading;
-using Flinq;
 using GenerationAttributes;
-using IncrementalCompiler.Analyzers;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.Diagnostics;
@@ -21,32 +19,55 @@ using NLog;
 
 namespace IncrementalCompiler
 {
+    public class CompilationCache
+    {
+        public CSharpCompilation _compilation;
+        public CompileOptions _options;
+        public readonly FileTimeList _referenceFileList;
+        public readonly FileTimeList _sourceFileList;
+        public readonly Dictionary<string, MetadataReference> _referenceMap;
+        public readonly Dictionary<string, SyntaxTree> _sourceMap;
+        public readonly CodeGeneration.GeneratedFilesMapping _filesMapping;
+
+        public CompilationCache(
+            CSharpCompilation compilation,
+            CompileOptions options,
+            FileTimeList referenceFileList,
+            FileTimeList sourceFileList,
+            Dictionary<string, MetadataReference> referenceMap,
+            Dictionary<string, SyntaxTree> sourceMap, CodeGeneration.GeneratedFilesMapping filesMapping) {
+            _referenceFileList = referenceFileList;
+            _sourceFileList = sourceFileList;
+            _referenceMap = referenceMap;
+            _sourceMap = sourceMap;
+            _filesMapping = filesMapping;
+            _compilation = compilation;
+            _options = options;
+        }
+    }
+
     public sealed class Compiler : IDisposable
     {
         readonly Logger _logger = LogManager.GetLogger("Compiler");
-        CSharpCompilation _compilation;
-        CompileOptions _options;
-        FileTimeList _referenceFileList;
-        FileTimeList _sourceFileList;
-        Dictionary<string, MetadataReference> _referenceMap;
-        Dictionary<string, SyntaxTree> _sourceMap;
-        MemoryStream _outputDllStream;
-        MemoryStream _outputDebugSymbolStream;
-        string assemblyNameNoExtension;
-        CSharpParseOptions parseOptions;
-        CodeGeneration.GeneratedFilesMapping _filesMapping;
+
+        readonly string assemblyNameNoExtension;
+        readonly CSharpParseOptions parseOptions;
+
+        MemoryStream? _outputDllStream;
+        MemoryStream? _outputDebugSymbolStream;
         ImmutableArray<DiagnosticAnalyzer> analyzers;
         const string analyzersPath = "./Analyzers";
-        CompileResult previousResult;
+        CompileResult? previousResult;
+        CompilationCache? _cache;
         bool referencesCompilerAttributes;
 
         static readonly object _lockAnalyzers = new object();
         static ImmutableArray<DiagnosticAnalyzer>? _loadedAnalyzers;
 
-        void CompileAnalyzer(string fullPath, string assembliesPath) {
+        void CompileAnalyzer(CompileOptions options, string fullPath, string assembliesPath) {
             _logger.Info($"Compiling analyzer: {fullPath}");
             var name = Path.GetFileNameWithoutExtension(Path.GetFileName(fullPath));
-            var parsed = ParseSource(fullPath, parseOptions);
+            var parsed = ParseSource(options, fullPath, parseOptions);
 
             var assemblyRefs =
                 AppDomain.CurrentDomain.GetAssemblies()
@@ -60,7 +81,7 @@ namespace IncrementalCompiler
                 new CSharpCompilationOptions(
                     OutputKind.DynamicallyLinkedLibrary,
                     assemblyIdentityComparer: DesktopAssemblyIdentityComparer.Default,
-                    sourceReferenceResolver: new SourceFileResolver(ImmutableArray<string>.Empty, _options.WorkDirectory)
+                    sourceReferenceResolver: new SourceFileResolver(ImmutableArray<string>.Empty, options.WorkDirectory)
                 )
             );
             using (var stream = new FileStream(Path.Combine(assembliesPath, name + ".dll"), FileMode.OpenOrCreate))
@@ -84,9 +105,9 @@ namespace IncrementalCompiler
             }
         }
 
-        string CompileAnalyzers() {
-            const string ANALYZERS = "compiled-analyzers";
-            var outputPath = Directory.Exists("Temp") ? Path.Combine("Temp", ANALYZERS) : ANALYZERS;
+        string CompileAnalyzers(CompileOptions options) {
+            var analyzers = "compiled-analyzers-" + assemblyNameNoExtension;
+            var outputPath = Directory.Exists("Temp") ? Path.Combine("Temp", analyzers) : analyzers;
 
             if (Directory.Exists(outputPath)) Directory.Delete(outputPath, true);
             Directory.CreateDirectory(outputPath);
@@ -98,10 +119,16 @@ namespace IncrementalCompiler
 
             foreach (var cs in analyzerSources)
             {
-                CompileAnalyzer(cs, outputPath);
+                CompileAnalyzer(options, cs, outputPath);
             }
 
             return outputPath;
+        }
+
+        class AL : IAnalyzerAssemblyLoader {
+            public Assembly LoadFromPath(string fullPath) => Assembly.LoadFrom(fullPath);
+
+            public void AddDependencyLocation(string fullPath) { }
         }
 
         /// <summary>
@@ -109,7 +136,7 @@ namespace IncrementalCompiler
         /// dependency versions must match those of project dependencies
         /// </summary>
         /// <param name="diagnostics"></param>
-        ImmutableArray<DiagnosticAnalyzer> AnalyzersInner(List<Diagnostic> diagnostics) {
+        ImmutableArray<DiagnosticAnalyzer> AnalyzersInner(CompileOptions options, List<Diagnostic> diagnostics) {
             // if Location.None is used instead, unity doesnt print the error to console.
             var defaultPos = Location.Create(
                 "/Analyzers", TextSpan.FromBounds(0, 0), new LinePositionSpan()
@@ -127,9 +154,9 @@ namespace IncrementalCompiler
                     return ImmutableArray<DiagnosticAnalyzer>.Empty;
                 }
 
-                var loader = new AnalyzerAssemblyLoader();
+                var loader = new AL();
 
-                var additionalPath = CompileAnalyzers();
+                var additionalPath = CompileAnalyzers(options);
 
                 var analyzerNames =
                     Directory.GetFiles(analyzersPath).Concat(Directory.GetFiles(additionalPath))
@@ -188,56 +215,57 @@ namespace IncrementalCompiler
             }
         }
 
-        ImmutableArray<DiagnosticAnalyzer> Analyzers(List<Diagnostic> diagnostics) {
+        ImmutableArray<DiagnosticAnalyzer> Analyzers(CompileOptions options, List<Diagnostic> diagnostics) {
             lock (_lockAnalyzers)
             {
                 if (_loadedAnalyzers.HasValue) return _loadedAnalyzers.Value;
-                _loadedAnalyzers = AnalyzersInner(diagnostics);
+                _loadedAnalyzers = AnalyzersInner(options, diagnostics);
                 return _loadedAnalyzers.Value;
             }
         }
 
-        public CompileResult Build(CompileOptions options)
-        {
+        public Compiler(CompileOptions options) {
+            assemblyNameNoExtension = Path.GetFileNameWithoutExtension(options.AssemblyName);
             parseOptions = new CSharpParseOptions(
                 LanguageVersion.CSharp8, DocumentationMode.Parse, SourceCodeKind.Regular, options.Defines
             ).WithFeatures(new []{new KeyValuePair<string, string>("IOperation", ""), });
+        }
 
-            if (PlatformHelper.CurrentPlatform != Platform.Windows)
+        public CompileResult Build(CompileOptions options)
+        {
+            var settings = new GenerationSettings(
+                partialsFolder: Path.Combine(SharedData.GeneratedFolder, assemblyNameNoExtension),
+                macrosFolder: Path.Combine(SharedData.GeneratedFolder, "_macros"),
+                txtForPartials: Path.Combine(
+                    SharedData.GeneratedFolder, SharedData.GeneratedFilesListTxt(assemblyNameNoExtension)));
+
+            if (_cache == null ||
+                _cache._options.WorkDirectory != options.WorkDirectory ||
+                _cache._options.AssemblyName != options.AssemblyName ||
+                _cache._options.Output != options.Output ||
+                _cache._options.NoWarnings.SequenceEqual(options.NoWarnings) == false ||
+                _cache._options.Defines.SequenceEqual(options.Defines) == false ||
+                _cache._options.DebugSymbolFile != options.DebugSymbolFile ||
+                _cache._options.IsUnityPackage != options.IsUnityPackage)
             {
-                // OSX does not support pdb
-                if (options.DebugSymbolFile == DebugSymbolFileType.Pdb ||
-                    options.DebugSymbolFile == DebugSymbolFileType.PdbToMdb)
-                {
-                    options.DebugSymbolFile = DebugSymbolFileType.None;
-                }
-            }
-            if (_compilation == null ||
-                _options.WorkDirectory != options.WorkDirectory ||
-                _options.AssemblyName != options.AssemblyName ||
-                _options.Output != options.Output ||
-                _options.NoWarnings.SequenceEqual(options.NoWarnings) == false ||
-                _options.Defines.SequenceEqual(options.Defines) == false ||
-                _options.DebugSymbolFile != options.DebugSymbolFile ||
-                _options.IsUnityPackage != options.IsUnityPackage)
-            {
-                (previousResult, _compilation) = BuildFull(options);
+                (previousResult, _cache) = BuildFull(options, settings);
                 return previousResult;
             }
             else
             {
-                return BuildIncremental(options);
+                _cache._options = options;
+                return BuildIncremental(options, settings, _cache, previousResult!);
             }
         }
 
-        (CompileResult, CSharpCompilation) BuildFull(CompileOptions options)
+        (CompileResult, CompilationCache) BuildFull(CompileOptions options, GenerationSettings settings)
         {
             var result = new CompileResult();
 
             var totalSW = Stopwatch.StartNew();
             var sw = Stopwatch.StartNew();
 
-            _filesMapping = new CodeGeneration.GeneratedFilesMapping();
+            var filesMapping = new CodeGeneration.GeneratedFilesMapping();
 
             void logTime(string label) {
                 var elapsed = sw.Elapsed;
@@ -245,33 +273,30 @@ namespace IncrementalCompiler
                 sw.Restart();
             }
 
-            assemblyNameNoExtension = Path.GetFileNameWithoutExtension(options.AssemblyName);
-
             _logger.Info("BuildFull");
-            _options = options;
 
-            _referenceFileList = new FileTimeList();
-            _referenceFileList.Update(options.References);
+            var referenceFileList = new FileTimeList();
+            referenceFileList.Update(options.References);
 
-            _sourceFileList = new FileTimeList();
-            _sourceFileList.Update(options.Files);
+            var sourceFileList = new FileTimeList();
+            sourceFileList.Update(options.Files);
 
-            _referenceMap = options.References.ToDictionary(
+            var referenceMap = options.References.ToDictionary(
                 keySelector: file => file,
-                elementSelector: CreateReference
+                elementSelector: s => CreateReference(options, s)
             );
             logTime("Loaded references");
 
-            _sourceMap = options.Files.AsParallel().Select(
-                fileName => (fileName, tree: ParseSource(fileName, parseOptions))).ToDictionary(t => t.fileName, t => t.tree);
+            var sourceMap = options.Files.AsParallel().Select(
+                fileName => (fileName, tree: ParseSource(options, fileName, parseOptions))).ToDictionary(t => t.fileName, t => t.tree);
             logTime("Loaded sources");
 
 
             var specificDiagnosticOptions = options.NoWarnings.ToDictionary(x => x, _ => ReportDiagnostic.Suppress);
             var compilation = CSharpCompilation.Create(
                 options.AssemblyName,
-                _sourceMap.Values,
-                _referenceMap.Values,
+                sourceMap.Values,
+                referenceMap.Values,
                 new CSharpCompilationOptions(
                     OutputKind.DynamicallyLinkedLibrary,
                     // deterministic option fails at runtime:
@@ -281,7 +306,7 @@ namespace IncrementalCompiler
                     assemblyIdentityComparer: DesktopAssemblyIdentityComparer.Default,
                     allowUnsafe: options.Unsafe,
                     // without SourceFileResolver debugging in Rider does not work
-                    sourceReferenceResolver: new SourceFileResolver(ImmutableArray<string>.Empty, _options.WorkDirectory),
+                    sourceReferenceResolver: new SourceFileResolver(ImmutableArray<string>.Empty, options.WorkDirectory),
                     optimizationLevel: options.Optimize ? OptimizationLevel.Release : OptimizationLevel.Debug
                 )
 
@@ -300,20 +325,17 @@ namespace IncrementalCompiler
             }
             else
             {
-                analyzers = ImmutableArray<DiagnosticAnalyzer>.Empty;
-                //analyzers = Analyzers(diagnostic);
+                analyzers = Analyzers(options, diagnostic);
                 logTime("Loaded analyzers");
 
-                const bool isUnity = true;
-
                 compilation = CodeGeneration.Run(
-                    isUnity: isUnity,
                     false,
                     compilation,
                     compilation.SyntaxTrees,
                     parseOptions,
                     assemblyNameNoExtension,
-                    ref _filesMapping, _sourceMap
+                    filesMapping, sourceMap,
+                    settings
                 ).Tap((compAndDiag) =>
                 {
                     diagnostic.AddRange(compAndDiag.Item2);
@@ -323,32 +345,34 @@ namespace IncrementalCompiler
                 logTime("Code generated");
 
                 compilation = MacroProcessor.Run(
-                    isUnity: isUnity,
                     compilation,
                     compilation.SyntaxTrees,
-                    _sourceMap,
-                    diagnostic
+                    sourceMap,
+                    diagnostic,
+                    settings
                 );
                 logTime("Macros completed");
             }
 
-            AnalyzeAndEmit(result, diagnostic, compilation, analyzers);
+            AnalyzeAndEmit(options, result, diagnostic, compilation, analyzers);
             logTime("Emitted dll");
 
             _logger.Info($"Total elapsed {totalSW.Elapsed}");
 
             previousResult = result;
-            return (result, compilation);
+            var cache = new CompilationCache(compilation, options, referenceFileList, sourceFileList, referenceMap, sourceMap, filesMapping);
+            return (result, cache);
         }
 
         void AnalyzeAndEmit(
+            CompileOptions options,
             CompileResult result,
             ICollection<Diagnostic> diagnostic,
             CSharpCompilation compilation,
             ImmutableArray<DiagnosticAnalyzer> analyzers
         ) {
             diagnostic = diagnostic.Concat(AnalyzersDiagnostics(compilation, analyzers)).ToList();
-            Emit(result, diagnostic, compilation);
+            Emit(options, result, diagnostic, compilation);
         }
 
         static ImmutableArray<Diagnostic> AnalyzersDiagnostics(
@@ -362,82 +386,82 @@ namespace IncrementalCompiler
                 .GetAllDiagnostics()
             : ImmutableArray<Diagnostic>.Empty;
 
-        CompileResult BuildIncremental(CompileOptions options)
+        CompileResult BuildIncremental(
+            CompileOptions options, GenerationSettings settings, CompilationCache cache, CompileResult previousResult)
         {
             _logger.Info("BuildIncremental");
-            _options = options;
 
             // update reference files
 
-            var referenceChanges = _referenceFileList.Update(options.References);
+            var referenceChanges = cache._referenceFileList.Update(options.References);
             foreach (var file in referenceChanges.Added)
             {
                 _logger.Info("+ {0}", file);
-                var reference = CreateReference(file);
-                _compilation = _compilation.AddReferences(reference);
-                _referenceMap.Add(file, reference);
+                var reference = CreateReference(options, file);
+                cache._compilation = cache._compilation.AddReferences(reference);
+                cache._referenceMap.Add(file, reference);
             }
             foreach (var file in referenceChanges.Changed)
             {
                 _logger.Info("* {0}", file);
-                var reference = CreateReference(file);
-                _compilation =_compilation.ReplaceReference(_referenceMap[file], reference);
-                _referenceMap[file] = reference;
+                var reference = CreateReference(options, file);
+                cache._compilation = cache._compilation.ReplaceReference(cache._referenceMap[file], reference);
+                cache._referenceMap[file] = reference;
             }
             foreach (var file in referenceChanges.Removed)
             {
                 _logger.Info("- {0}", file);
-                _compilation = _compilation.RemoveReferences(_referenceMap[file]);
-                _referenceMap.Remove(file);
+                cache._compilation = cache._compilation.RemoveReferences(cache._referenceMap[file]);
+                cache._referenceMap.Remove(file);
             }
 
             // update source files
 
-            var sourceChanges = _sourceFileList.Update(options.Files);
+            var sourceChanges = cache._sourceFileList.Update(options.Files);
 
-            var allTrees = _compilation.SyntaxTrees;
+            var allTrees = cache._compilation.SyntaxTrees;
 
             var newTrees = sourceChanges.Added.AsParallel().Select(file => {
-                var tree = ParseSource(file, parseOptions);
+                var tree = ParseSource(options, file, parseOptions);
                 return (file, tree);
             }).ToArray();
 
             foreach (var (file, tree) in newTrees) {
                 _logger.Info("+ {0}", file);
-                _sourceMap.Add(file, tree);
+                cache._sourceMap.Add(file, tree);
             }
 
-            _compilation = _compilation.AddSyntaxTrees(newTrees.Select(t => t.tree));
+            cache._compilation = cache._compilation.AddSyntaxTrees(newTrees.Select(t => t.tree));
 
             var changes = sourceChanges.Changed.AsParallel().Select(file => {
-                var tree = ParseSource(file, parseOptions);
+                var tree = ParseSource(options, file, parseOptions);
                 return (file, tree);
             }).ToArray();
 
             foreach (var (file, tree) in changes) {
                 _logger.Info("* {0}", file);
-                _compilation = _compilation.ReplaceSyntaxTree(_sourceMap[file], tree);
-                _sourceMap[file] = tree;
+                cache._compilation = cache._compilation.ReplaceSyntaxTree(cache._sourceMap[file], tree);
+                cache._sourceMap[file] = tree;
             }
 
             var removedTrees = sourceChanges.Removed.Select(file =>
             {
                 _logger.Info("- {0}", file);
-                var tree = _sourceMap[file];
-                _sourceMap.Remove(file);
+                var tree = cache._sourceMap[file];
+                cache._sourceMap.Remove(file);
                 return tree;
             }).ToArray();
 
             var generatedRemove = sourceChanges.Removed.Concat(sourceChanges.Changed).ToArray();
             var generatedFilesRemove = generatedRemove
-                .Where(_filesMapping.filesDict.ContainsKey)
-                .SelectMany(path => _filesMapping.filesDict[path])
-                .Where(_sourceMap.ContainsKey)
-                .Select(path => _sourceMap[path]);
+                .Where(cache._filesMapping.filesDict.ContainsKey)
+                .SelectMany(path => cache._filesMapping.filesDict[path])
+                .Where(cache._sourceMap.ContainsKey)
+                .Select(path => cache._sourceMap[path]);
 
-            _compilation = _compilation.RemoveSyntaxTrees(removedTrees.Concat(generatedFilesRemove));
+            cache._compilation = cache._compilation.RemoveSyntaxTrees(removedTrees.Concat(generatedFilesRemove));
 
-            _filesMapping.removeFiles(generatedRemove);
+            cache._filesMapping.removeFiles(generatedRemove);
 
             var allAddedTrees = newTrees.Concat(changes).Select(t => t.tree).ToImmutableArray();
 
@@ -449,11 +473,9 @@ namespace IncrementalCompiler
             }
             else
             {
-                const bool isUnity = true;
-
-                _compilation = CodeGeneration.Run(
-                    isUnity: isUnity, true, _compilation, allAddedTrees, parseOptions, assemblyNameNoExtension,
-                    ref _filesMapping, _sourceMap
+                cache._compilation = CodeGeneration.Run(
+                    true, cache._compilation, allAddedTrees, parseOptions, assemblyNameNoExtension,
+                    cache._filesMapping, cache._sourceMap, settings
                 ).Tap(t =>
                 {
                     diagnostic.AddRange(t.Item2);
@@ -465,26 +487,26 @@ namespace IncrementalCompiler
 
                 var treeSet = allAddedTrees.Select(t => t.FilePath).ToImmutableHashSet();
                 var treesForMacroProcessor =
-                    _compilation
+                    cache._compilation
                         .SyntaxTrees
                         .Where(t => treeSet.Contains(t.FilePath))
                         .ToImmutableArray();
 
-                _compilation = MacroProcessor.Run(
-                    isUnity: isUnity,
-                    _compilation,
+                cache._compilation = MacroProcessor.Run(
+                    cache._compilation,
                     treesForMacroProcessor,
-                    _sourceMap,
-                    diagnostic
+                    cache._sourceMap,
+                    diagnostic,
+                    settings
                 );
                 // emit or reuse prebuilt output
             }
-            diagnostic.AddRange(AnalyzersDiagnostics(_compilation, analyzers));
+            diagnostic.AddRange(AnalyzersDiagnostics(cache._compilation, analyzers));
 
             var reusePrebuilt = previousResult.Succeeded && _outputDllStream != null && (
-                (_options.PrebuiltOutputReuse == PrebuiltOutputReuseType.WhenNoChange &&
+                (options.PrebuiltOutputReuse == PrebuiltOutputReuseType.WhenNoChange &&
                  sourceChanges.Empty && referenceChanges.Empty) ||
-                (_options.PrebuiltOutputReuse == PrebuiltOutputReuseType.WhenNoSourceChange &&
+                (options.PrebuiltOutputReuse == PrebuiltOutputReuseType.WhenNoSourceChange &&
                  sourceChanges.Empty && referenceChanges.Added.Count == 0 && referenceChanges.Removed.Count == 0));
 
             if (reusePrebuilt)
@@ -493,22 +515,23 @@ namespace IncrementalCompiler
 
                 // write dll
 
-                var dllFile = Path.Combine(_options.WorkDirectory, _options.Output);
-                WriteToFile(_outputDllStream, dllFile);
+                var dllFile = Path.Combine(options.WorkDirectory, options.Output);
+                WriteToFile(_outputDllStream!, dllFile);
 
                 // write pdb or mdb
 
-                switch (_options.DebugSymbolFile)
+                switch (options.DebugSymbolFile)
                 {
                     case DebugSymbolFileType.Pdb:
-                        var pdbFile = Path.Combine(_options.WorkDirectory, Path.ChangeExtension(_options.Output, ".pdb"));
-                        WriteToFile(_outputDebugSymbolStream, pdbFile);
+                        if (_outputDebugSymbolStream != null)
+                        {
+                            var pdbFile = Path.Combine(
+                                options.WorkDirectory,
+                                Path.ChangeExtension(options.Output, ".pdb"));
+                            WriteToFile(_outputDebugSymbolStream, pdbFile);
+                        }
                         break;
 
-                    case DebugSymbolFileType.PdbToMdb:
-                        var mdbFile = Path.Combine(_options.WorkDirectory, _options.Output + ".mdb");
-                        WriteToFile(_outputDebugSymbolStream, mdbFile);
-                        break;
                 }
 
                 return previousResult;
@@ -519,29 +542,29 @@ namespace IncrementalCompiler
 
                 var result = previousResult;
                 result.Clear();
-                AnalyzeAndEmit(result, diagnostic, _compilation, analyzers);
+                AnalyzeAndEmit(options, result, diagnostic, cache._compilation, analyzers);
                 return result;
             }
         }
 
-        private MetadataReference CreateReference(string file)
+        private MetadataReference CreateReference(CompileOptions options, string file)
         {
-            return MetadataReference.CreateFromFile(Path.Combine(_options.WorkDirectory, file));
+            return MetadataReference.CreateFromFile(Path.Combine(options.WorkDirectory, file));
         }
 
-        private SyntaxTree ParseSource(string file, CSharpParseOptions parseOption)
+        private SyntaxTree ParseSource(CompileOptions options, string file, CSharpParseOptions parseOption)
         {
-            var fileFullPath = Path.Combine(_options.WorkDirectory, file);
+            var fileFullPath = Path.Combine(options.WorkDirectory, file);
             var text = File.ReadAllText(fileFullPath);
             return CSharpSyntaxTree.ParseText(text, parseOption, file, Encoding.UTF8);
         }
 
-        private void Emit(CompileResult result, ICollection<Diagnostic> diagnostic, CSharpCompilation compilation)
+        private void Emit(CompileOptions options, CompileResult result, ICollection<Diagnostic> diagnostic, CSharpCompilation compilation)
         {
             _outputDllStream?.Dispose();
             _outputDllStream = new MemoryStream();
             _outputDebugSymbolStream?.Dispose();
-            _outputDebugSymbolStream = _options.DebugSymbolFile != DebugSymbolFileType.None ? new MemoryStream() : null;
+            _outputDebugSymbolStream = options.DebugSymbolFile != DebugSymbolFileType.None ? new MemoryStream() : null;
 
             // emit to memory
 
@@ -549,20 +572,14 @@ namespace IncrementalCompiler
                 _outputDllStream,
                 _outputDebugSymbolStream,
                 options: new EmitOptions(debugInformationFormat:
-                    // PdbToMdb requires full pdb format
-                    // otherwise unity works with PortablePdb
-                    _options.DebugSymbolFile == DebugSymbolFileType.PdbToMdb
-                        ? DebugInformationFormat.Pdb
-                        : DebugInformationFormat.PortablePdb
+                    DebugInformationFormat.PortablePdb
                 )
             );
 
             // memory to file
 
-            var dllFile = Path.Combine(_options.WorkDirectory, _options.Output);
-            var mdbFile = Path.Combine(_options.WorkDirectory, _options.Output + ".mdb");
-            var pdbFile = Path.Combine(_options.WorkDirectory, Path.ChangeExtension(_options.Output, ".pdb"));
-
+            var dllFile = Path.Combine(options.WorkDirectory, options.Output);
+            var pdbFile = Path.Combine(options.WorkDirectory, Path.ChangeExtension(options.Output, ".pdb"));
 
             // gather result
 
@@ -585,26 +602,6 @@ namespace IncrementalCompiler
                     var emitDebugSymbolFile = pdbFile;
                     WriteToFile(_outputDebugSymbolStream, emitDebugSymbolFile);
                 }
-
-                // pdb to mdb when required
-                if (_options.DebugSymbolFile == DebugSymbolFileType.PdbToMdb)
-                {
-                    try {
-                        var code = ConvertPdb2Mdb(dllFile, LogManager.GetLogger("Pdb2Mdb"), result.Errors);
-                        _logger.Info("pdb2mdb exited with {0}", code);
-                        File.Delete(pdbFile);
-
-                        // read converted mdb file to cache contents
-                        _outputDebugSymbolStream?.Dispose();
-                        _outputDebugSymbolStream = new MemoryStream(File.ReadAllBytes(mdbFile));
-                    }
-                    catch (Exception e)
-                    {
-                        _logger.Error(e);
-                        result.Errors.Add($"Error while running pdb2mdb: {e}");
-                    }
-
-                }
             }
         }
 
@@ -617,7 +614,7 @@ namespace IncrementalCompiler
             }
         }
 
-        private string GetDiagnosticString(Diagnostic diagnostic, string type)
+        private string GetDiagnosticString(CompileOptions options, Diagnostic diagnostic, string type)
         {
             var line = diagnostic.Location.GetLineSpan();
 
@@ -626,8 +623,8 @@ namespace IncrementalCompiler
                 return $"None: " + $"{type} {diagnostic.Id}: {diagnostic.GetMessage()}";
 
             // Unity3d must have a relative path starting with "Assets/".
-            var path = (line.Path.StartsWith(_options.WorkDirectory + "/") || line.Path.StartsWith(_options.WorkDirectory + "\\"))
-                ? line.Path.Substring(_options.WorkDirectory.Length + 1)
+            var path = (line.Path.StartsWith(options.WorkDirectory + "/") || line.Path.StartsWith(options.WorkDirectory + "\\"))
+                ? line.Path.Substring(options.WorkDirectory.Length + 1)
                 : line.Path;
 
             var msg = diagnostic.GetMessage();

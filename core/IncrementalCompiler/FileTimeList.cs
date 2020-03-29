@@ -7,15 +7,21 @@ namespace IncrementalCompiler
 {
     public class FileTimeList
     {
-        private List<Tuple<string, DateTime>> _files;
+        List<Tuple<string, DateTime>>? _files;
 
         public class Result
         {
-            public List<string> Added;
-            public List<string> Changed;
-            public List<string> Removed;
+            public readonly List<string> Added;
+            public readonly List<string> Changed;
+            public readonly List<string> Removed;
 
             public bool Empty => Added.Count == 0 && Changed.Count == 0 && Removed.Count == 0;
+
+            public Result(List<string> added, List<string> changed, List<string> removed) {
+                Added = added;
+                Changed = changed;
+                Removed = removed;
+            }
         }
 
         public Result Update(IEnumerable<string> files)
@@ -40,12 +46,7 @@ namespace IncrementalCompiler
 
             if (oldFiles == null)
             {
-                return new Result
-                {
-                    Added = new List<string>(),
-                    Changed = new List<string>(),
-                    Removed = new List<string>(),
-                };
+                return new Result (new List<string>(), new List<string>(), new List<string>());
             }
 
             // get differences
@@ -82,12 +83,7 @@ namespace IncrementalCompiler
             for (; j < oldFiles.Count; j++)
                 removed.Add(oldFiles[j].Item1);
 
-            return new Result
-            {
-                Added = added,
-                Changed = changed,
-                Removed = removed,
-            };
+            return new Result(added, changed, removed);
         }
     }
 }

@@ -30,7 +30,7 @@ namespace IncrementalCompiler
         {
             // get parent process which will be monitored
 
-            Process parentProcess = null;
+            Process? parentProcess = null;
             if (parentProcessId != 0)
             {
                 try

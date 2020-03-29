@@ -33,7 +33,7 @@ namespace IncrementalCompiler
         }
 
         public override SyntaxList<TNode> VisitList<TNode>(SyntaxList<TNode> list) {
-            List<TNode> alternate = null;
+            List<TNode>? alternate = null;
 
             for (int i = 0, n = list.Count; i < n; i++)
             {
@@ -61,7 +61,7 @@ namespace IncrementalCompiler
                             replacement = replacement.WithTrailingTrivia(item.GetTrailingTrivia());
                         else
                             replacement = replacement.WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
-                        alternate.Add((TNode) (SyntaxNode) replacement);
+                        alternate!.Add((TNode) (SyntaxNode) replacement);
                     }
                 }
 

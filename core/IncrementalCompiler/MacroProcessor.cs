@@ -30,8 +30,8 @@ namespace IncrementalCompiler
         }
 
         public static CSharpCompilation Run(
-            bool isUnity, CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
-            List<Diagnostic> diagnostic
+            CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
+            List<Diagnostic> diagnostic, GenerationSettings settings
         )
         {
             var macrosType = typeof(Macros).FullName;
@@ -102,7 +102,7 @@ namespace IncrementalCompiler
             foreach (var method in allMethods)
             foreach (var attribute in method.GetAttributes())
             {
-                if (attribute.AttributeClass == simpleMethodMacroType)
+                if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, simpleMethodMacroType))
                 {
                     CodeGeneration.tryAttribute<SimpleMethodMacro>(
                         attribute, a =>
@@ -123,7 +123,7 @@ namespace IncrementalCompiler
                         }, diagnostic);
                 }
 
-                if (attribute.AttributeClass == statementMethodMacroType)
+                if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, statementMethodMacroType))
                 {
                     CodeGeneration.tryAttribute<StatementMethodMacro>(
                         attribute, a =>
@@ -157,7 +157,7 @@ namespace IncrementalCompiler
                         }, diagnostic);
                 }
 
-                if (attribute.AttributeClass == varMethodMacroType)
+                if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, varMethodMacroType))
                 {
                     CodeGeneration.tryAttribute<VarMethodMacro>(
                         attribute, a =>
@@ -174,7 +174,7 @@ namespace IncrementalCompiler
                                             if (vdgop.Declarations.Length != 1) throw new Exception(
                                                 $"Expected a single variable declaration"
                                             );
-                                            var varDecl = (IVariableDeclaratorOperation) op.Parent.Parent;
+                                            var varDecl = (IVariableDeclaratorOperation) op.Parent!.Parent!;
 
                                             var sb = new StringBuilder();
                                             sb.Append("{");
@@ -302,20 +302,20 @@ namespace IncrementalCompiler
                 }
                 return Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
             }).ToArray();
-            compilation = EditTrees(isUnity: isUnity, compilation, sourceMap, treeEdits);
+            compilation = EditTrees(compilation, sourceMap, treeEdits, settings);
             return compilation;
         }
 
         public static CSharpCompilation EditTrees(
-            bool isUnity,
             CSharpCompilation compilation,
             Dictionary<string, SyntaxTree> sourceMap,
-            IEnumerable<(SyntaxTree, CompilationUnitSyntax)> treeEdits
+            IEnumerable<(SyntaxTree, CompilationUnitSyntax)> treeEdits,
+            GenerationSettings settings
         ) {
             foreach (var (tree, syntax) in treeEdits)
             {
-                var originalFilePath = CodeGeneration.getRelativePath(isUnity, tree.FilePath);
-                var editedFilePath = Path.Combine(CodeGeneration.GENERATED_FOLDER, "_macros", originalFilePath);
+                var originalFilePath = CodeGeneration.getRelativePath(tree.FilePath);
+                var editedFilePath = Path.Combine(settings.macrosFolder, originalFilePath);
 
                 var newTree = tree.WithRootAndOptions(syntax, tree.Options).WithFilePath(editedFilePath);
                 sourceMap[tree.FilePath] = newTree;

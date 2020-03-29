@@ -14,7 +14,7 @@ namespace IncrementalCompiler
             PrebuiltOutputReuse = PrebuiltOutputReuseType.WhenNoChange,
         };
 
-        public static Settings Load()
+        public static Settings? Load()
         {
             var fileName = Path.ChangeExtension(Assembly.GetEntryAssembly().Location, ".xml");
             if (File.Exists(fileName) == false)

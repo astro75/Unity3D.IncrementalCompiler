@@ -43,7 +43,7 @@ namespace IncrementalCompiler
 
             var parentProcessId = Process.GetCurrentProcess().Id;
 
-            Process serverProcess = null;
+            Process? serverProcess = null;
 
             // new Thread(() => CompilerServiceServer.Run(logger, parentProcessId)).Start();
 

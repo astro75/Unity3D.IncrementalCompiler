@@ -2,7 +2,7 @@
   "profiles": {
     "IncrementalCompiler": {
       "commandName": "Project",
-      "commandLineArgs": "-dev \"C:\\work\\compiler\\Unity3D.IncrementalCompiler\\samples\\Basic\" UnityTempFile-1cc38ad69c49d884484327dbecf3a4bf"
+      "commandLineArgs": "-dev \"C:\\work\\compiler\\Unity3D.IncrementalCompiler\\samples\\Basic\" UnityTempFile-4ee7c8e13eafe5b4db2a4c2941bce146"
     }
   }
 }
