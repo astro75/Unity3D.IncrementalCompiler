@@ -9,7 +9,7 @@ internal class Incremental60Compiler : Compiler
 
     readonly string compilerExePath;
 
-    public Incremental60Compiler(Logger logger, string directory) : base(logger) {
+    public Incremental60Compiler(Logger? logger, string directory) : base(logger) {
         compilerExePath = Path.Combine(directory, ExeName);
     }
 

@@ -8,12 +8,12 @@ internal abstract class Compiler
 {
 	public abstract string Name { get; }
 
-	protected readonly Logger logger;
+	protected readonly Logger? logger;
 
 	protected readonly List<string> outputLines = new List<string>();
 	protected readonly List<string> errorLines = new List<string>();
 
-	protected Compiler(Logger logger)
+	protected Compiler(Logger? logger)
 	{
 		this.logger = logger;
 	}

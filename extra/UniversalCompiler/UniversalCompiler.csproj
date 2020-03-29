@@ -9,7 +9,7 @@
     <FileVersion>1.2.9</FileVersion>
     <LangVersion>8</LangVersion>
     <Nullable>enable</Nullable>
-<!--    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>-->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
   </PropertyGroup>
   <ItemGroup>

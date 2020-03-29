@@ -14,7 +14,7 @@ internal class Program
 	private static int Main(string[] args)
 	{
 		int exitCode;
-		Logger logger = null;
+		Logger? logger = null;
 
 #if LOGGING_ENABLED
 		using (logger = new Logger())
@@ -67,11 +67,6 @@ internal class Program
 
 	    var compiler = CreateCompiler(logger, projectDir);
 
-        if (compiler == null)
-        {
-            logger?.Append($"ERROR: Compiler is null");
-        }
-
         logger?.Append($"Compiler: {compiler.Name}");
 		logger?.Append("");
 		logger?.Append("- Compilation -----------------------------------------------");
@@ -89,7 +84,7 @@ internal class Program
 
 
     // TODO: clean this mess
-    private static Compiler CreateCompiler(Logger logger, string projectDir)
+    static Compiler CreateCompiler(Logger? logger, string projectDir)
     {
         logger?.Append("Create Compiler");
 

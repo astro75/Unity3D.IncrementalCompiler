@@ -6,7 +6,7 @@ using System.Threading;
 
 internal class Logger : IDisposable
 {
-	private enum LoggingMethod
+    enum LoggingMethod
 	{
 		Immediate,
 		Retained,
@@ -24,7 +24,7 @@ internal class Logger : IDisposable
 		*/
 	}
 
-	private string LogFilename
+    string LogFilename
 	{
 		get
 		{
@@ -33,11 +33,11 @@ internal class Logger : IDisposable
 		}
 	}
 
-	private const int MAXIMUM_FILE_AGE_IN_MINUTES = 5;
+    const int MAXIMUM_FILE_AGE_IN_MINUTES = 5;
 
-	private readonly Mutex mutex;
-	private readonly LoggingMethod loggingMethod;
-	private readonly StringBuilder pendingLines;
+    readonly Mutex mutex;
+    readonly LoggingMethod loggingMethod;
+    readonly StringBuilder pendingLines = new StringBuilder();
 
 	public Logger()
 	{
@@ -52,7 +52,6 @@ internal class Logger : IDisposable
 		}
 		else
 		{
-			pendingLines = new StringBuilder();
 			loggingMethod = LoggingMethod.Retained;
 		}
 	}
@@ -74,7 +73,7 @@ internal class Logger : IDisposable
         }
     }
 
-	private void DeleteLogFileIfTooOld()
+    void DeleteLogFileIfTooOld()
 	{
 		var lastWriteTime = new FileInfo(LogFilename).LastWriteTimeUtc;
 		if (DateTime.UtcNow - lastWriteTime > TimeSpan.FromMinutes(MAXIMUM_FILE_AGE_IN_MINUTES))
