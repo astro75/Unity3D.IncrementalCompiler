@@ -14,7 +14,7 @@
         <TargetDir>..\bin\</TargetDir>
     </PropertyGroup>
 
-    <Target Name="Clean">
+    <Target Name="Clean" BeforeTargets="PackageAll">
         <ItemGroup>
             <OldFiles Include="$(TargetDir)\**\*" />
         </ItemGroup>
@@ -22,7 +22,7 @@
         <Delete Files="@(OldFiles)" />
     </Target>
     
-    <Target Name="PackageAll" AfterTargets="Clean">
+    <Target Name="PackageAll">
         <!-- https://stackoverflow.com/questions/1502410/msbuild-passing-parameters-to-calltarget -->
         <MSBuild Projects ="$(MSBuildProjectFullPath)"
                  Properties="UnityVersion=2018;CompilerPlugin=CompilerPlugin.Unity5;UseHarmony=true"
