@@ -1,4 +1,4 @@
-<Project DefaultTargets="Package">
+<Project DefaultTargets="PackageAll">
 
     <ItemGroup>
         <ProjectReference Include="..\core\IncrementalCompiler\IncrementalCompiler.csproj" ReferenceOutputAssembly="false" />
@@ -10,26 +10,40 @@
         <ProjectReference Include="..\Macros\Macros.csproj" ReferenceOutputAssembly="false" />
     </ItemGroup>
 
-    <ItemGroup>
-        <Deps Include="..\*\*\*\$(Configuration)\*.*" />
-    </ItemGroup>
-    
-    <Target Name="Package">
-        <PropertyGroup>
-            <TargetDir>..\bin\</TargetDir>
-            <EditorDir>$(TargetDir)\Assets\CSharp vNext Support\Editor\</EditorDir>
-            <PluginsDir>$(TargetDir)\Plugins\Incremental Compiler\</PluginsDir>
-            <CompilerDir>$(TargetDir)\Compiler\</CompilerDir>
-        </PropertyGroup>
-        
+    <PropertyGroup>
+        <TargetDir>..\bin\</TargetDir>
+    </PropertyGroup>
+
+    <Target Name="Clean">
         <ItemGroup>
             <OldFiles Include="$(TargetDir)\**\*" />
         </ItemGroup>
         <!-- do not delete folders, because it fails on windows if the folder is open in file explorer -->
         <Delete Files="@(OldFiles)" />
-        
-        <Copy SourceFiles="..\extra\CompilerPlugin.2019.3\bin\$(Configuration)\Unity.PureCSharpTests.dll" DestinationFiles="$(EditorDir)\CSharpVNextSupport.dll" />
+    </Target>
+    
+    <Target Name="PackageAll" AfterTargets="Clean">
+        <!-- https://stackoverflow.com/questions/1502410/msbuild-passing-parameters-to-calltarget -->
+        <MSBuild Projects ="$(MSBuildProjectFullPath)"
+                 Properties="UnityVersion=2018;CompilerPlugin=CompilerPlugin.Unity5;UseHarmony=true"
+                 Targets="PackageOne" />
+        <MSBuild Projects ="$(MSBuildProjectFullPath)"
+                 Properties="UnityVersion=2019.3;CompilerPlugin=CompilerPlugin.2019.3"
+                 Targets="PackageOne" />
+    </Target>
+
+    <Target Name="PackageOne">
+        <Message Text="$(UnityVersion), $(CompilerPlugin)" />
+
+        <PropertyGroup>
+            <EditorDir>$(TargetDir)\$(UnityVersion)\Assets\CSharp vNext Support\Editor\</EditorDir>
+            <PluginsDir>$(TargetDir)\$(UnityVersion)\Plugins\Incremental Compiler\</PluginsDir>
+            <CompilerDir>$(TargetDir)\$(UnityVersion)\Compiler\</CompilerDir>
+        </PropertyGroup>
+
+        <Copy SourceFiles="..\extra\$(CompilerPlugin)\bin\$(Configuration)\Unity.PureCSharpTests.dll" DestinationFiles="$(EditorDir)\CSharpVNextSupport.dll" />
         <Copy SourceFiles="..\core\UnityPackage\Assets\Editor\CompilerSettings.cs" DestinationFolder="$(EditorDir)" />
+        <Copy Condition="'$(UseHarmony)' == 'true'" SourceFiles="..\tools\0Harmony.dll" DestinationFolder="$(EditorDir)" />
         
         <Copy SourceFiles="..\GenerationAttributes\bin\$(Configuration)\GenerationAttributes.dll" DestinationFolder="$(PluginsDir)" />
         <Copy SourceFiles="..\GenerationAttributes\bin\$(Configuration)\GenerationAttributes.xml" DestinationFolder="$(PluginsDir)" />
@@ -43,7 +57,7 @@
         <Copy SourceFiles="..\extra\UniversalCompiler\UniversalCompiler.xml" DestinationFolder="$(CompilerDir)" />
         
         <ItemGroup>
-            <CompiledCompiler Include="..\core\IncrementalCompiler\bin\$(Configuration)\net471\*" />
+            <CompiledCompiler Include="..\core\IncrementalCompiler\bin\$(Configuration)\net472\*" />
         </ItemGroup>
         <Copy SourceFiles="@(CompiledCompiler)" DestinationFolder="$(CompilerDir)" />
 
