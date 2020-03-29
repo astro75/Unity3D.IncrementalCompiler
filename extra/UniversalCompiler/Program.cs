@@ -9,7 +9,8 @@ using System.Reflection;
 
 internal class Program
 {
-    private const string LANGUAGE_SUPPORT_DIR = "Compiler";
+    const string INCREMENTAL_COMPILER_DIR = "Compiler";
+    const string ROSLYN_DIR = "Roslyn";
 
 	private static int Main(string[] args)
 	{
@@ -90,10 +91,20 @@ internal class Program
     {
         logger?.Append("Create Compiler");
 
-        var compilerDirectory = Path.Combine(projectDir, LANGUAGE_SUPPORT_DIR);
+        {
+            var compilerDirectory = Path.Combine(projectDir, ROSLYN_DIR);
+            if (Directory.Exists(compilerDirectory))
+            {
+                logger?.Append("Compiler directory: " + compilerDirectory);
+                return new RoslynCompiler(logger, compilerDirectory);
+            }
+        }
 
-        logger?.Append("Compiler directory: " + compilerDirectory);
-        return new Incremental60Compiler(logger, compilerDirectory);
+        {
+            var compilerDirectory = Path.Combine(projectDir, INCREMENTAL_COMPILER_DIR);
+            logger?.Append("Compiler directory: " + compilerDirectory);
+            return new IncrementalCompiler(logger, compilerDirectory);
+        }
     }
 
 	private static Platform CurrentPlatform

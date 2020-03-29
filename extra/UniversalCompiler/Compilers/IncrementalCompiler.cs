@@ -1,15 +1,14 @@
 ﻿using System.Diagnostics;
 using System.IO;
 
-internal class Incremental60Compiler : Compiler
+internal class IncrementalCompiler : Compiler
 {
-	public override string Name => "Incremental C# Compiler 6.0";
-    const string DllName = "IncrementalCompiler.dll";
+	public override string Name => "Incremental C# Compiler";
     const string ExeName = "IncrementalCompiler.exe";
 
     readonly string compilerExePath;
 
-    public Incremental60Compiler(Logger? logger, string directory) : base(logger) {
+    public IncrementalCompiler(Logger? logger, string directory) : base(logger) {
         compilerExePath = Path.Combine(directory, ExeName);
     }
 
@@ -22,11 +21,6 @@ internal class Incremental60Compiler : Compiler
 	        content = content.Replace('\'', '\"');
 	        File.WriteAllText(filename, content);
 	    }
-
-		// var processArguments = compilerPath + "-noconfig " + responseFile;
-		// var process = new Process();
-        // process.StartInfo = CreateStartInfo("dotnet", processArguments);
-		// return process;
 
         var processArguments = "-noconfig " + responseFile;
         var process = new Process { StartInfo = CreateStartInfo(compilerExePath, processArguments) };
