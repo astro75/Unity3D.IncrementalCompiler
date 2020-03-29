@@ -37,7 +37,7 @@
 
         <PropertyGroup>
             <EditorDir>$(TargetDir)\$(UnityVersion)\Assets\CSharp vNext Support\Editor\</EditorDir>
-            <PluginsDir>$(TargetDir)\$(UnityVersion)\Plugins\Incremental Compiler\</PluginsDir>
+            <PluginsDir>$(TargetDir)\$(UnityVersion)\Assets\Plugins\Incremental Compiler\</PluginsDir>
             <CompilerDir>$(TargetDir)\$(UnityVersion)\Compiler\</CompilerDir>
         </PropertyGroup>
 
