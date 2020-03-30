@@ -9,7 +9,7 @@ Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Core", "Core", "{092669A2-5
 EndProject
 Project("{2150E333-8FDC-42A3-9474-1A3956D46DE8}") = "Extra", "Extra", "{A22672B3-D1C4-47C0-AB82-6D22BBB94BBB}"
 EndProject
-Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CompilerPlugin.Unity5", "extra\CompilerPlugin.Unity5\CompilerPlugin.Unity5.csproj", "{67FE81D8-C1BF-4D15-A512-E9E8078DEECF}"
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "CompilerPlugin.2018", "extra\CompilerPlugin.2018\CompilerPlugin.2018.csproj", "{67FE81D8-C1BF-4D15-A512-E9E8078DEECF}"
 EndProject
 Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "UniversalCompiler", "extra\UniversalCompiler\UniversalCompiler.csproj", "{B19F1DAC-FA9A-4749-9E03-1848D29BFCCD}"
 EndProject

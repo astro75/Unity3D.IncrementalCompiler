@@ -17,8 +17,6 @@ public class CompilationFlags {
 
 internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
 {
-    public const string COMPILER_DEFINE = "ALWAYS_ON";
-
     public CustomCSharpCompiler(ScriptAssembly scriptAssembly, EditorScriptCompilationOptions options, string tempOutputDirectory)
         : base(scriptAssembly, options, tempOutputDirectory)
     {
@@ -26,10 +24,6 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
 
 	string? GetUniversalCompilerPath()
 	{
-        // var basePath = Path.Combine(Directory.GetCurrentDirectory(), "Roslyn");
-        // var compilerPath = Path.Combine(basePath, "csc.exe");
-        // return File.Exists(compilerPath) ? compilerPath : null;
-
         var basePath = Path.Combine(Directory.GetCurrentDirectory(), "Compiler");
         var compilerPath = Path.Combine(basePath, "UniversalCompiler.exe");
         return File.Exists(compilerPath) ? compilerPath : null;
@@ -57,11 +51,10 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
         "-target:library",
         "-nowarn:0169",
         "-out:" + PrepareFileName(AssetPath.Combine(tempBuildDirectory, assembly.Filename)),
-        "-unsafe" // added unsafe to all projects, because setting in unity asmdef does not work
+        //"-unsafe" // added unsafe to all projects, because setting in unity asmdef does not work
       };
 
       // added
-      arguments.Add("-define:" + COMPILER_DEFINE);
       arguments.Add("-define:__UNITY_PROCESSID__" + Process.GetCurrentProcess().Id);
 
       if (assembly.CompilerOptions.AllowUnsafeCode)

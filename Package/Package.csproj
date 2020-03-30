@@ -3,8 +3,12 @@
     <ItemGroup>
         <ProjectReference Include="..\CompilationExtensionCodeGenerator\CompilationExtensionCodeGenerator.csproj" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\core\IncrementalCompiler\IncrementalCompiler.csproj" ReferenceOutputAssembly="false" />
+        <ProjectReference Include="..\extra\CompilerPlugin.2018\CompilerPlugin.2018.csproj">
+          <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
+          <Project>{67fe81d8-c1bf-4d15-a512-e9e8078deecf}</Project>
+          <Name>CompilerPlugin.2018</Name>
+        </ProjectReference>
         <ProjectReference Include="..\extra\CompilerPlugin.2019.3\CompilerPlugin.2019.3.csproj" ReferenceOutputAssembly="false" />
-        <ProjectReference Include="..\extra\CompilerPlugin.Unity5\CompilerPlugin.Unity5.csproj" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\extra\UniversalCompiler\UniversalCompiler.csproj" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\GenerationAttributes.Java\GenerationAttributes.Java.csproj" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\GenerationAttributes\GenerationAttributes.csproj" ReferenceOutputAssembly="false" />
@@ -25,10 +29,8 @@
     
     <Target Name="PackageAll">
         <!-- https://stackoverflow.com/questions/1502410/msbuild-passing-parameters-to-calltarget -->
-        <MSBuild Projects="$(MSBuildProjectFullPath)" Properties="UnityVersion=2018;CompilerPlugin=CompilerPlugin.Unity5;UseHarmony=true" Targets="PackageOne" />
+        <MSBuild Projects="$(MSBuildProjectFullPath)" Properties="UnityVersion=2018;CompilerPlugin=CompilerPlugin.2018;UseHarmony=true" Targets="PackageOne" />
         <MSBuild Projects="$(MSBuildProjectFullPath)" Properties="UnityVersion=2019.3;CompilerPlugin=CompilerPlugin.2019.3" Targets="PackageOne" />
-        
-        <CallTarget Targets="PackageRoslyn" />
     </Target>
 
     <Target Name="PackageOne">
@@ -38,10 +40,11 @@
             <EditorDir>$(TargetDir)\$(UnityVersion)\Assets\CSharp vNext Support\Editor\</EditorDir>
             <PluginsDir>$(TargetDir)\$(UnityVersion)\Assets\Plugins\Incremental Compiler\</PluginsDir>
             <CompilerDir>$(TargetDir)\$(UnityVersion)\Compiler\</CompilerDir>
+            <RoslynTarget>$(TargetDir)\$(UnityVersion)\Roslyn\</RoslynTarget>
+            <RoslynSource>..\tools\csc</RoslynSource>
         </PropertyGroup>
 
         <Copy SourceFiles="..\extra\$(CompilerPlugin)\bin\$(Configuration)\Unity.PureCSharpTests.dll" DestinationFiles="$(EditorDir)\CSharpVNextSupport.dll" />
-        <Copy SourceFiles="..\core\UnityPackage\Assets\Editor\CompilerSettings.cs" DestinationFolder="$(EditorDir)" />
         <Copy Condition="'$(UseHarmony)' == 'true'" SourceFiles="..\tools\0Harmony.dll" DestinationFolder="$(EditorDir)" />
         
         <Copy SourceFiles="..\GenerationAttributes\bin\$(Configuration)\GenerationAttributes.dll" DestinationFolder="$(PluginsDir)" />
@@ -58,23 +61,14 @@
         </ItemGroup>
         <Copy SourceFiles="@(CompiledCompiler)" DestinationFolder="$(CompilerDir)" />
 
-        <Message Importance="high" Text="Exported successfully" />
-    </Target>
-
-    <Target Name="PackageRoslyn">
-        <PropertyGroup>
-            <RoslynSource>..\tools\csc</RoslynSource>
-            <RoslynTarget>$(TargetDir)\Roslyn</RoslynTarget>
-        </PropertyGroup>
-
         <ItemGroup>
             <CompiledCompiler Include="..\CompilationExtensionCodeGenerator\bin\$(Configuration)\*\*" />
             <RoslynSources Include="$(RoslynSource)\*\*" />
         </ItemGroup>
-        
         <Copy SourceFiles="@(CompiledCompiler)" DestinationFolder="$(RoslynTarget)\%(RecursiveDir)" />
         <!-- this also overwrites some files from CompiledCompiler -->
         <Copy SourceFiles="@(RoslynSources)" DestinationFolder="$(RoslynTarget)\%(RecursiveDir)" />
-    </Target>
 
+        <Message Importance="high" Text="Exported successfully" />
+    </Target>
 </Project>

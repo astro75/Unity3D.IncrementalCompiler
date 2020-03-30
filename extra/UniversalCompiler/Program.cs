@@ -94,6 +94,7 @@ internal class Program
     {
         logger?.Append("Create Compiler");
 
+        // .net framework works faster on windows than net core
         if (platform == Platform.Windows) {
             var compilerDirectory = Path.Combine(projectDir, ROSLYN_DIR, "net472");
             if (File.Exists(Path.Combine(compilerDirectory, RoslynCompiler.ExeName)))

@@ -32,12 +32,6 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
     {
         var xdoc = XDocument.Parse(content);
 
-        SetUpCorrectLangVersion(xdoc);
-        EnableUnsafeCode(xdoc);
-        RemoveAnnoyingReferences(xdoc);
-
-        AddDefine(xdoc, CustomCSharpCompiler.COMPILER_DEFINE);
-
         if (xdoc.Root == null)
         {
             Debug.LogError("Project file root not found");
@@ -45,6 +39,30 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         }
 
         var ns = xdoc.Root.GetDefaultNamespace();
+
+        {
+            // SetUpCorrectLangVersion
+            const string csharpVersion = "8";
+            xdoc.Descendants(ns + "LangVersion").Remove();
+            var propertyGroupElement = xdoc.Descendants(ns + "PropertyGroup").First();
+            propertyGroupElement.Add(new XElement(ns + "LangVersion", csharpVersion));
+        }
+
+        {
+            // EnableUnsafeCode
+            xdoc.Descendants(ns + "AllowUnsafeBlocks").Remove();
+            var propertyGroup = xdoc.Descendants(ns + "PropertyGroup").First();
+            propertyGroup.Add(new XElement(ns + "AllowUnsafeBlocks", "True"));
+        }
+
+        {
+            // RemoveAnnoyingReferences
+            xdoc.Descendants(ns + "Reference").Where(element =>
+            {
+                var include = element.Attribute("Include")?.Value;
+                return include == "Boo.Lang" || include == "UnityScript.Lang";
+            }).Remove();
+        }
 
         var compileName = ns + "Compile";
         var noneName = ns + "None";
@@ -56,20 +74,18 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
             .OfType<string>()
             .ToArray();
 
-        var commonPrefix = allCsPaths.Length > 1 ? findCommonPrefix(allCsPaths) : "";
+        var commonPrefix = allCsPaths.Length > 1 ? FindCommonPrefix(allCsPaths) : "";
 
+        if (commonPrefix.Length > 0)
         {
-            if (commonPrefix.Length > 0)
+            foreach (var fileElement in xdoc.Descendants(compileName).Concat(xdoc.Descendants(noneName)))
             {
-                foreach (var fileElement in xdoc.Descendants(compileName).Concat(xdoc.Descendants(noneName)))
+                var includeAttribute = fileElement.Attribute(includeName);
+                if (includeAttribute != null)
                 {
-                    var includeAttribute = fileElement.Attribute(includeName);
-                    if (includeAttribute != null)
-                    {
-                        fileElement.SetAttributeValue(
-                            linkName,
-                            EnsureDoesNotStartWith(includeAttribute.Value, commonPrefix));
-                    }
+                    fileElement.SetAttributeValue(
+                        linkName,
+                        EnsureDoesNotStartWith(includeAttribute.Value, commonPrefix));
                 }
             }
         }
@@ -123,7 +139,7 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         return writer.ToString();
     }
 
-    static string findCommonPrefix(string[] paths) {
+    static string FindCommonPrefix(string[] paths) {
         if (paths.Length == 0) return "";
         var result = paths[0];
         foreach (var path in paths)
@@ -145,41 +161,5 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
     class Utf8StringWriter : StringWriter
     {
         public override Encoding Encoding => Encoding.UTF8;
-    }
-
-    static void SetUpCorrectLangVersion(XDocument xdoc)
-    {
-        const string csharpVersion = "8";
-        var ns = xdoc.Root.GetDefaultNamespace();
-        xdoc.Descendants(ns + "LangVersion").Remove();
-        var propertyGroupElement = xdoc.Descendants(ns + "PropertyGroup").First();
-        propertyGroupElement.Add(new XElement(ns + "LangVersion", csharpVersion));
-    }
-
-    static void EnableUnsafeCode(XDocument xdoc)
-    {
-        var ns = xdoc.Root.GetDefaultNamespace();
-        xdoc.Descendants(ns + "AllowUnsafeBlocks").Remove();
-        var propertyGroup = xdoc.Descendants(ns + "PropertyGroup").First();
-        propertyGroup.Add(new XElement(ns + "AllowUnsafeBlocks", "True"));
-    }
-
-    static void RemoveAnnoyingReferences(XDocument xdoc)
-    {
-        var ns = xdoc.Root.GetDefaultNamespace();
-        xdoc.Descendants(ns + "Reference").Where(element =>
-        {
-            var include = element.Attribute("Include")?.Value;
-            return include == "Boo.Lang" || include == "UnityScript.Lang";
-        }).Remove();
-    }
-
-    static void AddDefine(XDocument xdoc, string define)
-    {
-        var ns = xdoc.Root.GetDefaultNamespace();
-        foreach (var defines in xdoc.Descendants(ns + "DefineConstants"))
-        {
-            defines.Value += ";" + define;
-        }
     }
 }
