@@ -51,9 +51,7 @@
         <Copy SourceFiles="..\Macros\bin\Release\Macros.dll" DestinationFolder="$(PluginsDir)" />
         <Copy SourceFiles="..\Macros\bin\Release\Macros.xml" DestinationFolder="$(PluginsDir)" />
         
-        <Copy SourceFiles="..\core\IncrementalCompiler\IncrementalCompiler.xml" DestinationFolder="$(CompilerDir)" />
         <Copy SourceFiles="..\extra\UniversalCompiler\bin\$(Configuration)\UniversalCompiler.exe" DestinationFolder="$(CompilerDir)" />
-        <Copy SourceFiles="..\extra\UniversalCompiler\UniversalCompiler.xml" DestinationFolder="$(CompilerDir)" />
         
         <ItemGroup>
             <CompiledCompiler Include="..\core\IncrementalCompiler\bin\$(Configuration)\net472\*" />

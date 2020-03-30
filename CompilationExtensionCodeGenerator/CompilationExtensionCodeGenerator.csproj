@@ -25,9 +25,8 @@
     <Reference Include="CompilationExtensionInterfaces">
       <HintPath>..\tools\csc\net472\CompilationExtensionInterfaces.dll</HintPath>
     </Reference>
-    <Reference Include="mscorlib" />
   </ItemGroup>
   <ItemGroup>
-    <ProjectReference Include="..\core\IncrementalCompiler\IncrementalCompiler.csproj" />
+    <ProjectReference Include="..\core\CodeGenerator\CodeGenerator.csproj" />
   </ItemGroup>
 </Project>

@@ -4,12 +4,11 @@ using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using NLog;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
 {
-    static class Extensions
+    public static class Extensions
     {
         public static bool Has(this BasePropertyDeclarationSyntax decl, SyntaxKind kind)
             => decl.Modifiers.Has(kind);

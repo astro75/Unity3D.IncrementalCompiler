@@ -26,7 +26,7 @@
     </Reference>
   </ItemGroup>
   <ItemGroup>
-    <Compile Include="..\..\core\IncrementalCompiler\SharedData.cs" Link="SharedData.cs" />
+    <Compile Include="..\..\core\CodeGenerator\SharedData.cs" Link="SharedData.cs" />
     <Compile Include="..\CompilerPlugin\CSharp60SupportActivator.cs" Link="CSharp60SupportActivator.cs" />
     <Compile Include="..\CompilerPlugin\CSharpProjectProcessor.cs" Link="CSharpProjectProcessor.cs" />
     <Compile Include="..\CompilerPlugin\CustomCSharpCompiler.cs" Link="CustomCSharpCompiler.cs" />
