@@ -9,7 +9,6 @@ using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using MonadLib;
 using static System.String;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -33,21 +32,27 @@ namespace IncrementalCompiler
 
     public class GenerationSettings
     {
-        public readonly string partialsFolder, macrosFolder;
+        public readonly string partialsFolder;
+        public readonly string macrosFolder;
         public readonly string? txtForPartials;
+        public readonly string baseDirectory;
 
-        public GenerationSettings(string partialsFolder, string macrosFolder, string? txtForPartials) {
+        readonly Uri baseDirectoryUri;
+
+        public GenerationSettings(string partialsFolder, string macrosFolder, string? txtForPartials, string baseDirectory) {
             this.partialsFolder = partialsFolder;
             this.macrosFolder = macrosFolder;
             this.txtForPartials = txtForPartials;
+            this.baseDirectory = baseDirectory;
+            baseDirectoryUri = new Uri(baseDirectory);
         }
+
+        public string getRelativePath(string path) =>
+            baseDirectoryUri.MakeRelativeUri(new Uri(Path.GetFullPath(path))).ToString();
     }
 
     public static partial class CodeGeneration
     {
-        public static string getRelativePath(string path) =>
-            new Uri(Directory.GetCurrentDirectory()).MakeRelativeUri(new Uri(Path.GetFullPath(path))).ToString();
-
         static readonly Type caseType = typeof(RecordAttribute);
         static readonly HashSet<SyntaxKind> kindsForExtensionClass = new HashSet<SyntaxKind>(new[] {
             SyntaxKind.PublicKeyword, SyntaxKind.InternalKeyword, SyntaxKind.PrivateKeyword
@@ -151,6 +156,12 @@ namespace IncrementalCompiler
             }
         }
 
+        static void DeleteFilesRecursively(string targetDir)
+        {
+            foreach (var file in Directory.GetFiles(targetDir)) File.Delete(file);
+            foreach (var subDir in Directory.GetDirectories(targetDir)) DeleteFilesRecursively(subDir);
+        }
+
         public static void tryAttribute<A>(AttributeData attr, Action<A> a, List<Diagnostic> diagnostic) where A : Attribute {
             try {
                 var instance = CreateAttributeByReflection<A>(attr);
@@ -180,7 +191,8 @@ namespace IncrementalCompiler
         ) {
             if (!incrementalRun && Directory.Exists(settings.partialsFolder))
             {
-                DeleteFilesAndFoldersRecursively(settings.partialsFolder);
+                // windows explorer likes to lock folders, so delete files only
+                DeleteFilesRecursively(settings.partialsFolder);
             }
             Directory.CreateDirectory(settings.partialsFolder);
             var oldCompilation = compilation;
@@ -213,6 +225,7 @@ namespace IncrementalCompiler
                     JavaClassFile? javaClassFile = null;
                     foreach (var attr in symbol.GetAttributes()) {
                         if (!treeContains(attr.ApplicationSyntaxReference, tree, tds)) continue;
+                        if (attr.AttributeClass == null) continue;
                         var attrClassName = attr.AttributeClass.ToDisplayString();
                         if (attrClassName == caseType.FullName)
                         {
@@ -284,6 +297,7 @@ namespace IncrementalCompiler
                                 foreach (var attr in fieldSymbol.GetAttributes())
                                 {
                                     if (!treeContains(attr.ApplicationSyntaxReference, tree, tds)) continue;
+                                    if (attr.AttributeClass == null) continue;
                                     var attrClassName = attr.AttributeClass.ToDisplayString();
                                     if (attrClassName == typeof(PublicAccessor).FullName)
                                     {
@@ -305,6 +319,7 @@ namespace IncrementalCompiler
                                 foreach (var attr in methodSymbol.GetAttributes())
                                 {
                                     if (!treeContains(attr.ApplicationSyntaxReference, tree, tds)) continue;
+                                    if (attr.AttributeClass == null) continue;
                                     var attrClassName = attr.AttributeClass.ToDisplayString();
                                     if (attrClassName == typeof(JavaMethodAttribute).FullName)
                                     {
@@ -358,7 +373,7 @@ namespace IncrementalCompiler
                 }
                 if (newMembers.Any())
                 {
-                    var treePath = getRelativePath(tree.FilePath);
+                    var treePath = settings.getRelativePath(tree.FilePath);
                     var nt = CSharpSyntaxTree.Create(
                         SF.CompilationUnit()
                             .WithUsings(cleanUsings(root.Usings))
@@ -416,13 +431,13 @@ namespace IncrementalCompiler
             return (compilation, diagnostic);
         }
 
-        static bool treeContains(SyntaxReference syntaxRef, SyntaxTree tree, TypeDeclarationSyntax tds) {
-            return tree == syntaxRef.SyntaxTree
+        static bool treeContains(SyntaxReference? syntaxRef, SyntaxTree tree, TypeDeclarationSyntax tds) {
+            return tree == syntaxRef?.SyntaxTree
                    &&
                    tds.Span.Contains(syntaxRef.Span);
         }
 
-        static Location attrLocation(AttributeData attr) => attr.ApplicationSyntaxReference.GetSyntax().GetLocation();
+        static Location attrLocation(AttributeData attr) => attr.ApplicationSyntaxReference!.GetSyntax().GetLocation();
 
         static void SetNamedArguments(Type type, AttributeData attributeData, Attribute instance) {
             foreach (var arg in attributeData.NamedArguments)
@@ -430,7 +445,7 @@ namespace IncrementalCompiler
                 // if some arguments are invalid they do not appear in NamedArguments list
                 // because of that we do not check for errors
                 var prop = type.GetProperty(arg.Key);
-                prop.SetValue(instance, arg.Value.Value);
+                prop?.SetValue(instance, arg.Value.Value);
             }
         }
 
@@ -549,16 +564,16 @@ namespace IncrementalCompiler
 
         public class CaseClass : IEnumerable<TypeDeclarationSyntax> {
             readonly TypeDeclarationSyntax caseClass;
-            readonly Maybe<TypeDeclarationSyntax> companion;
+            readonly TypeDeclarationSyntax? companion;
 
-            public CaseClass(TypeDeclarationSyntax caseClass, Maybe<TypeDeclarationSyntax> companion) {
+            public CaseClass(TypeDeclarationSyntax caseClass, TypeDeclarationSyntax? companion) {
                 this.caseClass = caseClass;
                 this.companion = companion;
             }
 
             public IEnumerator<TypeDeclarationSyntax> GetEnumerator() {
                 yield return caseClass;
-                foreach (var c in companion.ToEnumerable()) yield return c;
+                if (companion != null) yield return companion;
             }
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         }
@@ -572,7 +587,7 @@ namespace IncrementalCompiler
             public readonly bool traversable;
 
             static readonly string stringName = "string";
-            static readonly string iEnumName = typeof(IEnumerable<>).FullName;
+            static readonly string iEnumName = typeof(IEnumerable<>).FullName!;
 
             public FieldOrProp(
                 TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model

@@ -42,6 +42,8 @@ internal class Program
         logger?.Append("mono path");
         logger?.Append(Environment.GetEnvironmentVariable("MONO_PATH"));
 
+        var platform = CurrentPlatform;
+
 		var responseFile = args[0];
 		var compilationOptions = File.ReadAllLines(responseFile.TrimStart('@'));
         var targetProfileDir = GetTargetProfileDir(compilationOptions);
@@ -53,20 +55,21 @@ internal class Program
 												  .Substring(10);
 
 		logger?.Append($"CSharpCompilerWrapper.exe version: {GetExecutingAssemblyFileVersion()}");
-		logger?.Append($"Platform: {CurrentPlatform}");
+		logger?.Append($"Platform: {platform}");
 		logger?.Append($"Target assembly: {targetAssembly}");
 		logger?.Append($"Project directory: {projectDir}");
 		logger?.Append($"Target profile directory: {targetProfileDir}");
 		logger?.Append($"Unity 'Data' or 'Frameworks' directory: {unityEditorDataDir}");
 
-		if (CurrentPlatform == Platform.Linux)
+
+		if (platform == Platform.Linux)
 		{
 			logger?.Append("");
 			logger?.Append("Platform is not supported");
 			return -1;
 		}
 
-	    var compiler = CreateCompiler(logger, projectDir);
+	    var compiler = CreateCompiler(logger, projectDir, platform);
 
         logger?.Append($"Compiler: {compiler.Name}");
 		logger?.Append("");
@@ -74,7 +77,7 @@ internal class Program
 		logger?.Append("");
 
 		var stopwatch = Stopwatch.StartNew();
-		int exitCode = compiler.Compile(CurrentPlatform, unityEditorDataDir, targetProfileDir, responseFile);
+		int exitCode = compiler.Compile(platform, unityEditorDataDir, targetProfileDir, responseFile);
 		stopwatch.Stop();
 
 		logger?.Append($"Elapsed time: {stopwatch.ElapsedMilliseconds / 1000f:F2} sec");
@@ -87,16 +90,25 @@ internal class Program
 
 
     // TODO: clean this mess
-    static Compiler CreateCompiler(Logger? logger, string projectDir)
+    static Compiler CreateCompiler(Logger? logger, string projectDir, Platform platform)
     {
         logger?.Append("Create Compiler");
 
-        {
-            var compilerDirectory = Path.Combine(projectDir, ROSLYN_DIR);
-            if (Directory.Exists(compilerDirectory))
+        if (platform == Platform.Windows) {
+            var compilerDirectory = Path.Combine(projectDir, ROSLYN_DIR, "net472");
+            if (File.Exists(Path.Combine(compilerDirectory, RoslynCompiler.ExeName)))
             {
                 logger?.Append("Compiler directory: " + compilerDirectory);
                 return new RoslynCompiler(logger, compilerDirectory);
+            }
+        }
+
+        {
+            var compilerDirectory = Path.Combine(projectDir, ROSLYN_DIR, "netcoreapp3.1");
+            if (File.Exists(Path.Combine(compilerDirectory, DotnetRoslynCompiler.ExeName)))
+            {
+                logger?.Append("Compiler directory: " + compilerDirectory);
+                return new DotnetRoslynCompiler(logger, compilerDirectory);
             }
         }
 

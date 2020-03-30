@@ -34,19 +34,18 @@ namespace IncrementalCompiler
             List<Diagnostic> diagnostic, GenerationSettings settings
         )
         {
-            var macrosType = typeof(Macros).FullName;
+            var macrosType = typeof(Macros).FullName!;
             var macros = compilation.GetTypeByMetadataName(macrosType);
 
             if (macros == null)
             {
                 // skip this step if macros dll is not referenced
                 return compilation;
-                // throw new Exception($"Could not find type {macrosType} in project.");
             }
 
-            var simpleMethodMacroType = compilation.GetTypeByMetadataName(typeof(SimpleMethodMacro).FullName);
-            var statementMethodMacroType = compilation.GetTypeByMetadataName(typeof(StatementMethodMacro).FullName);
-            var varMethodMacroType = compilation.GetTypeByMetadataName(typeof(VarMethodMacro).FullName);
+            var simpleMethodMacroType = compilation.GetTypeByMetadataName(typeof(SimpleMethodMacro).FullName!);
+            var statementMethodMacroType = compilation.GetTypeByMetadataName(typeof(StatementMethodMacro).FullName!);
+            var varMethodMacroType = compilation.GetTypeByMetadataName(typeof(VarMethodMacro).FullName!);
             var allMethods = compilation.GetAllTypes().SelectMany(t => t.GetMembers().OfType<IMethodSymbol>());
 
             var builderExpressions = ImmutableDictionary.CreateBuilder<ISymbol, Action<MacroCtx, IOperation>>();
@@ -314,7 +313,7 @@ namespace IncrementalCompiler
         ) {
             foreach (var (tree, syntax) in treeEdits)
             {
-                var originalFilePath = CodeGeneration.getRelativePath(tree.FilePath);
+                var originalFilePath = settings.getRelativePath(tree.FilePath);
                 var editedFilePath = Path.Combine(settings.macrosFolder, originalFilePath);
 
                 var newTree = tree.WithRootAndOptions(syntax, tree.Options).WithFilePath(editedFilePath);
@@ -336,7 +335,8 @@ namespace IncrementalCompiler
             this.model = model;
         }
 
-        public override void Visit(SyntaxNode node) {
+        public override void Visit(SyntaxNode? node) {
+            if (node == null) return;
             var operation = model.GetOperation(node);
             if (operation == null) base.Visit(node);
             else results.Add(operation);

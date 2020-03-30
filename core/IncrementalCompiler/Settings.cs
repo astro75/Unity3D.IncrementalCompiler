@@ -16,8 +16,8 @@ namespace IncrementalCompiler
 
         public static Settings? Load()
         {
-            var fileName = Path.ChangeExtension(Assembly.GetEntryAssembly().Location, ".xml");
-            if (File.Exists(fileName) == false)
+            var fileName = Path.ChangeExtension(Assembly.GetEntryAssembly()?.Location, ".xml");
+            if (fileName == null || File.Exists(fileName) == false)
                 return null;
 
             using (var stream = new FileStream(fileName, FileMode.Open, FileAccess.Read, FileShare.Read))

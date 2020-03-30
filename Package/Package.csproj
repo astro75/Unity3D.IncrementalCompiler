@@ -1,6 +1,7 @@
 <Project DefaultTargets="PackageAll">
 
     <ItemGroup>
+        <ProjectReference Include="..\CompilationExtensionCodeGenerator\CompilationExtensionCodeGenerator.csproj" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\core\IncrementalCompiler\IncrementalCompiler.csproj" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\extra\CompilerPlugin.2019.3\CompilerPlugin.2019.3.csproj" ReferenceOutputAssembly="false" />
         <ProjectReference Include="..\extra\CompilerPlugin.Unity5\CompilerPlugin.Unity5.csproj" ReferenceOutputAssembly="false" />
@@ -24,12 +25,10 @@
     
     <Target Name="PackageAll">
         <!-- https://stackoverflow.com/questions/1502410/msbuild-passing-parameters-to-calltarget -->
-        <MSBuild Projects ="$(MSBuildProjectFullPath)"
-                 Properties="UnityVersion=2018;CompilerPlugin=CompilerPlugin.Unity5;UseHarmony=true"
-                 Targets="PackageOne" />
-        <MSBuild Projects ="$(MSBuildProjectFullPath)"
-                 Properties="UnityVersion=2019.3;CompilerPlugin=CompilerPlugin.2019.3"
-                 Targets="PackageOne" />
+        <MSBuild Projects="$(MSBuildProjectFullPath)" Properties="UnityVersion=2018;CompilerPlugin=CompilerPlugin.Unity5;UseHarmony=true" Targets="PackageOne" />
+        <MSBuild Projects="$(MSBuildProjectFullPath)" Properties="UnityVersion=2019.3;CompilerPlugin=CompilerPlugin.2019.3" Targets="PackageOne" />
+        
+        <CallTarget Targets="PackageRoslyn" />
     </Target>
 
     <Target Name="PackageOne">
@@ -62,6 +61,22 @@
         <Copy SourceFiles="@(CompiledCompiler)" DestinationFolder="$(CompilerDir)" />
 
         <Message Importance="high" Text="Exported successfully" />
+    </Target>
+
+    <Target Name="PackageRoslyn">
+        <PropertyGroup>
+            <RoslynSource>..\tools\csc</RoslynSource>
+            <RoslynTarget>$(TargetDir)\Roslyn</RoslynTarget>
+        </PropertyGroup>
+
+        <ItemGroup>
+            <CompiledCompiler Include="..\CompilationExtensionCodeGenerator\bin\$(Configuration)\*\*" />
+            <RoslynSources Include="$(RoslynSource)\*\*" />
+        </ItemGroup>
+        
+        <Copy SourceFiles="@(CompiledCompiler)" DestinationFolder="$(RoslynTarget)\%(RecursiveDir)" />
+        <!-- this also overwrites some files from CompiledCompiler -->
+        <Copy SourceFiles="@(RoslynSources)" DestinationFolder="$(RoslynTarget)\%(RecursiveDir)" />
     </Target>
 
 </Project>

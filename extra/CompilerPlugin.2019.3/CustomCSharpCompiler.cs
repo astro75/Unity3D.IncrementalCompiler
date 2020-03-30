@@ -26,10 +26,14 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
 
 	string? GetUniversalCompilerPath()
 	{
-		var basePath = Path.Combine(Directory.GetCurrentDirectory(), "Compiler");
-		var compilerPath = Path.Combine(basePath, "UniversalCompiler.exe");
-		return File.Exists(compilerPath) ? compilerPath : null;
-	}
+        // var basePath = Path.Combine(Directory.GetCurrentDirectory(), "Roslyn");
+        // var compilerPath = Path.Combine(basePath, "csc.exe");
+        // return File.Exists(compilerPath) ? compilerPath : null;
+
+        var basePath = Path.Combine(Directory.GetCurrentDirectory(), "Compiler");
+        var compilerPath = Path.Combine(basePath, "UniversalCompiler.exe");
+        return File.Exists(compilerPath) ? compilerPath : null;
+    }
 
     static void FillCompilerOptionsEdited(
         List<string> arguments,
@@ -38,7 +42,7 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
     {
         arguments.Add("-nostdlib+");
         arguments.Add("-preferreduilang:en-US");
-        arguments.Add("-langversion:7.3");
+        arguments.Add("-langversion:latest");
     }
 
     static string GenerateResponseFileEdited(
@@ -101,7 +105,7 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
                     isWindows: Application.platform == RuntimePlatform.WindowsEditor,
                     processPath: compiler,
                     // Arguments = "/noconfig @" + this.assembly.GeneratedResponseFile,
-                    processArguments: " @" + assembly.GeneratedResponseFile,
+                    processArguments: $"@{assembly.GeneratedResponseFile}",
                     unityEditorDataDir: MonoInstallationFinder.GetFrameWorksFolder()
                 ));
                 p.Start();
@@ -166,6 +170,7 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
 
         var vars = startInfo.EnvironmentVariables;
         vars.Add("UNITY_DATA", unityEditorDataDir);
+        // vars["RoslynCommandLineLogFile"] = Path.Combine(Directory.GetCurrentDirectory(), "clogs");
 
         startInfo.CreateNoWindow = true;
         startInfo.WorkingDirectory = Application.dataPath + "/..";

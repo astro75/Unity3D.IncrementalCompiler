@@ -215,10 +215,8 @@ public class CompilerSettings : EditorWindow
             var totalFound = 0;
             foreach (var line in lines.Reverse())
             {
-                Debug.Log(line);
                 if (line.StartsWith("compilation-info;", StringComparison.Ordinal)) {
                     var split = line.Split(';');
-                    Debug.Log(line);
                     if (split.Length < 4) continue;
 
                     var target = split[1];

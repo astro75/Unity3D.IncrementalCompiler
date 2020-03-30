@@ -133,12 +133,12 @@ namespace IncrementalCompiler
                     foreach (var warning in result.Warnings)
                     {
                         logger.Info(warning);
-                        Console.Error.WriteLine(warning.Replace("\n", " ~~ "));
+                        Console.Error.WriteLine(warning.Replace("\r\n", " ~~ ").Replace("\n", " ~~ "));
                     }
                     foreach (var error in result.Errors)
                     {
                         logger.Info(error);
-                        Console.Error.WriteLine(error.Replace("\n", " ~~ "));
+                        Console.Error.WriteLine(error.Replace("\r\n", " ~~ ").Replace("\n", " ~~ "));
                     }
                     return result.Succeeded ? 0 : 1;
                 }
@@ -150,7 +150,7 @@ namespace IncrementalCompiler
                         serverProcess = Process.Start(
                             new ProcessStartInfo
                             {
-                                FileName = Assembly.GetEntryAssembly().Location,
+                                FileName = (Assembly.GetEntryAssembly() ?? typeof(Program).Assembly).Location,
                                 Arguments = "-server " + parentProcessId,
                                 WindowStyle = ProcessWindowStyle.Hidden
                             });

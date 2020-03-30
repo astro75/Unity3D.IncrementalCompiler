@@ -43,7 +43,12 @@ namespace IncrementalCompiler
                             _logger.Info("Flush old project. (Project={0})", _projectPath);
                     }
 
-                    if (_compilerMap.TryGetValue(options.Output, out compiler) == false)
+
+                    if (_compilerMap.TryGetValue(options.Output, out var cachedCompiler))
+                    {
+                        compiler = cachedCompiler;
+                    }
+                    else
                     {
                         compiler = new Compiler(options);
                         _compilerMap.Add(options.Output, compiler);

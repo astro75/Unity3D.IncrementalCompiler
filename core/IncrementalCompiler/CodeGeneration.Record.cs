@@ -9,7 +9,6 @@ using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
-using MonadLib;
 using static System.String;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
@@ -256,14 +255,14 @@ namespace IncrementalCompiler
             #region Static apply method
 
 
-            var companion = Maybe.MZero<TypeDeclarationSyntax>();
+            TypeDeclarationSyntax? companion = null;
             {
                 if (attr.GenerateConstructor == GeneratedConstructor.ConstructorAndApply) {
                     if (cds.TypeParameterList == null) {
                         newMembers = newMembers.Concat(GenerateStaticApply(cds, initializedFieldsAndProps));
                     }
                     else {
-                        companion = Maybe.Just(GenerateCaseClassCompanion(cds, initializedFieldsAndProps));
+                        companion = GenerateCaseClassCompanion(cds, initializedFieldsAndProps);
                     }
                 }
             }

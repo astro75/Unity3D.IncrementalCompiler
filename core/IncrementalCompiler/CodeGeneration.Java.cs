@@ -240,7 +240,7 @@ namespace IncrementalCompiler
 
 
                 foreach (var attrData in type.GetAttributes()) {
-                    if (attrData.AttributeClass.ToDisplayString() == typeof(JavaBindingAttribute).FullName) {
+                    if (attrData.AttributeClass?.ToDisplayString() == typeof(JavaBindingAttribute).FullName) {
                         var instance = CreateAttributeByReflection<JavaBindingAttribute>(attrData);
                         return instance.JavaClass;
                     }

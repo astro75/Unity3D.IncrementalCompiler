@@ -23,7 +23,8 @@ internal class IncrementalCompiler : Compiler
 	    }
 
         var processArguments = "-noconfig " + responseFile;
-        var process = new Process { StartInfo = CreateStartInfo(compilerExePath, processArguments) };
+        var process = new Process { StartInfo = CreateOSDependentStartInfo(
+            platform, compilerExePath, processArguments, unityEditorDataDir) };
         return process;
 	}
 }

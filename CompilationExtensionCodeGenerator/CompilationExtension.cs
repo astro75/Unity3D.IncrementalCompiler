@@ -11,31 +11,39 @@ namespace CompilationExtensionCodeGenerator {
 
     // ReSharper disable once UnusedType.Global
     public class CompilationExtension : IProcessCompilation {
-        public IEnumerable<object> process(ref object compilation) {
-            var (diagnostics, resultCompilation) = processTypeSafe((CSharpCompilation) compilation);
+        public IEnumerable<object> process(ref object compilation, string baseDirectory) {
+            var (diagnostics, resultCompilation) = processTypeSafe((CSharpCompilation) compilation, baseDirectory);
             compilation = resultCompilation;
             return diagnostics;
         }
 
-        const string GENERATED_FOLDER = "generated-by-compiler";
-
-        static (IEnumerable<Diagnostic>, CSharpCompilation) processTypeSafe(CSharpCompilation compilation) {
+        static (IEnumerable<Diagnostic>, CSharpCompilation) processTypeSafe(
+            CSharpCompilation compilation, string baseDirectory
+        ) {
             var mapping = new CodeGeneration.GeneratedFilesMapping();
             var sourceMap = new Dictionary<string, SyntaxTree>();
 
             compilation = removeGenerated(compilation);
 
+            var assemblyName = compilation.AssemblyName ?? "assembly_not_found";
+
+            var generatedBase = Path.Combine(baseDirectory, SharedData.GeneratedFolder);
+
             var settings = new GenerationSettings(
-                partialsFolder: Path.Combine(GENERATED_FOLDER, "partials"),
-                macrosFolder: Path.Combine(GENERATED_FOLDER, "macros"),
-                txtForPartials: null);
+                partialsFolder: Path.Combine(generatedBase, assemblyName, "partials"),
+                macrosFolder: Path.Combine(generatedBase, assemblyName, "macros"),
+                txtForPartials: Path.Combine(generatedBase, SharedData.GeneratedFilesListTxt(assemblyName)),
+                baseDirectory: baseDirectory);
+
+            var parseOptions =
+                compilation.SyntaxTrees.FirstOrDefault()?.Options as CSharpParseOptions ?? CSharpParseOptions.Default;
 
             var (newCompilation, diagnostics) = CodeGeneration.Run(
                 incrementalRun: false,
                 compilation,
                 compilation.SyntaxTrees,
-                CSharpParseOptions.Default,
-                compilation.AssemblyName ?? "assembly_not_found",
+                parseOptions,
+                assemblyName,
                 mapping,
                 sourceMap,
                 settings
@@ -54,7 +62,7 @@ namespace CompilationExtensionCodeGenerator {
 
         static CSharpCompilation removeGenerated(CSharpCompilation compilation) =>
             compilation.RemoveSyntaxTrees(compilation.SyntaxTrees.Where(tree =>
-                tree.FilePath.Replace("\\", "/").Contains($"/{GENERATED_FOLDER}/")
+                tree.FilePath.Replace("\\", "/").Contains($"/{SharedData.GeneratedFolder}/")
             ));
     }
 }

@@ -237,7 +237,8 @@ namespace IncrementalCompiler
                 partialsFolder: Path.Combine(SharedData.GeneratedFolder, assemblyNameNoExtension),
                 macrosFolder: Path.Combine(SharedData.GeneratedFolder, "_macros"),
                 txtForPartials: Path.Combine(
-                    SharedData.GeneratedFolder, SharedData.GeneratedFilesListTxt(assemblyNameNoExtension)));
+                    SharedData.GeneratedFolder, SharedData.GeneratedFilesListTxt(assemblyNameNoExtension)),
+                baseDirectory: ".");
 
             if (_cache == null ||
                 _cache._options.WorkDirectory != options.WorkDirectory ||
@@ -317,7 +318,7 @@ namespace IncrementalCompiler
 
             referencesCompilerAttributes =
                 !options.IsUnityPackage
-                && compilation.GetTypeByMetadataName(typeof(RecordAttribute).FullName) != null;
+                && compilation.GetTypeByMetadataName(typeof(RecordAttribute).FullName!) != null;
 
             if (!referencesCompilerAttributes)
             {
@@ -325,7 +326,8 @@ namespace IncrementalCompiler
             }
             else
             {
-                analyzers = Analyzers(options, diagnostic);
+                // analyzers = Analyzers(options, diagnostic);
+                analyzers = ImmutableArray<DiagnosticAnalyzer>.Empty;
                 logTime("Loaded analyzers");
 
                 compilation = CodeGeneration.Run(
@@ -614,62 +616,9 @@ namespace IncrementalCompiler
             }
         }
 
-        private string GetDiagnosticString(CompileOptions options, Diagnostic diagnostic, string type)
-        {
-            var line = diagnostic.Location.GetLineSpan();
-
-            // Path could be null
-            if (string.IsNullOrEmpty(line.Path))
-                return $"None: " + $"{type} {diagnostic.Id}: {diagnostic.GetMessage()}";
-
-            // Unity3d must have a relative path starting with "Assets/".
-            var path = (line.Path.StartsWith(options.WorkDirectory + "/") || line.Path.StartsWith(options.WorkDirectory + "\\"))
-                ? line.Path.Substring(options.WorkDirectory.Length + 1)
-                : line.Path;
-
-            var msg = diagnostic.GetMessage();
-            return $"{path}({line.StartLinePosition.Line + 1},{line.StartLinePosition.Character + 1}): "
-                + $"{type} {diagnostic.Id}: {msg}";
-        }
-
-        public static int ConvertPdb2Mdb(string dllFile, Logger logger, List<string> resultErrors)
-        {
-            var toolPath = Path.Combine(Path.GetDirectoryName(Assembly.GetEntryAssembly().Location), "pdb2mdb.exe");
-            if (!File.Exists(toolPath))
-            {
-                resultErrors.Add($"Could not find pdb2mdb tool at '{toolPath}'");
-                return 666;
-            }
-            using (var process = new Process())
-            {
-                var startInfo = new ProcessStartInfo(toolPath, '"' + dllFile + '"') {
-                    RedirectStandardOutput = true,
-                    UseShellExecute = false
-                };
-                process.StartInfo = startInfo;
-
-                process.OutputDataReceived += (sender, e) => logger.Info("Output :" + e.Data);
-
-                logger.Info($"Process: {process.StartInfo.FileName}");
-                logger.Info($"Arguments: {process.StartInfo.Arguments}");
-
-                process.Start();
-                process.BeginOutputReadLine();
-                process.WaitForExit();
-
-                logger.Info($"Exit code: {process.ExitCode}");
-
-                return process.ExitCode;
-            }
-        }
-
-        #region IDisposable
-
         public void Dispose() {
             _outputDllStream?.Dispose();
             _outputDebugSymbolStream?.Dispose();
         }
-
-        #endregion
     }
 }
