@@ -3,11 +3,11 @@ using System.Collections.Generic;
 using UnityEngine;
 using UnityEditor;
 using System.Diagnostics;
- using System.Globalization;
- using System.IO;
+using System.Globalization;
+using System.IO;
 using System.Linq;
 using System.Reflection;
-using System.Xml.Linq;
+using UnityEditor.Compilation;
 using Debug = UnityEngine.Debug;
 
 public class CompilerSettings : EditorWindow
@@ -51,6 +51,7 @@ public class CompilerSettings : EditorWindow
     void OnGUI_Compiler()
     {
         GUILayout.Label("Compiler", EditorStyles.boldLabel);
+        if (GUILayout.Button("Recompile")) CompilationPipeline.RequestScriptCompilation();
         EditorGUILayout.BeginHorizontal();
         EditorGUILayout.LabelField("Version", GetUniversalCompilerVersion());
         EditorGUI.BeginDisabledGroup(!File.Exists(UcLogFilePath));
@@ -77,7 +78,7 @@ public class CompilerSettings : EditorWindow
             }
             var ago = now - duration.time;
             var seconds = (int) ago.TotalSeconds;
-            EditorGUILayout.LabelField($"{seconds,4} s ago, {duration.durationMs:N0} ms, {duration.target}");
+            EditorGUILayout.LabelField($"{seconds,4} s ago, {duration.durationMs,6:N0} ms, {duration.target}");
         }
         EditorGUI.indentLevel -= 1;
 
@@ -125,7 +126,7 @@ public class CompilerSettings : EditorWindow
                     result.Add(new LogElement(target, elapsed, dateTime));
 
                     totalFound++;
-                    if (totalFound >= 30) break;
+                    if (totalFound >= 50) break;
                 }
             }
         }

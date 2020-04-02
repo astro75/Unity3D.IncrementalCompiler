@@ -27,12 +27,22 @@ namespace CompilationExtensionCodeGenerator {
             var assemblyName = compilation.AssemblyName ?? "assembly_not_found";
 
             var generatedBase = Path.Combine(baseDirectory, SharedData.GeneratedFolder);
+            var generatedForAssembly = Path.Combine(generatedBase, assemblyName);
 
             var settings = new GenerationSettings(
-                partialsFolder: Path.Combine(generatedBase, assemblyName, "partials"),
-                macrosFolder: Path.Combine(generatedBase, assemblyName, "macros"),
+                partialsFolder: Path.Combine(generatedForAssembly, "partials"),
+                macrosFolder: Path.Combine(generatedForAssembly, "macros"),
                 txtForPartials: Path.Combine(generatedBase, SharedData.GeneratedFilesListTxt(assemblyName)),
                 baseDirectory: baseDirectory);
+
+            {
+                if (Directory.Exists(generatedForAssembly))
+                {
+                    // windows explorer likes to lock folders, so delete files only
+                    CodeGeneration.DeleteFilesRecursively(generatedForAssembly);
+                }
+                Directory.CreateDirectory(settings.partialsFolder);
+            }
 
             var parseOptions =
                 compilation.SyntaxTrees.FirstOrDefault()?.Options as CSharpParseOptions ?? CSharpParseOptions.Default;

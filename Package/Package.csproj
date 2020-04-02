@@ -62,10 +62,10 @@
         <Copy SourceFiles="@(CompiledCompiler)" DestinationFolder="$(CompilerDir)" />
 
         <ItemGroup>
-            <CompiledCompiler Include="..\CompilationExtensionCodeGenerator\bin\$(Configuration)\*\*" />
+            <RoslynCompiler Include="..\CompilationExtensionCodeGenerator\bin\$(Configuration)\*\*" />
             <RoslynSources Include="$(RoslynSource)\*\*" />
         </ItemGroup>
-        <Copy SourceFiles="@(CompiledCompiler)" DestinationFolder="$(RoslynTarget)\%(RecursiveDir)" />
+        <Copy SourceFiles="@(RoslynCompiler)" DestinationFolder="$(RoslynTarget)\%(RecursiveDir)" />
         <!-- this also overwrites some files from CompiledCompiler -->
         <Copy SourceFiles="@(RoslynSources)" DestinationFolder="$(RoslynTarget)\%(RecursiveDir)" />
 

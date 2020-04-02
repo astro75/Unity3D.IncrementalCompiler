@@ -67,7 +67,14 @@ internal class Logger : IDisposable
             mutex.WaitOne(); // make sure we own the mutex now, so no other process is writing to the file
 
             DeleteLogFileIfTooOld();
-            File.AppendAllText(LogFilename, pendingLines.ToString());
+            try
+            {
+                File.AppendAllText(LogFilename, pendingLines.ToString());
+            }
+            catch (Exception)
+            {
+                // :(
+            }
 
             mutex.ReleaseMutex();
         }
@@ -98,7 +105,14 @@ internal class Logger : IDisposable
 	{
 		if (loggingMethod == LoggingMethod.Immediate)
 		{
-			File.AppendAllText(LogFilename, message + Environment.NewLine);
+            try
+            {
+                File.AppendAllText(LogFilename, message + Environment.NewLine);
+            }
+            catch (Exception)
+            {
+                // :(
+            }
 		}
 		else
 		{

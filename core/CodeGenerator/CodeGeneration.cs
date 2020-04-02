@@ -44,7 +44,7 @@ namespace IncrementalCompiler
             this.macrosFolder = macrosFolder;
             this.txtForPartials = txtForPartials;
             this.baseDirectory = baseDirectory;
-            baseDirectoryUri = new Uri(baseDirectory);
+            baseDirectoryUri = new Uri(Path.GetFullPath(baseDirectory));
         }
 
         public string getRelativePath(string path) =>
@@ -156,7 +156,7 @@ namespace IncrementalCompiler
             }
         }
 
-        static void DeleteFilesRecursively(string targetDir)
+        public static void DeleteFilesRecursively(string targetDir)
         {
             foreach (var file in Directory.GetFiles(targetDir)) File.Delete(file);
             foreach (var subDir in Directory.GetDirectories(targetDir)) DeleteFilesRecursively(subDir);
@@ -189,12 +189,6 @@ namespace IncrementalCompiler
             Dictionary<string, SyntaxTree> sourceMap,
             GenerationSettings settings
         ) {
-            if (!incrementalRun && Directory.Exists(settings.partialsFolder))
-            {
-                // windows explorer likes to lock folders, so delete files only
-                DeleteFilesRecursively(settings.partialsFolder);
-            }
-            Directory.CreateDirectory(settings.partialsFolder);
             var oldCompilation = compilation;
             var diagnostic = new List<Diagnostic>();
 
