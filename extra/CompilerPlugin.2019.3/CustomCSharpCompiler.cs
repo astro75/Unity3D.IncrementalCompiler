@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Diagnostics;
 using System.IO;
 using System.Linq;
+using System.Text;
 using System.Threading;
 using UnityEditor;
 using UnityEditor.Scripting.Compilers;
@@ -29,6 +30,12 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
         return File.Exists(compilerPath) ? compilerPath : null;
     }
 
+    string? GetRoslynCompilerPath()
+    {
+        var compilerPath = Path.Combine(Directory.GetCurrentDirectory(), "Roslyn", "net472", "csc.exe");
+        return File.Exists(compilerPath) ? compilerPath : null;
+    }
+
     static void FillCompilerOptionsEdited(
         List<string> arguments,
         bool buildingForEditor,
@@ -40,55 +47,62 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
     }
 
     static string GenerateResponseFileEdited(
-      ScriptAssembly assembly,
-      EditorScriptCompilationOptions options,
-      string tempBuildDirectory)
+        ScriptAssembly assembly,
+        EditorScriptCompilationOptions options,
+        string tempBuildDirectory)
     {
-      bool buildingForEditor = (options & EditorScriptCompilationOptions.BuildingForEditor) == EditorScriptCompilationOptions.BuildingForEditor;
-      bool flag = (options & EditorScriptCompilationOptions.BuildingDevelopmentBuild) == EditorScriptCompilationOptions.BuildingDevelopmentBuild;
-      List<string> arguments = new List<string>()
-      {
-        "-target:library",
-        "-nowarn:0169",
-        "-out:" + PrepareFileName(AssetPath.Combine(tempBuildDirectory, assembly.Filename)),
-        //"-unsafe" // added unsafe to all projects, because setting in unity asmdef does not work
-      };
+        bool buildingForEditor = (options & EditorScriptCompilationOptions.BuildingForEditor) == EditorScriptCompilationOptions.BuildingForEditor;
+        bool flag = (options & EditorScriptCompilationOptions.BuildingDevelopmentBuild) == EditorScriptCompilationOptions.BuildingDevelopmentBuild;
+        List<string> arguments = new List<string>()
+        {
+            "-target:library",
+            "-nowarn:0169",
+            "-out:" + PrepareFileName(AssetPath.Combine(tempBuildDirectory, assembly.Filename))
+        };
 
-      // added
-      arguments.Add("-define:__UNITY_PROCESSID__" + Process.GetCurrentProcess().Id);
+        // added
+        arguments.Add("-define:__UNITY_PROCESSID__" + Process.GetCurrentProcess().Id);
 
-      if (assembly.CompilerOptions.AllowUnsafeCode)
-        arguments.Add("-unsafe");
-      arguments.Add("-debug:portable");
-      if (!flag && (!buildingForEditor || !EditorPrefs.GetBool("AllowAttachedDebuggingOfEditor", true)))
-        arguments.Add("-optimize+");
-      else
-        arguments.Add("-optimize-");
-      FillCompilerOptionsEdited(arguments, buildingForEditor, assembly.BuildTarget);
-      foreach (ScriptAssembly assemblyReference in assembly.ScriptAssemblyReferences)
-        arguments.Add("-reference:" + ScriptCompilerBase.PrepareFileName(AssetPath.Combine(assembly.OutputDirectory, assemblyReference.Filename)));
-      foreach (string reference in assembly.References)
-        arguments.Add("-reference:" + ScriptCompilerBase.PrepareFileName(reference));
-      foreach (string str in ((IEnumerable<string>) assembly.Defines).Distinct<string>())
-        arguments.Add("-define:" + str);
-      foreach (string file in assembly.Files)
-      {
-        string str = Paths.UnifyDirectorySeparator(ScriptCompilerBase.PrepareFileName(file));
-        arguments.Add(str);
-      }
-      HashSet<string> source = new HashSet<string>((IEnumerable<string>) (assembly.Language?.CreateResponseFileProvider()?.Get(assembly.OriginPath) ?? new List<string>()));
-      string path = source.SingleOrDefault<string>((Func<string, bool>) (x => ((IEnumerable<string>) CompilerSpecificResponseFiles.MicrosoftCSharpCompilerObsolete).Contains<string>(AssetPath.GetFileName(x))));
-      if (!string.IsNullOrEmpty(path))
-        UnityEngine.Debug.LogWarning((object) ("Using obsolete custom response file '" + AssetPath.GetFileName(path) + "'. Please use 'csc.rsp' instead."));
-      foreach (string responseFileName in source)
-        ScriptCompilerBase.AddResponseFileToArguments(arguments, responseFileName, assembly.CompilerOptions.ApiCompatibilityLevel);
-      return CommandLineFormatter.GenerateResponseFile((IEnumerable<string>) arguments);
+        if (assembly.CompilerOptions.AllowUnsafeCode)
+            arguments.Add("-unsafe");
+        arguments.Add("-debug:portable");
+        if (!flag && (!buildingForEditor || !EditorPrefs.GetBool("AllowAttachedDebuggingOfEditor", true)))
+            arguments.Add("-optimize+");
+        else
+            arguments.Add("-optimize-");
+        FillCompilerOptionsEdited(arguments, buildingForEditor, assembly.BuildTarget);
+        foreach (ScriptAssembly assemblyReference in assembly.ScriptAssemblyReferences)
+            arguments.Add("-reference:" + ScriptCompilerBase.PrepareFileName(AssetPath.Combine(assembly.OutputDirectory, assemblyReference.Filename)));
+        foreach (string reference in assembly.References)
+            arguments.Add("-reference:" + ScriptCompilerBase.PrepareFileName(reference));
+        foreach (string str in ((IEnumerable<string>) assembly.Defines).Distinct<string>())
+            arguments.Add("-define:" + str);
+        foreach (string file in assembly.Files)
+        {
+            string str = Paths.UnifyDirectorySeparator(ScriptCompilerBase.PrepareFileName(file));
+            arguments.Add(str);
+        }
+        HashSet<string> source = new HashSet<string>((IEnumerable<string>) (assembly.Language?.CreateResponseFileProvider()?.Get(assembly.OriginPath) ?? new List<string>()));
+        string path = source.SingleOrDefault<string>((Func<string, bool>) (x => ((IEnumerable<string>) CompilerSpecificResponseFiles.MicrosoftCSharpCompilerObsolete).Contains<string>(AssetPath.GetFileName(x))));
+        if (!string.IsNullOrEmpty(path))
+            UnityEngine.Debug.LogWarning((object) ("Using obsolete custom response file '" + AssetPath.GetFileName(path) + "'. Please use 'csc.rsp' instead."));
+
+        // Assembly-CSharp has null OriginPath
+        if (assembly.OriginPath?.StartsWith("Assets", StringComparison.Ordinal) ?? true)
+        {
+            var rspPath = "Assets/assets-csc.rsp";
+            if (File.Exists(rspPath)) source.Add(rspPath);
+        }
+
+        foreach (string responseFileName in source)
+            ScriptCompilerBase.AddResponseFileToArguments(arguments, responseFileName, assembly.CompilerOptions.ApiCompatibilityLevel);
+        return CommandLineFormatter.GenerateResponseFile((IEnumerable<string>) arguments);
     }
 
-	protected override Program StartCompiler()
+    protected override Program StartCompiler()
 	{
-        var universalCompilerPath = GetUniversalCompilerPath();
-		if (universalCompilerPath != null)
+        var compilerPath = GetUniversalCompilerPath();
+		if (compilerPath != null)
 		{
             if (assembly.GeneratedResponseFile == null)
                 assembly.GeneratedResponseFile = GenerateResponseFileEdited(assembly, options, tempOutputDirectory);
@@ -105,7 +119,7 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
                 return p;
             }
 
-            var program = StartCompilerLocal(universalCompilerPath);
+            var program = StartCompilerLocal(compilerPath);
 
 		    if (!CompilationFlags.checkIfBuildCompiles) return program;
 
