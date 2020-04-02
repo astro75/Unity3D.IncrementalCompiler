@@ -14,22 +14,6 @@ using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
 {
-    public static class GeneratedConstructorExts
-    {
-        public static bool generateConstructor(this GeneratedConstructor gc) {
-            switch (gc)
-            {
-                case GeneratedConstructor.None:
-                    return false;
-                case GeneratedConstructor.Constructor:
-                case GeneratedConstructor.ConstructorAndApply:
-                    return true;
-                default:
-                    throw new ArgumentOutOfRangeException(nameof(gc), gc, null);
-            }
-        }
-    }
-
     public class GenerationSettings
     {
         public readonly string partialsFolder;

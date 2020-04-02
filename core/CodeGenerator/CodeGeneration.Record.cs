@@ -55,7 +55,7 @@ namespace IncrementalCompiler
             var initializedFieldsAndProps = fieldsAndProps.Where(_ => !_.initialized).ToImmutableArray();
 
             var constructor = createIf(
-                attr.GenerateConstructor.generateConstructor() && hasAnyFields,
+                attr.GenerateConstructor.HasFlag(ConstructorFlags.Constructor) && hasAnyFields,
                 () => {
                     var params_ = initializedFieldsAndProps.joinCommaSeparated(f => f.type + " " + f.identifier);
                     var body = initializedFieldsAndProps.Any()
@@ -207,14 +207,18 @@ namespace IncrementalCompiler
             });
 
 
-            var withers = createIf(constructor.Count > 0 && initializedFieldsAndProps.Length >= 1 && !symbolInfo.IsAbstract, () => {
-                // pubilc Type withVal1(int val1) => new Type(val2, val2);
-                var args = initializedFieldsAndProps.joinCommaSeparated(f => f.identifier.Text);
-                return ParseClassMembers(Join("\n", initializedFieldsAndProps.Select(f =>
-                    $"public {typeName} with{f.identifierFirstLetterUpper} ({f.type + " " + f.identifier}) => " +
-                    $"new {typeName}({args});"
-                )));
-            });
+            var withers = createIf(
+                attr.GenerateConstructor.HasFlag(ConstructorFlags.Withers) && constructor.Count > 0 &&
+                initializedFieldsAndProps.Length >= 1 && !symbolInfo.IsAbstract,
+                () => {
+                    // pubilc Type withVal1(int val1) => new Type(val2, val2);
+                    var args = initializedFieldsAndProps.joinCommaSeparated(f => f.identifier.Text);
+                    return ParseClassMembers(Join("\n", initializedFieldsAndProps.Select(f =>
+                        $"public {typeName} with{f.identifierFirstLetterUpper} ({f.type + " " + f.identifier}) => " +
+                        $"new {typeName}({args});"
+                    )));
+                }
+            );
 
             var fieldsForCopy = initializedFieldsAndProps.Where(f => {
                 if (f.typeInfo is ITypeParameterSymbol tp) {
@@ -226,20 +230,24 @@ namespace IncrementalCompiler
                 return !f.typeInfo.IsNullable();
             }).ToImmutableArray();
 
-            var copy = createIf(constructor.Count > 0 && fieldsForCopy.Length >= 1 && !symbolInfo.IsAbstract, () => {
-                // pubilc Type copy(int? val1 = null, int? val2 = null) => new Type(val2 ?? this.val1, val2 ?? this.val2);
-                var args1 = fieldsForCopy.joinCommaSeparated(f =>
-                    f.typeInfo.IsValueType
-                        ? $"{f.type}? {f.identifier} = null"
-                        : $"{f.type} {f.identifier} = null"
-                );
-                var args2 = initializedFieldsAndProps.joinCommaSeparated(f =>
-                    fieldsForCopy.Contains(f)
-                        ? $"{f.identifier}?? this.{f.identifier}"
-                        : $"this.{f.identifier}"
-                );
-                return ParseClassMembers($"public {typeName} copy({args1}) => new {typeName}({args2});");
-            });
+            var copy = createIf(
+                attr.GenerateConstructor.HasFlag(ConstructorFlags.Copy) && constructor.Count > 0 &&
+                fieldsForCopy.Length >= 1 && !symbolInfo.IsAbstract,
+                () => {
+                    // pubilc Type copy(int? val1 = null, int? val2 = null) => new Type(val2 ?? this.val1, val2 ?? this.val2);
+                    var args1 = fieldsForCopy.joinCommaSeparated(f =>
+                        f.typeInfo.IsValueType
+                            ? $"{f.type}? {f.identifier} = null"
+                            : $"{f.type} {f.identifier} = null"
+                    );
+                    var args2 = initializedFieldsAndProps.joinCommaSeparated(f =>
+                        fieldsForCopy.Contains(f)
+                            ? $"{f.identifier}?? this.{f.identifier}"
+                            : $"this.{f.identifier}"
+                    );
+                    return ParseClassMembers($"public {typeName} copy({args1}) => new {typeName}({args2});");
+                }
+            );
 
             var baseList = attr.GenerateComparer
                 // : IEquatable<TypeName>
@@ -257,7 +265,7 @@ namespace IncrementalCompiler
 
             TypeDeclarationSyntax? companion = null;
             {
-                if (attr.GenerateConstructor == GeneratedConstructor.ConstructorAndApply) {
+                if (attr.GenerateConstructor.HasFlag(ConstructorFlags.Apply)) {
                     if (cds.TypeParameterList == null) {
                         newMembers = newMembers.Concat(GenerateStaticApply(cds, initializedFieldsAndProps));
                     }
@@ -282,6 +290,7 @@ namespace IncrementalCompiler
                 cds.Modifiers
                 .RemoveOfKind(SyntaxKind.PartialKeyword)
                 .RemoveOfKind(SyntaxKind.ReadOnlyKeyword)
+                .RemoveOfKind(SyntaxKind.SealedKeyword)
                 .Add(SyntaxKind.StaticKeyword)
                 .Add(SyntaxKind.PartialKeyword);
 
@@ -290,5 +299,11 @@ namespace IncrementalCompiler
                     .WithModifiers(classModifiers)
                     .WithMembers(applyMethod);
         }
+    }
+
+    [Record(GenerateConstructor = ConstructorFlags.Apply)]
+    static class ConstructorFlagsExts
+    {
+        public static bool HasFlag(this ConstructorFlags flags, ConstructorFlags flag) => (flags & flag) == flag;
     }
 }
