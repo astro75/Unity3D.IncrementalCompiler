@@ -16,7 +16,7 @@ namespace Assets.Scripts {
         three
     }
 
-    [Record(GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
+    [Record(GenerateConstructor = ConstructorFlags.All)]
     public partial class ApplyTestWithFieldSet<A> {
         A shouldGenerate;
         float shouldntGenerate = 1;
@@ -50,7 +50,7 @@ namespace Assets.Scripts {
         public int prop { get; set; }
     }
 
-    [Record(GenerateComparer = true, GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
+    [Record(GenerateComparer = true, GenerateConstructor = ConstructorFlags.All)]
     public partial struct CCCompanionWithoutGenerics {
         public static readonly string name = "TOM";
         public readonly Func<int, string> get;
@@ -79,14 +79,13 @@ namespace Assets.Scripts {
                     Console.WriteLine("two");
                     break;
                 case testEnum.one:
-                    Console.WriteLine("one");
                     break;
-                default: return;
+                default: throw new Exception("aaa");
             }
         }
     }
 
-    [Record(GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
+    [Record(GenerateConstructor = ConstructorFlags.All)]
     public partial struct CCOneGenericArgument<A> {
         public readonly string name;
         public readonly Func<A, string> get;
@@ -95,7 +94,7 @@ namespace Assets.Scripts {
         public readonly List<string> c;
     }
 
-    [Record(GenerateConstructor = GeneratedConstructor.None)]
+    [Record(GenerateConstructor = ConstructorFlags.None)]
     public partial struct CCNoConstructor<A> {
         public readonly string name;
         public readonly Func<A, string> get;
@@ -232,7 +231,7 @@ namespace Assets.Scripts {
         static int nonono;
     }
 
-    [Record(GenerateConstructor = GeneratedConstructor.ConstructorAndApply)]
+    [Record(GenerateConstructor = ConstructorFlags.All)]
     public readonly partial struct ReadonlyApply<A> {
         public readonly int val;
     }

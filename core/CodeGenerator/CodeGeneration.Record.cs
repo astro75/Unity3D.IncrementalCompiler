@@ -286,6 +286,8 @@ namespace IncrementalCompiler
         ) {
             // add and remove partial modifier because rider prints
             // warning if partial keyword is not right before class keyword
+
+            // Keywords that we like to keep: public, internal, ... maybe more
             var classModifiers =
                 cds.Modifiers
                 .RemoveOfKind(SyntaxKind.PartialKeyword)

@@ -91,7 +91,37 @@ namespace IncrementalCompiler
                 for (var i = 0; i < iop.Arguments.Length; i++)
                 {
                     var arg = iop.Arguments[i];
-                    var expr = arg.Syntax.ToString();
+
+                    string expr;
+                    if (arg.ArgumentKind == ArgumentKind.DefaultValue)
+                    {
+                        expr = defaultValueToString(arg.Value);
+
+                        string defaultValueToString(IOperation val) {
+                            switch (val)
+                            {
+                                case ILiteralOperation literalOp:
+                                    if (literalOp.ConstantValue.HasValue)
+                                    {
+                                        return literalOp.ConstantValue.Value?.ToString() ?? "null";
+                                    }
+                                    else throw new Exception("Literal constant has no value");
+                                case IConversionOperation conversionOp:
+                                    // enums
+                                    return $"(({conversionOp.Type.ToDisplayString()}) {defaultValueToString(conversionOp.Operand)})";
+                                case IDefaultValueOperation defaultValueOp:
+                                    return $"default({defaultValueOp.Type.ToDisplayString()})";
+                                default:
+                                    throw new Exception(
+                                        $"Expected '{arg.Parameter.Name}' to be of type " +
+                                        $"{nameof(ILiteralOperation)}, but got {arg.Value.GetType()}");
+                            }
+                        }
+                    }
+                    else
+                    {
+                        expr = arg.Syntax.ToString();
+                    }
                     sb.Replace("${" + arg.Parameter.Name + "}", expr);
                     sb.Replace("${expr" + (i) + "}", expr);
                 }

@@ -3,6 +3,17 @@ using System.Diagnostics;
 
 namespace GenerationAttributes
 {
+    /// <summary>
+    /// <code><![CDATA[
+    ///    None = 0,
+    ///    Constructor = 1,
+    ///    Apply =   Constructor | 1 << 1,
+    ///    Copy =    Constructor | 1 << 2,
+    ///    Withers = Constructor | 1 << 3,
+    ///    Default = Constructor | Copy | Withers,
+    ///    All =     Constructor | Apply | Copy | Withers
+    /// ]]></code>
+    /// </summary>
     [Flags]
     public enum ConstructorFlags
     {

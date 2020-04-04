@@ -1,19 +1,4 @@
-<Project DefaultTargets="PackageAll">
-
-    <ItemGroup>
-        <ProjectReference Include="..\CompilationExtensionCodeGenerator\CompilationExtensionCodeGenerator.csproj" ReferenceOutputAssembly="false" />
-        <ProjectReference Include="..\core\IncrementalCompiler\IncrementalCompiler.csproj" ReferenceOutputAssembly="false" />
-        <ProjectReference Include="..\extra\CompilerPlugin.2018\CompilerPlugin.2018.csproj">
-          <ReferenceOutputAssembly>False</ReferenceOutputAssembly>
-          <Project>{67fe81d8-c1bf-4d15-a512-e9e8078deecf}</Project>
-          <Name>CompilerPlugin.2018</Name>
-        </ProjectReference>
-        <ProjectReference Include="..\extra\CompilerPlugin.2019.3\CompilerPlugin.2019.3.csproj" ReferenceOutputAssembly="false" />
-        <ProjectReference Include="..\extra\UniversalCompiler\UniversalCompiler.csproj" ReferenceOutputAssembly="false" />
-        <ProjectReference Include="..\GenerationAttributes.Java\GenerationAttributes.Java.csproj" ReferenceOutputAssembly="false" />
-        <ProjectReference Include="..\GenerationAttributes\GenerationAttributes.csproj" ReferenceOutputAssembly="false" />
-        <ProjectReference Include="..\Macros\Macros.csproj" ReferenceOutputAssembly="false" />
-    </ItemGroup>
+<Project DefaultTargets="Clean;PackageAll">
 
     <PropertyGroup>
         <TargetDir>..\bin\</TargetDir>
@@ -28,6 +13,16 @@
     </Target>
     
     <Target Name="PackageAll">
+        <MSBuild Targets="Build" Projects="
+        ..\GenerationAttributes.Java\GenerationAttributes.Java.csproj;
+        ..\extra\CompilerPlugin.2018\CompilerPlugin.2018.csproj;
+        ..\extra\CompilerPlugin.2019.3\CompilerPlugin.2019.3.csproj;
+        ..\CompilationExtensionCodeGenerator\CompilationExtensionCodeGenerator.csproj;
+        ..\core\IncrementalCompiler\IncrementalCompiler.csproj;
+        ..\extra\UniversalCompiler\UniversalCompiler.csproj;
+        ..\GenerationAttributes\GenerationAttributes.csproj;
+        ..\Macros\Macros.csproj" />
+        
         <!-- https://stackoverflow.com/questions/1502410/msbuild-passing-parameters-to-calltarget -->
         <MSBuild Projects="$(MSBuildProjectFullPath)" Properties="UnityVersion=2018;CompilerPlugin=CompilerPlugin.2018;UseHarmony=true" Targets="PackageOne" />
         <MSBuild Projects="$(MSBuildProjectFullPath)" Properties="UnityVersion=2019.3;CompilerPlugin=CompilerPlugin.2019.3" Targets="PackageOne" />
