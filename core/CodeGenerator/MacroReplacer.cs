@@ -18,7 +18,7 @@ namespace IncrementalCompiler
             var rewritten = node;
             if (node != null)
             {
-                if (ctx.changedNodes.TryGetValue(node, out var replacement))
+                if (ctx.ChangedNodes.TryGetValue(node, out var replacement))
                 {
                     rewritten = replacement;
                 }
@@ -40,7 +40,7 @@ namespace IncrementalCompiler
                 var item = list[i];
 
                 var visited = VisitListElement(item);
-                var replaced = ctx.changedStatements.TryGetValue(item, out var replacementList);
+                var replaced = ctx.ChangedStatements.TryGetValue(item, out var replacementList);
 
                 if ((item != visited || replaced) && alternate == null)
                 {

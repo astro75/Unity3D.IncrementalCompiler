@@ -19,13 +19,21 @@ namespace IncrementalCompiler
         public class MacroCtx
         {
             public readonly SemanticModel Model;
-            public readonly Dictionary<SyntaxNode, SyntaxNode> changedNodes =
+            public readonly Dictionary<SyntaxNode, SyntaxNode> ChangedNodes =
                 new Dictionary<SyntaxNode, SyntaxNode>();
-            public readonly Dictionary<SyntaxNode, SyntaxList<StatementSyntax>> changedStatements =
+            public readonly Dictionary<SyntaxNode, SyntaxList<StatementSyntax>> ChangedStatements =
                 new Dictionary<SyntaxNode, SyntaxList<StatementSyntax>>();
+            public readonly MacroReplacer Replacer;
+            readonly StringBuilder stringBuilder = new StringBuilder();
 
             public MacroCtx(SemanticModel model) {
                 Model = model;
+                Replacer = new MacroReplacer(this);
+            }
+
+            public StringBuilder EmptyStringBuilder() {
+                stringBuilder.Clear();
+                return stringBuilder;
             }
         }
 
@@ -58,7 +66,7 @@ namespace IncrementalCompiler
                 (ctx, op) =>
                 {
                     var enclosingSymbol = ctx.Model.GetEnclosingSymbol(op.Syntax.SpanStart);
-                    ctx.changedNodes.Add(op.Syntax, enclosingSymbol.ContainingType.ToDisplayString().StringLiteral());
+                    ctx.ChangedNodes.Add(op.Syntax, enclosingSymbol.ContainingType.ToDisplayString().StringLiteral());
                 });
 
             builderExpressions.Add(
@@ -66,7 +74,7 @@ namespace IncrementalCompiler
                 (ctx, op) =>
                 {
                     var enclosingSymbol = ctx.Model.GetEnclosingSymbol(op.Syntax.SpanStart);
-                    ctx.changedNodes.Add(op.Syntax, enclosingSymbol.ToDisplayString().StringLiteral());
+                    ctx.ChangedNodes.Add(op.Syntax, enclosingSymbol.ToDisplayString().StringLiteral());
                 });
 
             void tryMacro(IOperation op, IMethodSymbol method, Action act) {
@@ -87,7 +95,7 @@ namespace IncrementalCompiler
                 }
             }
 
-            void replaceArguments(StringBuilder sb, IInvocationOperation iop) {
+            void replaceArguments(MacroCtx ctx, StringBuilder sb, IInvocationOperation iop) {
                 for (var i = 0; i < iop.Arguments.Length; i++)
                 {
                     var arg = iop.Arguments[i];
@@ -120,7 +128,7 @@ namespace IncrementalCompiler
                     }
                     else
                     {
-                        expr = arg.Syntax.ToString();
+                        expr = ctx.Replacer.Visit(arg.Syntax).ToString();
                     }
                     sb.Replace("${" + arg.Parameter.Name + "}", expr);
                     sb.Replace("${expr" + (i) + "}", expr);
@@ -142,10 +150,10 @@ namespace IncrementalCompiler
                                 {
                                     tryMacro(op, method, () =>
                                     {
-                                        var sb = new StringBuilder();
+                                        var sb = ctx.EmptyStringBuilder();
                                         sb.Append(a.pattern);
-                                        replaceArguments(sb, iop);
-                                        ctx.changedNodes.Add(iop.Syntax, SyntaxFactory.ParseExpression(sb.ToString()));
+                                        replaceArguments(ctx, sb, iop);
+                                        ctx.ChangedNodes.Add(iop.Syntax, SyntaxFactory.ParseExpression(sb.ToString()));
                                     });
                                 }
                             });
@@ -166,15 +174,15 @@ namespace IncrementalCompiler
                                         var parent = op.Parent;
                                         if (parent is IExpressionStatementOperation statementOperation)
                                         {
-                                            var sb = new StringBuilder();
+                                            var sb = ctx.EmptyStringBuilder();
                                             sb.Append("{");
                                             sb.Append(a.pattern);
                                             sb.Append("}");
 
-                                            replaceArguments(sb, iop);
+                                            replaceArguments(ctx, sb, iop);
 
                                             var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
-                                            ctx.changedStatements.Add(statementOperation.Syntax, parsedBlock.Statements);
+                                            ctx.ChangedStatements.Add(statementOperation.Syntax, parsedBlock.Statements);
                                         }
                                         else
                                         {
@@ -205,18 +213,18 @@ namespace IncrementalCompiler
                                             );
                                             var varDecl = (IVariableDeclaratorOperation) op.Parent!.Parent!;
 
-                                            var sb = new StringBuilder();
+                                            var sb = ctx.EmptyStringBuilder();
                                             sb.Append("{");
                                             sb.Append(a.pattern);
                                             sb.Append("}");
 
-                                            replaceArguments(sb, iop);
+                                            replaceArguments(ctx, sb, iop);
 
                                             sb.Replace("${varName}", varDecl.Symbol.ToString());
                                             sb.Replace("${varType}", varDecl.Symbol.Type.ToDisplayString());
 
                                             var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
-                                            ctx.changedStatements.Add(vdgop.Syntax, parsedBlock.Statements);
+                                            ctx.ChangedStatements.Add(vdgop.Syntax, parsedBlock.Statements);
                                         }
                                         else
                                         {
@@ -270,6 +278,8 @@ namespace IncrementalCompiler
                     // Console.WriteLine(operation.Syntax);
 
                     var descendants = operation.DescendantsAndSelf().ToArray();
+                    // reverse the order for nested macros to work
+                    Array.Reverse(descendants);
 
                     foreach (var op in descendants.OfType<IPropertyReferenceOperation>())
                     {
@@ -295,29 +305,28 @@ namespace IncrementalCompiler
                     //     }
                     // }
 
-//                    Console.WriteLine(op?.Type?.ToString() ?? "null");
-//                    var symbol = model.GetDeclaredSymbol(classDecl);
-//                    var op = symbol.GetRootOperation();
-//                    Console.WriteLine(op?.Type.ToString() ?? "null");
-//                    Console.WriteLine(op?.Type);
-
-//                    Console.WriteLine(op?.Type);
-
-//                    var members = symbol.GetMembers();
-//                    foreach (var member in members)
-//                    {
-//
-//                        var op = model.GetOperation(member.DeclaringSyntaxReferences[0].GetSyntax().);
-//                        Console.WriteLine(op?.Type);
-//                    }
+                    // Console.WriteLine(op?.Type?.ToString() ?? "null");
+                    // var symbol = model.GetDeclaredSymbol(classDecl);
+                    // var op = symbol.GetRootOperation();
+                    // Console.WriteLine(op?.Type.ToString() ?? "null");
+                    // Console.WriteLine(op?.Type);
+                    //
+                    // Console.WriteLine(op?.Type);
+                    //
+                    // var members = symbol.GetMembers();
+                    // foreach (var member in members)
+                    // {
+                    //
+                    //     var op = model.GetOperation(member.DeclaringSyntaxReferences[0].GetSyntax().);
+                    //     Console.WriteLine(op?.Type);
+                    // }
                 }
 
                 var newRoot = root;
 
-                if (ctx.changedNodes.Any() || ctx.changedStatements.Any())
+                if (ctx.ChangedNodes.Any() || ctx.ChangedStatements.Any())
                 {
-                    var replacer = new MacroReplacer(ctx);
-                    var updatedTree = (CompilationUnitSyntax) replacer.Visit(root);
+                    var updatedTree = (CompilationUnitSyntax) ctx.Replacer.Visit(root);
                     // var updatedTree = root.ReplaceNodes(changes.Keys, (a, b) => changes[a]);
                     // Console.WriteLine(updatedTree.GetText());
                     newRoot = updatedTree;
