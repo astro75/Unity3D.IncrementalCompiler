@@ -349,7 +349,6 @@ namespace IncrementalCompiler
                                         {
                                             if (propertySymbol.SetMethod != null) throw new Exception("Lazy Property should not have a setter");
                                             if (propertySymbol.GetMethod == null) throw new Exception("Lazy Property should have a getter");
-                                            if (propertySymbol.Type.IsValueType) throw new Exception("Lazy Property does not work on ValueType");
                                             if (attributes.Length > 1) throw new Exception("Lazy Property should not have other attributes");
                                             var syntax = (PropertyDeclarationSyntax) propertySymbol.DeclaringSyntaxReferences.Single().GetSyntax();
 
@@ -362,8 +361,9 @@ namespace IncrementalCompiler
                                                 : SF.TokenList();
 
                                             // object __lazy_value_baseName;
+                                            // int? __lazy_value_baseName;
                                             var variableDecl = SF.FieldDeclaration(SF.VariableDeclaration(
-                                                syntax.Type,
+                                                propertySymbol.Type.IsValueType ? SF.NullableType(syntax.Type) : syntax.Type,
                                                 SF.SingletonSeparatedList(SF.VariableDeclarator(backingValueName))
                                             )).WithModifiers(modifiers);
 
