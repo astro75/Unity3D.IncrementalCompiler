@@ -338,7 +338,8 @@ namespace IncrementalCompiler
                         foreach (var member in symbol.GetMembers()) switch (member)
                         {
                             case IPropertySymbol propertySymbol:
-                                foreach (var attr in propertySymbol.GetAttributes())
+                                var attributes = propertySymbol.GetAttributes();
+                                foreach (var attr in attributes)
                                 {
                                     if (!GeneratorCtx.TreeContains(attr.ApplicationSyntaxReference, tds)) continue;
                                     if (attr.AttributeClass == null) continue;
@@ -349,6 +350,7 @@ namespace IncrementalCompiler
                                             if (propertySymbol.SetMethod != null) throw new Exception("Lazy Property should not have a setter");
                                             if (propertySymbol.GetMethod == null) throw new Exception("Lazy Property should have a getter");
                                             if (propertySymbol.Type.IsValueType) throw new Exception("Lazy Property does not work on ValueType");
+                                            if (attributes.Length > 1) throw new Exception("Lazy Property should not have other attributes");
                                             var syntax = (PropertyDeclarationSyntax) propertySymbol.DeclaringSyntaxReferences.Single().GetSyntax();
 
                                             var baseName = syntax.Identifier;
@@ -379,7 +381,9 @@ namespace IncrementalCompiler
 
                                             ctx.ChangedStatements.Add(syntax, SF.List(new MemberDeclarationSyntax[] {
                                                 variableDecl,
-                                                syntax.WithIdentifier(backingInitName).WithModifiers(modifiers),
+                                                syntax.WithIdentifier(backingInitName)
+                                                    .WithModifiers(modifiers)
+                                                    .WithAttributeLists(SF.List<AttributeListSyntax>()),
                                                 originalReplacement
                                             }));
                                         }, diagnostic);
