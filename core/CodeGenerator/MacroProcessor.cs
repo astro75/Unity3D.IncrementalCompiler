@@ -1,5 +1,4 @@
 ﻿using System;
-using System.CodeDom;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -40,26 +39,36 @@ namespace IncrementalCompiler
         public static CSharpCompilation Run(
             CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
             List<Diagnostic> diagnostic, GenerationSettings settings
-        )
-        {
-            var macrosType = typeof(Macros).FullName!;
-            var macros = compilation.GetTypeByMetadataName(macrosType);
+        ) {
+            var referencedAssemblies = compilation.Assembly.GetReferencedAssembliesAndSelf();
 
-            if (macros == null)
-            {
+            var macrosAssembly = referencedAssemblies.FirstOrDefault(_ => _.Name == "Macros");
+
+            if (macrosAssembly == null) {
                 // skip this step if macros dll is not referenced
                 return compilation;
             }
 
-            var simpleMethodMacroType = compilation.GetTypeByMetadataName(typeof(SimpleMethodMacro).FullName!);
-            var statementMethodMacroType = compilation.GetTypeByMetadataName(typeof(StatementMethodMacro).FullName!);
-            var varMethodMacroType = compilation.GetTypeByMetadataName(typeof(VarMethodMacro).FullName!);
-            var typesWithMacroAttributesType = compilation.GetTypeByMetadataName(typeof(TypesWithMacroAttributes).FullName!);
+            // GetTypeByMetadataName searches in assembly and its direct references only
+            var macrosClass = macrosAssembly.GetTypeByMetadataName(typeof(Macros).FullName!)!;
+
+            if (macrosClass == null)
+            {
+                diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                    "ER0003", "Error", "Macros.dll assembly must be referenced directly.", "Error", DiagnosticSeverity.Error, true
+                ), compilation.Assembly.Locations[0]));
+                return compilation;
+            }
+
+            var simpleMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(SimpleMethodMacro).FullName!);
+            var statementMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(StatementMethodMacro).FullName!);
+            var varMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(VarMethodMacro).FullName!);
+            var typesWithMacroAttributesType = macrosAssembly.GetTypeByMetadataName(typeof(TypesWithMacroAttributes).FullName!);
             // var allMethods = compilation.GetAllTypes().SelectMany(t => t.GetMembers().OfType<IMethodSymbol>());
 
             var builder = ImmutableDictionary.CreateBuilder<ISymbol, Action<MacroCtx, IOperation>>();
 
-            ISymbol macroSymbol(string name) => macros.GetMembers(name).First();
+            ISymbol macroSymbol(string name) => macrosClass.GetMembers(name).First();
 
             builder.Add(
                 macroSymbol(nameof(Macros.className)),
@@ -139,10 +148,6 @@ namespace IncrementalCompiler
             var typesToCheck = new List<INamedTypeSymbol>();
 
             {
-                var referencedAssemblies =
-                    compilation.Assembly.Modules.SelectMany(_ => _.ReferencedAssemblySymbols).Distinct().ToArray();
-
-                collectTypesForMacros(compilation.Assembly);
                 foreach (var assembly in referencedAssemblies) collectTypesForMacros(assembly);
 
                 void collectTypesForMacros(IAssemblySymbol assembly) {

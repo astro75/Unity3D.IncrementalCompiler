@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
+using System.Collections.Immutable;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -137,6 +138,25 @@ namespace IncrementalCompiler
             yield return type;
             foreach (var nestedType in type.GetTypeMembers().SelectMany(GetNestedTypes))
                 yield return nestedType;
+        }
+
+        public static IAssemblySymbol[] GetReferencedAssembliesAndSelf(this IAssemblySymbol root) {
+            var tested = new HashSet<IAssemblySymbol>();
+            var notTested = new HashSet<IAssemblySymbol> {root};
+            while (notTested.Count > 0)
+            {
+                var toTest = notTested.ToArray();
+                notTested.Clear();
+                foreach (var a in toTest) tested.Add(a);
+
+                foreach (var a in toTest)
+                foreach (var module in a.Modules)
+                foreach (var assembly in module.ReferencedAssemblySymbols)
+                    if (!tested.Contains(assembly))
+                        notTested.Add(assembly);
+            }
+
+            return tested.OrderBy(_ => _.Name).ToArray();
         }
     }
 }
