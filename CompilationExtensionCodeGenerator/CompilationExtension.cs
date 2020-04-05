@@ -35,7 +35,7 @@ namespace CompilationExtensionCodeGenerator {
             var settings = new GenerationSettings(
                 partialsFolder: Path.Combine(generatedForAssembly, "partials"),
                 macrosFolder: Path.Combine(generatedForAssembly, "macros"),
-                txtForPartials: Path.Combine(generatedBase, SharedData.GeneratedFilesListTxt(assemblyName)),
+                txtForPartials: null,
                 baseDirectory: baseDirectory);
 
             {

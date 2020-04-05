@@ -158,5 +158,11 @@ namespace IncrementalCompiler
 
             return tested.OrderBy(_ => _.Name).ToArray();
         }
+
+        public static string EnsureDoesNotEndWith(this string s, string suffix) =>
+            s.EndsWith(suffix, StringComparison.Ordinal) ? s.Substring(0, s.Length - suffix.Length) : s;
+
+        public static string EnsureDoesNotStartWith(this string s, string prefix) =>
+            s.StartsWith(prefix, StringComparison.Ordinal) ? s.Substring(prefix.Length) : s;
     }
 }

@@ -425,7 +425,8 @@ namespace IncrementalCompiler
             foreach (var (tree, syntax) in treeEdits)
             {
                 var originalFilePath = settings.getRelativePath(tree.FilePath);
-                var editedFilePath = Path.Combine(settings.macrosFolder, originalFilePath);
+                var editedFilePath = Path.Combine(
+                    settings.macrosFolder, originalFilePath.EnsureDoesNotEndWith(".cs") + ".transformed.cs");
 
                 var newTree = tree.WithRootAndOptions(syntax, tree.Options).WithFilePath(editedFilePath);
                 sourceMap[tree.FilePath] = newTree;

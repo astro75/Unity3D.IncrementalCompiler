@@ -236,8 +236,7 @@ namespace IncrementalCompiler
             var settings = new GenerationSettings(
                 partialsFolder: Path.Combine(SharedData.GeneratedFolder, assemblyNameNoExtension),
                 macrosFolder: Path.Combine(SharedData.GeneratedFolder, "_macros"),
-                txtForPartials: Path.Combine(
-                    SharedData.GeneratedFolder, SharedData.GeneratedFilesListTxt(assemblyNameNoExtension)),
+                txtForPartials: null,
                 baseDirectory: ".");
 
             if (_cache == null ||

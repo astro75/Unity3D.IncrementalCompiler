@@ -19,7 +19,6 @@ namespace IncrementalCompiler
         public readonly string partialsFolder;
         public readonly string macrosFolder;
         public readonly string? txtForPartials;
-        public readonly string baseDirectory;
 
         readonly Uri baseDirectoryUri;
 
@@ -27,7 +26,6 @@ namespace IncrementalCompiler
             this.partialsFolder = partialsFolder;
             this.macrosFolder = macrosFolder;
             this.txtForPartials = txtForPartials;
-            this.baseDirectory = baseDirectory;
             baseDirectoryUri = new Uri(Path.GetFullPath(baseDirectory));
         }
 
@@ -427,7 +425,7 @@ namespace IncrementalCompiler
                             .WithLeadingTrivia(SyntaxTriviaList.Create(SyntaxFactory.Comment("// ReSharper disable all")))
                             .WithMembers(SF.List(ctx.NewMembers))
                             .NormalizeWhitespace(),
-                        path: Path.Combine(settings.partialsFolder, treePath),
+                        path: Path.Combine(settings.partialsFolder, treePath.EnsureDoesNotEndWith(".cs") + ".partials.cs"),
                         options: parseOptions,
                         encoding: Encoding.UTF8);
                     results.Add(new GeneratedCsFile(sourcePath: treePath, tree: nt, location: root.GetLocation()));
@@ -449,6 +447,7 @@ namespace IncrementalCompiler
                     var typesString = Join(", ", typesWithMacros.Select(_ => $"typeof({_.ToDisplayString()})"));
 
                     var syntax = CSharpSyntaxTree.ParseText(
+                        $"// generated\n" +
                         $"[assembly: {typeof(TypesWithMacroAttributes).FullName}({typesString})]"
                     ).GetCompilationUnitRoot();
 

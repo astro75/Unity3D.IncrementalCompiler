@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -106,19 +107,32 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
                 var assemblyName = xdoc.Root.Descendants(ns + "AssemblyName").Select(el => el.Value).First();
                 // .dll suffix appears here if we select VS2017 in unity preferences
                 assemblyName = EnsureDoesNotEndWith(assemblyName, ".dll");
-                var filename = Path.Combine(SharedData.GeneratedFolder, SharedData.GeneratedFilesListTxt(assemblyName));
-                if (!File.Exists(filename)) return;
-                var filesToAdd = File.ReadAllLines(filename);
-                var newFiles = filesToAdd.Select(
-                    file => (object)new XElement(
-                        compileName,
-                        new XAttribute(includeName, file),
-                        new XAttribute(linkName, convertLink(file))
-                    )
-                );
+                {
+                    var partialsFolder = Path.Combine(SharedData.GeneratedFolder, assemblyName, "partials");
+                    var files = GetCsFiles(partialsFolder).ToArray();
+                    var newFiles = files.Select(
+                        file => (object) new XElement(
+                            compileName,
+                            new XAttribute(includeName, file),
+                            new XAttribute(linkName, convertLink(file))
+                        )
+                    );
+                    xdoc.Root.Add(new XElement(ns + "ItemGroup", newFiles.ToArray()));
+                }
+                {
+                    var macrosFolder = Path.Combine(SharedData.GeneratedFolder, assemblyName, "macros");
+                    var files = GetCsFiles(macrosFolder).ToArray();
+                    var newFiles = files.Select(
+                        file => (object) new XElement(
+                            noneName,
+                            new XAttribute(includeName, file),
+                            new XAttribute(linkName, convertLink(file))
+                        )
+                    );
+                    xdoc.Root.Add(new XElement(ns + "ItemGroup", newFiles.ToArray()));
+                }
 
                 string convertLink(string file) {
-                    file = EnsureDoesNotEndWith(file, ".cs") + ".partials.cs";
                     var assetsIdx = file.IndexOf("Assets", StringComparison.Ordinal);
                     if (assetsIdx != -1)
                     {
@@ -127,7 +141,6 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
                     return EnsureDoesNotStartWith(file, commonPrefix);
                 }
 
-                xdoc.Root.Add(new XElement(ns + "ItemGroup", newFiles.ToArray()));
             }
 
             RemoveOldGeneratedFiles();
@@ -137,6 +150,37 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         var writer = new Utf8StringWriter();
         xdoc.Save(writer);
         return writer.ToString();
+    }
+
+    static IEnumerable<string> GetCsFiles(string path) =>
+        GetFiles(path).Where(_ => _.EndsWith(".cs", StringComparison.Ordinal));
+
+    static IEnumerable<string> GetFiles(string path) {
+        var queue = new Queue<string>();
+        queue.Enqueue(path);
+        while (queue.Count > 0) {
+            path = queue.Dequeue();
+            try {
+                foreach (string subDir in Directory.GetDirectories(path)) {
+                    queue.Enqueue(subDir);
+                }
+            }
+            catch(Exception ex) {
+                Console.Error.WriteLine(ex);
+            }
+            string[]? files = null;
+            try {
+                files = Directory.GetFiles(path);
+            }
+            catch (Exception ex) {
+                Console.Error.WriteLine(ex);
+            }
+            if (files != null) {
+                for (int i = 0; i < files.Length; i++) {
+                    yield return files[i];
+                }
+            }
+        }
     }
 
     static string FindCommonPrefix(string[] paths) {
