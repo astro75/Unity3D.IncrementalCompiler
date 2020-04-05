@@ -14,12 +14,21 @@ public class TestScript : MonoBehaviour {
         new ExprClass().testClassExpr();
         var x = c.testClassExpr2();
         c.statementMacro();
+
+        nestedExpr(testExpr(20 + 20));
+
+        Debug.LogWarning(lazyBaby);
     }
+
+    [LazyProperty] string lazyBaby => GetType().FullName;
 
     enum Enum { Val1, Val2 }
 
     [SimpleMethodMacro(@"""${value} = "" + (${value})")]
-    static string testExpr(int value) => throw new NotImplementedException();
+    static string testExpr(int value) => throw new MacroException();
+
+    [SimpleMethodMacro(@"Debug.LogWarning(${s})")]
+    static string nestedExpr(string s) => throw new MacroException();
 
     [SimpleMethodMacro(@"""${value}, ${value2}, ${value3}, ${value4}, ${value5}, ${value6}, ${value7}, ${value8}""")]
     static string testExprWithDefault(
@@ -32,13 +41,13 @@ public class TestScript : MonoBehaviour {
 
     public class ExprClass {
         [SimpleMethodMacro(@"Debug.LogWarning(""${this}"")")]
-        public void testClassExpr() => throw new NotImplementedException();
+        public void testClassExpr() => throw new MacroException();
 
         [StatementMethodMacro(@"if (true) Debug.LogWarning(""${this}"");")]
-        public void statementMacro() => throw new NotImplementedException();
+        public void statementMacro() => throw new MacroException();
 
         [VarMethodMacro(@"int ${varName}_backup = 10; { ${varType} ${varName} = ${varName}_backup + 2; return; }")]
-        public int testClassExpr2() => throw new NotImplementedException();
+        public int testClassExpr2() => throw new MacroException();
     }
 
     public struct SomeStruct {

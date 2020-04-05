@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 
 namespace GenerationAttributes
 {
@@ -36,10 +37,10 @@ namespace GenerationAttributes
     [AttributeUsage(AttributeTargets.Method)]
     public class SimpleMethodMacro : Attribute
     {
-        public readonly string pattern;
+        public readonly string Pattern;
 
         public SimpleMethodMacro(string pattern) {
-            this.pattern = pattern;
+            Pattern = pattern;
         }
     }
 
@@ -69,10 +70,10 @@ namespace GenerationAttributes
     [AttributeUsage(AttributeTargets.Method)]
     public class StatementMethodMacro : Attribute
     {
-        public readonly string pattern;
+        public readonly string Pattern;
 
         public StatementMethodMacro(string pattern) {
-            this.pattern = pattern;
+            Pattern = pattern;
         }
     }
 
@@ -115,11 +116,17 @@ namespace GenerationAttributes
     [AttributeUsage(AttributeTargets.Method)]
     public class VarMethodMacro : Attribute
     {
-        public readonly string pattern;
+        public readonly string Pattern;
 
         public VarMethodMacro(string pattern) {
-            this.pattern = pattern;
+            Pattern = pattern;
         }
+    }
+
+    [AttributeUsage(AttributeTargets.Property)]
+    [Conditional("CodeGeneration")]
+    public class LazyProperty : Attribute
+    {
     }
 
 

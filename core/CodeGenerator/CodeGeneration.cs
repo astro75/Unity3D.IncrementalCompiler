@@ -50,6 +50,12 @@ namespace IncrementalCompiler
         public void AddMacroMethod(INamedTypeSymbol symbol) {
             TypesWithMacros.Add(symbol);
         }
+
+        public static bool TreeContains(SyntaxReference? syntaxRef, TypeDeclarationSyntax tds) {
+            return
+                // filter out partial classes in other files, or even the same file
+                syntaxRef != null && tds.Span.Contains(syntaxRef.Span);
+        }
     }
 
     public static partial class CodeGeneration
@@ -284,7 +290,7 @@ namespace IncrementalCompiler
                     if (symbol == null) continue;
                     JavaClassFile? javaClassFile = null;
                     foreach (var attr in symbol.GetAttributes()) {
-                        if (!treeContains(attr.ApplicationSyntaxReference, tree, tds)) continue;
+                        if (!GeneratorCtx.TreeContains(attr.ApplicationSyntaxReference, tds)) continue;
                         if (attr.AttributeClass == null) continue;
 
                         if (typeAttributes.TryGetValue(attr.AttributeClass, out var action))
@@ -333,7 +339,7 @@ namespace IncrementalCompiler
                             case IFieldSymbol fieldSymbol:
                                 foreach (var attr in fieldSymbol.GetAttributes())
                                 {
-                                    if (!treeContains(attr.ApplicationSyntaxReference, tree, tds)) continue;
+                                    if (!GeneratorCtx.TreeContains(attr.ApplicationSyntaxReference, tds)) continue;
                                     if (attr.AttributeClass == null) continue;
                                     var attrClassName = attr.AttributeClass.ToDisplayString();
                                     if (attrClassName == typeof(PublicAccessor).FullName)
@@ -355,7 +361,7 @@ namespace IncrementalCompiler
                             case IMethodSymbol methodSymbol:
                                 foreach (var attr in methodSymbol.GetAttributes())
                                 {
-                                    if (!treeContains(attr.ApplicationSyntaxReference, tree, tds)) continue;
+                                    if (!GeneratorCtx.TreeContains(attr.ApplicationSyntaxReference, tds)) continue;
                                     if (attr.AttributeClass == null) continue;
                                     if (methodAttributes.TryGetValue(attr.AttributeClass, out var action))
                                     {
@@ -502,12 +508,6 @@ namespace IncrementalCompiler
 
         static IEnumerable<A> NullableAsEnumerable<A>(A? maybeValue) where A : class =>
             maybeValue != null ? new[] {maybeValue} : Enumerable.Empty<A>();
-
-        static bool treeContains(SyntaxReference? syntaxRef, SyntaxTree tree, TypeDeclarationSyntax tds) {
-            return tree == syntaxRef?.SyntaxTree
-                   &&
-                   tds.Span.Contains(syntaxRef.Span);
-        }
 
         static Location attrLocation(AttributeData attr) => attr.ApplicationSyntaxReference!.GetSyntax().GetLocation();
 

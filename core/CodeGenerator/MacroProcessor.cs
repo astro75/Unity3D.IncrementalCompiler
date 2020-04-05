@@ -10,6 +10,7 @@ using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
 using Microsoft.CodeAnalysis.Operations;
+using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler
 {
@@ -20,8 +21,8 @@ namespace IncrementalCompiler
             public readonly SemanticModel Model;
             public readonly Dictionary<SyntaxNode, SyntaxNode> ChangedNodes =
                 new Dictionary<SyntaxNode, SyntaxNode>();
-            public readonly Dictionary<SyntaxNode, SyntaxList<StatementSyntax>> ChangedStatements =
-                new Dictionary<SyntaxNode, SyntaxList<StatementSyntax>>();
+            public readonly Dictionary<SyntaxNode, SyntaxList<SyntaxNode>> ChangedStatements =
+                new Dictionary<SyntaxNode, SyntaxList<SyntaxNode>>();
             public readonly MacroReplacer Replacer;
             readonly StringBuilder stringBuilder = new StringBuilder();
 
@@ -63,6 +64,7 @@ namespace IncrementalCompiler
             var simpleMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(SimpleMethodMacro).FullName!);
             var statementMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(StatementMethodMacro).FullName!);
             var varMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(VarMethodMacro).FullName!);
+            var lazyPropertyType = macrosAssembly.GetTypeByMetadataName(typeof(LazyProperty).FullName!);
             var typesWithMacroAttributesType = macrosAssembly.GetTypeByMetadataName(typeof(TypesWithMacroAttributes).FullName!);
             // var allMethods = compilation.GetAllTypes().SelectMany(t => t.GetMembers().OfType<IMethodSymbol>());
 
@@ -185,7 +187,7 @@ namespace IncrementalCompiler
                                     tryMacro(op, method, () =>
                                     {
                                         var sb = ctx.EmptyStringBuilder();
-                                        sb.Append(a.pattern);
+                                        sb.Append(a.Pattern);
                                         replaceArguments(ctx, sb, iop);
                                         ctx.ChangedNodes.Add(iop.Syntax, SyntaxFactory.ParseExpression(sb.ToString()));
                                     });
@@ -210,7 +212,7 @@ namespace IncrementalCompiler
                                         {
                                             var sb = ctx.EmptyStringBuilder();
                                             sb.Append("{");
-                                            sb.Append(a.pattern);
+                                            sb.Append(a.Pattern);
                                             sb.Append("}");
 
                                             replaceArguments(ctx, sb, iop);
@@ -249,7 +251,7 @@ namespace IncrementalCompiler
 
                                             var sb = ctx.EmptyStringBuilder();
                                             sb.Append("{");
-                                            sb.Append(a.pattern);
+                                            sb.Append(a.Pattern);
                                             sb.Append("}");
 
                                             replaceArguments(ctx, sb, iop);
@@ -324,34 +326,68 @@ namespace IncrementalCompiler
                         var method = op.TargetMethod.OriginalDefinition;
                         { if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op); }
                     }
+                }
 
-                    // foreach (var op in descendants.OfType<IAssignmentOperation>()) {
-                    //     if (allMacros.TryGetValue(op.Value, out var fn)) {
-                    //         changes.Add(op.Syntax, fn(new MacroCtx(model, op)));
-                    //     }
-                    // }
+                {
+                    var generatorCtx = new GeneratorCtx(root, model);
 
-                    // foreach (var method in descendants.OfType<IMem>()) {
-                    //     if (allMacros.TryGetValue(method., out var fn)) {
-                    //         changes.Add(prop.Syntax, fn(model, prop.Syntax));
-                    //     }
-                    // }
+                    foreach (var tds in generatorCtx.TypesInFile)
+                    {
+                        var symbol = model.GetDeclaredSymbol(tds);
+                        if (symbol == null) continue;
+                        foreach (var member in symbol.GetMembers()) switch (member)
+                        {
+                            case IPropertySymbol propertySymbol:
+                                foreach (var attr in propertySymbol.GetAttributes())
+                                {
+                                    if (!GeneratorCtx.TreeContains(attr.ApplicationSyntaxReference, tds)) continue;
+                                    if (attr.AttributeClass == null) continue;
+                                    if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, lazyPropertyType))
+                                    {
+                                        CodeGeneration.tryAttribute<LazyProperty>(attr, _ =>
+                                        {
+                                            if (propertySymbol.SetMethod != null) throw new Exception("Lazy Property should not have a setter");
+                                            if (propertySymbol.GetMethod == null) throw new Exception("Lazy Property should have a getter");
+                                            if (propertySymbol.Type.IsValueType) throw new Exception("Lazy Property does not work on ValueType");
+                                            var syntax = (PropertyDeclarationSyntax) propertySymbol.DeclaringSyntaxReferences.Single().GetSyntax();
 
-                    // Console.WriteLine(op?.Type?.ToString() ?? "null");
-                    // var symbol = model.GetDeclaredSymbol(classDecl);
-                    // var op = symbol.GetRootOperation();
-                    // Console.WriteLine(op?.Type.ToString() ?? "null");
-                    // Console.WriteLine(op?.Type);
-                    //
-                    // Console.WriteLine(op?.Type);
-                    //
-                    // var members = symbol.GetMembers();
-                    // foreach (var member in members)
-                    // {
-                    //
-                    //     var op = model.GetOperation(member.DeclaringSyntaxReferences[0].GetSyntax().);
-                    //     Console.WriteLine(op?.Type);
-                    // }
+                                            var baseName = syntax.Identifier;
+                                            var backingValueName = SF.Identifier("__lazy_value_" + baseName.Text);
+                                            var backingInitName = SF.Identifier("__lazy_init_" + baseName.Text);
+
+                                            var modifiers = propertySymbol.IsStatic
+                                                ? SF.TokenList(SF.Token(SyntaxKind.StaticKeyword))
+                                                : SF.TokenList();
+
+                                            // object __lazy_value_baseName;
+                                            var variableDecl = SF.FieldDeclaration(SF.VariableDeclaration(
+                                                syntax.Type,
+                                                SF.SingletonSeparatedList(SF.VariableDeclarator(backingValueName))
+                                            )).WithModifiers(modifiers);
+
+                                            // object baseName => __lazy_value_baseName ??= __lazy_init_baseName;
+                                            var originalReplacement = SF.PropertyDeclaration(
+                                                syntax.Type,
+                                                baseName
+                                            ).WithExpressionBody(SF.ArrowExpressionClause(SF.AssignmentExpression(
+                                                SyntaxKind.CoalesceAssignmentExpression,
+                                                SF.IdentifierName(backingValueName),
+                                                SF.IdentifierName(backingInitName)
+                                            )))
+                                            .WithSemicolonToken(SF.Token(SyntaxKind.SemicolonToken))
+                                            .WithModifiers(syntax.Modifiers);
+
+                                            ctx.ChangedStatements.Add(syntax, SF.List(new MemberDeclarationSyntax[] {
+                                                variableDecl,
+                                                syntax.WithIdentifier(backingInitName).WithModifiers(modifiers),
+                                                originalReplacement
+                                            }));
+                                        }, diagnostic);
+                                    }
+                                }
+                                break;
+                        }
+                    }
                 }
 
                 var newRoot = root;

@@ -90,6 +90,7 @@ internal class CustomCSharpCompiler : MicrosoftCSharpCompiler
         // Assembly-CSharp has null OriginPath
         if (assembly.OriginPath?.StartsWith("Assets", StringComparison.Ordinal) ?? true)
         {
+            // excludes unity packages
             var rspPath = "Assets/assets-csc.rsp";
             if (File.Exists(rspPath)) source.Add(rspPath);
         }
