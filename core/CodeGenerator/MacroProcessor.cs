@@ -54,14 +54,14 @@ namespace IncrementalCompiler
             var simpleMethodMacroType = compilation.GetTypeByMetadataName(typeof(SimpleMethodMacro).FullName!);
             var statementMethodMacroType = compilation.GetTypeByMetadataName(typeof(StatementMethodMacro).FullName!);
             var varMethodMacroType = compilation.GetTypeByMetadataName(typeof(VarMethodMacro).FullName!);
-            var allMethods = compilation.GetAllTypes().SelectMany(t => t.GetMembers().OfType<IMethodSymbol>());
+            var typesWithMacroAttributesType = compilation.GetTypeByMetadataName(typeof(TypesWithMacroAttributes).FullName!);
+            // var allMethods = compilation.GetAllTypes().SelectMany(t => t.GetMembers().OfType<IMethodSymbol>());
 
-            var builderExpressions = ImmutableDictionary.CreateBuilder<ISymbol, Action<MacroCtx, IOperation>>();
-            var builderStatements = ImmutableDictionary.CreateBuilder<ISymbol, Action<MacroCtx, IOperation>>();
+            var builder = ImmutableDictionary.CreateBuilder<ISymbol, Action<MacroCtx, IOperation>>();
 
             ISymbol macroSymbol(string name) => macros.GetMembers(name).First();
 
-            builderExpressions.Add(
+            builder.Add(
                 macroSymbol(nameof(Macros.className)),
                 (ctx, op) =>
                 {
@@ -69,7 +69,7 @@ namespace IncrementalCompiler
                     ctx.ChangedNodes.Add(op.Syntax, enclosingSymbol.ContainingType.ToDisplayString().StringLiteral());
                 });
 
-            builderExpressions.Add(
+            builder.Add(
                 macroSymbol(nameof(Macros.classAndMethodName)),
                 (ctx, op) =>
                 {
@@ -136,6 +136,35 @@ namespace IncrementalCompiler
                 if (iop.Instance != null) sb.Replace("${this}", iop.Instance.Syntax.ToString());
             }
 
+            var typesToCheck = new List<INamedTypeSymbol>();
+
+            {
+                var referencedAssemblies =
+                    compilation.Assembly.Modules.SelectMany(_ => _.ReferencedAssemblySymbols).Distinct().ToArray();
+
+                collectTypesForMacros(compilation.Assembly);
+                foreach (var assembly in referencedAssemblies) collectTypesForMacros(assembly);
+
+                void collectTypesForMacros(IAssemblySymbol assembly) {
+                    foreach (var attr in assembly.GetAttributes())
+                    {
+                        var c = attr.AttributeClass;
+                        if (c != null && SymbolEqualityComparer.Default.Equals(c, typesWithMacroAttributesType))
+                        {
+                            var s = attr.ConstructorArguments[0].Values.Select(_ =>
+                            {
+                                var symbol = ((INamedTypeSymbol?) _.Value);
+                                if (symbol == null) throw new Exception();
+                                return symbol;
+                            });
+                            typesToCheck.AddRange(s);
+                        }
+                    }
+                }
+            }
+
+            var allMethods = typesToCheck.SelectMany(_ => _.GetMembers().OfType<IMethodSymbol>());
+
             foreach (var method in allMethods)
             foreach (var attribute in method.GetAttributes())
             {
@@ -144,7 +173,7 @@ namespace IncrementalCompiler
                     CodeGeneration.tryAttribute<SimpleMethodMacro>(
                         attribute, a =>
                         {
-                            builderExpressions.Add(method, (ctx, op) =>
+                            builder.Add(method, (ctx, op) =>
                             {
                                 if (op is IInvocationOperation iop)
                                 {
@@ -165,7 +194,7 @@ namespace IncrementalCompiler
                     CodeGeneration.tryAttribute<StatementMethodMacro>(
                         attribute, a =>
                         {
-                            builderExpressions.Add(method, (ctx, op) =>
+                            builder.Add(method, (ctx, op) =>
                             {
                                 if (op is IInvocationOperation iop)
                                 {
@@ -199,7 +228,7 @@ namespace IncrementalCompiler
                     CodeGeneration.tryAttribute<VarMethodMacro>(
                         attribute, a =>
                         {
-                            builderStatements.Add(method, (ctx, op) =>
+                            builder.Add(method, (ctx, op) =>
                             {
                                 if (op is IInvocationOperation iop)
                                 {
@@ -237,8 +266,7 @@ namespace IncrementalCompiler
                 }
             }
 
-            var macrosExpressions = builderExpressions.ToImmutable();
-            var macrosStatements = builderStatements.ToImmutable();
+            var resolvedMacros = builder.ToImmutable();
 
 //            var namedTypeSymbols = CustomSymbolFinder.GetAllSymbols(compilation);
 
@@ -283,14 +311,13 @@ namespace IncrementalCompiler
 
                     foreach (var op in descendants.OfType<IPropertyReferenceOperation>())
                     {
-                        if (macrosExpressions.TryGetValue(op.Property.OriginalDefinition, out var act)) act(ctx, op);
+                        if (resolvedMacros.TryGetValue(op.Property.OriginalDefinition, out var act)) act(ctx, op);
                     }
 
                     foreach (var op in descendants.OfType<IInvocationOperation>())
                     {
                         var method = op.TargetMethod.OriginalDefinition;
-                        { if (macrosExpressions.TryGetValue(method, out var act)) act(ctx, op); }
-                        { if (macrosStatements.TryGetValue(method, out var act)) act(ctx, op); }
+                        { if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op); }
                     }
 
                     // foreach (var op in descendants.OfType<IAssignmentOperation>()) {

@@ -121,4 +121,20 @@ namespace GenerationAttributes
             this.pattern = pattern;
         }
     }
+
+
+    /// <summary>
+    /// Used internally by compiler
+    /// </summary>
+    [AttributeUsage(AttributeTargets.Assembly)]
+    public class TypesWithMacroAttributes : Attribute
+    {
+        public readonly Type[] types;
+
+        public TypesWithMacroAttributes(params Type[] types) {
+            this.types = types;
+        }
+    }
 }
+
+

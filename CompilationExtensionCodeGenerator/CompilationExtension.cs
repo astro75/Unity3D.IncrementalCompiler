@@ -1,4 +1,6 @@
-﻿using System.Collections.Generic;
+﻿using System;
+using System.Collections.Generic;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using CompilationExtensionInterfaces;
@@ -11,6 +13,7 @@ namespace CompilationExtensionCodeGenerator {
     // ReSharper disable once UnusedType.Global
     public class CompilationExtension : IProcessCompilation {
         public IEnumerable<object> process(ref object compilation, string baseDirectory) {
+            // processTypeSafe((CSharpCompilation) compilation, baseDirectory);
             var (diagnostics, resultCompilation) = processTypeSafe((CSharpCompilation) compilation, baseDirectory);
             compilation = resultCompilation;
             return diagnostics;
@@ -47,6 +50,8 @@ namespace CompilationExtensionCodeGenerator {
             var parseOptions =
                 compilation.SyntaxTrees.FirstOrDefault()?.Options as CSharpParseOptions ?? CSharpParseOptions.Default;
 
+            var sw = Stopwatch.StartNew();
+
             var (newCompilation, diagnostics) = CodeGeneration.Run(
                 incrementalRun: false,
                 compilation,
@@ -58,6 +63,9 @@ namespace CompilationExtensionCodeGenerator {
                 settings
             );
 
+            debugPrint($"Code generation: {sw.Elapsed}");
+            sw.Restart();
+
             newCompilation = MacroProcessor.Run(
                 newCompilation,
                 compilation.SyntaxTrees,
@@ -66,7 +74,13 @@ namespace CompilationExtensionCodeGenerator {
                 settings
             );
 
+            debugPrint($"Macro processor: {sw.Elapsed}");
+
             return (diagnostics, newCompilation);
+        }
+
+        static void debugPrint(string message) {
+            // Console.Out.WriteLine(message);
         }
 
         static CSharpCompilation removeGenerated(CSharpCompilation compilation) =>

@@ -17,11 +17,8 @@ namespace IncrementalCompiler
     public static partial class CodeGeneration
     {
         static CaseClass GenerateCaseClass(
-            RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds
+            RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds, INamedTypeSymbol symbolInfo
         ) {
-            var symbolInfo = model.GetDeclaredSymbol(cds);
-            if (symbolInfo == null) throw new Exception("Could not find symbol");
-
             var properties = cds.Members.OfType<PropertyDeclarationSyntax>()
                 .Where(prop => prop.Modifiers.HasNot(SyntaxKind.StaticKeyword))
                 .Where(prop => prop.AccessorList?.Accessors.Any(ads =>

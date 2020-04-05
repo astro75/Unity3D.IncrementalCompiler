@@ -35,6 +35,23 @@ namespace IncrementalCompiler
             baseDirectoryUri.MakeRelativeUri(new Uri(Path.GetFullPath(path))).ToString();
     }
 
+    class GeneratorCtx
+    {
+        public readonly List<MemberDeclarationSyntax> NewMembers = new List<MemberDeclarationSyntax>();
+        public readonly SemanticModel Model;
+        public readonly ImmutableArray<TypeDeclarationSyntax> TypesInFile;
+        public readonly List<INamedTypeSymbol> TypesWithMacros = new List<INamedTypeSymbol>();
+
+        public GeneratorCtx(CompilationUnitSyntax root, SemanticModel model) {
+            Model = model;
+            TypesInFile = root.DescendantNodes().OfType<TypeDeclarationSyntax>().ToImmutableArray();
+        }
+
+        public void AddMacroMethod(INamedTypeSymbol symbol) {
+            TypesWithMacros.Add(symbol);
+        }
+    }
+
     public static partial class CodeGeneration
     {
         static readonly Type caseType = typeof(RecordAttribute);
@@ -179,24 +196,89 @@ namespace IncrementalCompiler
             void tryAttributeLocal<A>(AttributeData attr, Action<A> a) where A : Attribute =>
                 tryAttribute(attr, a, diagnostic);
 
-            var results = trees.AsParallel().SelectMany(originalTree =>
+            var typeAttributes = new Dictionary<
+                INamedTypeSymbol,
+                Action<AttributeData, GeneratorCtx, TypeDeclarationSyntax, INamedTypeSymbol>
+            >();
+
+            var methodAttributes = new Dictionary<
+                INamedTypeSymbol,
+                Action<AttributeData, GeneratorCtx, TypeDeclarationSyntax, IMethodSymbol>
+            >();
+
+            {
+                addAttribute<RecordAttribute>((instance, ctx, tds, symbol) =>
+                {
+                    ctx.NewMembers.AddRange(
+                        GenerateCaseClass(instance, ctx.Model, tds, symbol)
+                            .Select(generatedClass => AddAncestors(tds, generatedClass, onlyNamespace: false))
+                    );
+                });
+
+                addAttribute<SingletonAttribute>((instance, ctx, tds, symbol) =>
+                {
+                    if (tds is ClassDeclarationSyntax cds) {
+                        ctx.NewMembers.Add(
+                            AddAncestors(tds, GenerateSingleton(cds), onlyNamespace: false)
+                        );
+                    }
+                    else
+                    {
+                        throw new Exception("Can only be used on a class");
+                    }
+                });
+
+                addAttribute<MatcherAttribute>((instance, ctx, tds, symbol) =>
+                {
+                    var matcher = GenerateMatcher(ctx.Model, tds, instance, ctx.TypesInFile, symbol);
+                    ctx.NewMembers.Add(AddAncestors(tds, matcher, onlyNamespace: true));
+                });
+
+                addMacroAttribute<SimpleMethodMacro>();
+                addMacroAttribute<StatementMethodMacro>();
+                addMacroAttribute<VarMethodMacro>();
+
+                void addAttribute<A>(Action<A, GeneratorCtx, TypeDeclarationSyntax, INamedTypeSymbol> act) where A : Attribute {
+                    var compilationType = compilation.GetTypeByMetadataName(typeof(A).FullName);
+                    if (compilationType != null)
+                    {
+                        typeAttributes.Add(
+                            compilationType,
+                            (attr, ctx, tds, symbol) => tryAttributeLocal<A>(attr, instance => act(instance, ctx, tds, symbol))
+                        );
+                    }
+                }
+
+                void addMacroAttribute<A>() {
+                    var compilationType = compilation.GetTypeByMetadataName(typeof(A).FullName);
+                    if (compilationType != null)
+                    {
+                        methodAttributes.Add(
+                            compilationType,
+                            (attr, ctx, tds, symbol) => ctx.AddMacroMethod(symbol.ContainingType)
+                        );
+                    }
+                }
+            }
+
+            var resultsFromTrees = trees.AsParallel().Select(originalTree =>
             {
                 var tree = originalTree;
 
                 var model = oldCompilation.GetSemanticModel(tree);
                 var root = tree.GetCompilationUnitRoot();
-                var newMembers = ImmutableList<MemberDeclarationSyntax>.Empty;
-                var typesInFile = root.DescendantNodes().OfType<TypeDeclarationSyntax>().ToImmutableArray();
-                var result = ImmutableList<IGenerationResult>.Empty;
+                var results = new List<IGenerationResult>();
 
                 var treeEdited = false;
                 var editsList = new List<(SyntaxNode, SyntaxNode)>();
-                void replaceSyntax(SyntaxNode oldNode, SyntaxNode newNode) {
-                    treeEdited = true;
-                    editsList.Add((oldNode, newNode));
-                }
+                // void replaceSyntax(SyntaxNode oldNode, SyntaxNode newNode) {
+                //     treeEdited = true;
+                //     editsList.Add((oldNode, newNode));
+                // }
 
-                foreach (var tds in typesInFile)
+                var ctx = new GeneratorCtx(root, model);
+
+                foreach (var tds in ctx.TypesInFile)
                 {
                     var symbol = model.GetDeclaredSymbol(tds);
                     if (symbol == null) continue;
@@ -204,66 +286,43 @@ namespace IncrementalCompiler
                     foreach (var attr in symbol.GetAttributes()) {
                         if (!treeContains(attr.ApplicationSyntaxReference, tree, tds)) continue;
                         if (attr.AttributeClass == null) continue;
-                        var attrClassName = attr.AttributeClass.ToDisplayString();
-                        if (attrClassName == caseType.FullName)
+
+                        if (typeAttributes.TryGetValue(attr.AttributeClass, out var action))
                         {
-                            tryAttributeLocal<RecordAttribute>(attr, instance => {
-                                newMembers = newMembers.AddRange(
-                                    GenerateCaseClass(instance, model, tds)
-                                    .Select(generatedClass =>
-                                        AddAncestors(tds, generatedClass, onlyNamespace: false)
-                                    )
-                                );
-                            });
+                            action(attr, ctx, tds, symbol);
                         }
-                        if (attrClassName == typeof(SingletonAttribute).FullName)
-                        {
-                            if (tds is ClassDeclarationSyntax cds) {
-                                tryAttributeLocal<SingletonAttribute>(attr, m =>
-                                {
-                                    newMembers = newMembers.Add(
-                                        AddAncestors(tds, GenerateSingleton(cds), onlyNamespace: false)
-                                    );
-                                });
-                            }
-                        }
-                        if (attrClassName == typeof(MatcherAttribute).FullName)
-                        {
-                            tryAttributeLocal<MatcherAttribute>(attr, m => {
-                                newMembers = newMembers.Add(
-                                    AddAncestors(tds, GenerateMatcher(model, tds, m, typesInFile), onlyNamespace: true)
-                                );
-                            });
-                        }
-                        if (attrClassName == typeof(JavaClassAttribute).FullName)
-                        {
-                            tryAttributeLocal<JavaClassAttribute>(attr, instance =>
-                            {
-                                javaClassFile = new JavaClassFile(symbol, module: instance.Module, imports: instance.Imports, classBody: instance.ClassBody, attrLocation(attr));
-                                newMembers = newMembers.Add(AddAncestors(
-                                    tds,
-                                    CreatePartial(tds, javaClassFile.GenerateMembers(), Extensions.EmptyBaseList),
-                                    onlyNamespace: false
-                                 ));
-                            });
-                        }
-                        if (attrClassName == typeof(JavaListenerInterfaceAttribute).FullName)
-                        {
-                            tryAttributeLocal<JavaListenerInterfaceAttribute>(attr, instance =>
-                            {
-                                var javaInterface = new JavaClassFile(symbol, module: instance.Module, imports: "", classBody: "", attrLocation(attr));
-                                result = result.Add(new GeneratedJavaFile(
-                                    sourcePath: tree.FilePath,
-                                    location: attrLocation(attr),
-                                    javaFile: new JavaFile(
-                                        module: javaInterface.Module,
-                                        path: javaInterface.JavaFilePath(),
-                                        contents: javaInterface.GenerateJavaInterface()
-                                    )
-                                ));
-                                newMembers = newMembers.Add(AddAncestors(tds, javaInterface.GetInterfaceClass(), onlyNamespace: false));
-                            });
-                        }
+
+                        // java attributes disabled for now
+                        // var attrClassName = attr.AttributeClass.ToDisplayString();
+                        // if (attrClassName == typeof(JavaClassAttribute).FullName)
+                        // {
+                        //     tryAttributeLocal<JavaClassAttribute>(attr, instance =>
+                        //     {
+                        //         javaClassFile = new JavaClassFile(symbol, module: instance.Module, imports: instance.Imports, classBody: instance.ClassBody, attrLocation(attr));
+                        //         newMembers = newMembers.Add(AddAncestors(
+                        //             tds,
+                        //             CreatePartial(tds, javaClassFile.GenerateMembers(), Extensions.EmptyBaseList),
+                        //             onlyNamespace: false
+                        //          ));
+                        //     });
+                        // }
+                        // if (attrClassName == typeof(JavaListenerInterfaceAttribute).FullName)
+                        // {
+                        //     tryAttributeLocal<JavaListenerInterfaceAttribute>(attr, instance =>
+                        //     {
+                        //         var javaInterface = new JavaClassFile(symbol, module: instance.Module, imports: "", classBody: "", attrLocation(attr));
+                        //         result = result.Add(new GeneratedJavaFile(
+                        //             sourcePath: tree.FilePath,
+                        //             location: attrLocation(attr),
+                        //             javaFile: new JavaFile(
+                        //                 module: javaInterface.Module,
+                        //                 path: javaInterface.JavaFilePath(),
+                        //                 contents: javaInterface.GenerateJavaInterface()
+                        //             )
+                        //         ));
+                        //         newMembers = newMembers.Add(AddAncestors(tds, javaInterface.GetInterfaceClass(), onlyNamespace: false));
+                        //     });
+                        // }
                     }
 
                     var newClassMembers = ImmutableArray<string>.Empty;
@@ -298,22 +357,26 @@ namespace IncrementalCompiler
                                 {
                                     if (!treeContains(attr.ApplicationSyntaxReference, tree, tds)) continue;
                                     if (attr.AttributeClass == null) continue;
-                                    var attrClassName = attr.AttributeClass.ToDisplayString();
-                                    if (attrClassName == typeof(JavaMethodAttribute).FullName)
+                                    if (methodAttributes.TryGetValue(attr.AttributeClass, out var action))
                                     {
-                                        tryAttributeLocal<JavaMethodAttribute>(attr, instance =>
-                                        {
-                                            if (javaClassFile == null) throw new Exception(
-                                                $"must be used together with {nameof(JavaClassAttribute)}"
-                                            );
-                                            javaClassFile.AddMethod(instance.MethodBody, methodSymbol);
-                                            var syntaxes = methodSymbol.DeclaringSyntaxReferences;
-                                            if (syntaxes.Length != 1) throw new Exception($"code must be in one place");
-                                            var syntax = (BaseMethodDeclarationSyntax) syntaxes[0].GetSyntax();
-                                            var replacedSyntax = javaClassFile.GenerateMethod(methodSymbol, syntax);
-                                            replaceSyntax(syntax, replacedSyntax);
-                                        });
+                                        action(attr, ctx, tds, methodSymbol);
                                     }
+                                    // var attrClassName = attr.AttributeClass.ToDisplayString();
+                                    // if (attrClassName == typeof(JavaMethodAttribute).FullName)
+                                    // {
+                                    //     tryAttributeLocal<JavaMethodAttribute>(attr, instance =>
+                                    //     {
+                                    //         if (javaClassFile == null) throw new Exception(
+                                    //             $"must be used together with {nameof(JavaClassAttribute)}"
+                                    //         );
+                                    //         javaClassFile.AddMethod(instance.MethodBody, methodSymbol);
+                                    //         var syntaxes = methodSymbol.DeclaringSyntaxReferences;
+                                    //         if (syntaxes.Length != 1) throw new Exception($"code must be in one place");
+                                    //         var syntax = (BaseMethodDeclarationSyntax) syntaxes[0].GetSyntax();
+                                    //         var replacedSyntax = javaClassFile.GenerateMethod(methodSymbol, syntax);
+                                    //         replaceSyntax(syntax, replacedSyntax);
+                                    //     });
+                                    // }
                                 }
                                 break;
                         }
@@ -321,7 +384,7 @@ namespace IncrementalCompiler
 
                     if (newClassMembers.Length > 0)
                     {
-                        newMembers = newMembers.Add(AddAncestors(
+                        ctx.NewMembers.Add(AddAncestors(
                             tds,
                             CreatePartial(tds, ParseClassMembers(Join("\n", newClassMembers)), Extensions.EmptyBaseList),
                             onlyNamespace: false
@@ -330,7 +393,7 @@ namespace IncrementalCompiler
 
                     if (javaClassFile != null)
                     {
-                        result = result.Add(new GeneratedJavaFile(
+                        results.Add(new GeneratedJavaFile(
                             sourcePath: tree.FilePath,
                             location: javaClassFile.Location,
                             javaFile: new JavaFile(
@@ -347,24 +410,52 @@ namespace IncrementalCompiler
                         editsList.Select(t => t.Item1),
                         (toReplace, _) => editsList.First(t => t.Item1 == toReplace).Item2
                     );
-                    result = result.Add(new ModifiedFile(tree, newRoot));
+                    results.Add(new ModifiedFile(tree, newRoot));
                 }
-                if (newMembers.Any())
+                if (ctx.NewMembers.Count > 0)
                 {
                     var treePath = settings.getRelativePath(tree.FilePath);
                     var nt = CSharpSyntaxTree.Create(
                         SF.CompilationUnit()
                             .WithUsings(cleanUsings(root.Usings))
                             .WithLeadingTrivia(SyntaxTriviaList.Create(SyntaxFactory.Comment("// ReSharper disable all")))
-                            .WithMembers(SF.List(newMembers))
+                            .WithMembers(SF.List(ctx.NewMembers))
                             .NormalizeWhitespace(),
                         path: Path.Combine(settings.partialsFolder, treePath),
                         options: parseOptions,
                         encoding: Encoding.UTF8);
-                    result = result.Add(new GeneratedCsFile(sourcePath: treePath, tree: nt, location: root.GetLocation()));
+                    results.Add(new GeneratedCsFile(sourcePath: treePath, tree: nt, location: root.GetLocation()));
                 }
-                return result.ToArray();
+                return (results, ctx.TypesWithMacros);
             }).ToArray();
+
+            var results = resultsFromTrees.SelectMany(_ => _.results).ToList();
+
+            {
+                var typesWithMacros = resultsFromTrees
+                    .SelectMany(_ => _.TypesWithMacros)
+                    .Distinct()
+                    .OrderBy(_ => _.Name)
+                    .ToArray();
+
+                if (typesWithMacros.Length > 0)
+                {
+                    var typesString = Join(", ", typesWithMacros.Select(_ => $"typeof({_.ToDisplayString()})"));
+
+                    var syntax = CSharpSyntaxTree.ParseText(
+                        $"[assembly: {typeof(TypesWithMacroAttributes).FullName}({typesString})]"
+                    ).GetCompilationUnitRoot();
+
+                    var nt = CSharpSyntaxTree.Create(
+                        syntax,
+                        path: Path.Combine(settings.partialsFolder, "MacroList.cs"),
+                        options: parseOptions,
+                        encoding: Encoding.UTF8);
+
+                    results.Add(new GeneratedCsFile(sourcePath: "MacroList.cs", tree: nt, location: Location.None));
+                }
+            }
+
             var csFiles = results.OfType<GeneratedCsFile>().ToArray();
             compilation = compilation.AddSyntaxTrees(csFiles.Select(_ => _.Tree));
             foreach (var file in csFiles)
@@ -408,6 +499,9 @@ namespace IncrementalCompiler
             }
             return (compilation, diagnostic);
         }
+
+        static IEnumerable<A> NullableAsEnumerable<A>(A? maybeValue) where A : class =>
+            maybeValue != null ? new[] {maybeValue} : Enumerable.Empty<A>();
 
         static bool treeContains(SyntaxReference? syntaxRef, SyntaxTree tree, TypeDeclarationSyntax tds) {
             return tree == syntaxRef?.SyntaxTree
@@ -464,12 +558,12 @@ namespace IncrementalCompiler
 
         static MemberDeclarationSyntax GenerateMatcher(
             SemanticModel model, TypeDeclarationSyntax tds,
-            MatcherAttribute attribute, ImmutableArray<TypeDeclarationSyntax> typesInFile
+            MatcherAttribute attribute, ImmutableArray<TypeDeclarationSyntax> typesInFile,
+            INamedTypeSymbol baseTypeSymbol
         ) {
             // TODO: ban extending this class in different files
             // TODO: generics ?
 
-            var baseTypeSymbol = model.GetDeclaredSymbol(tds) ?? throw new Exception($"Could not find symbol for {tds}");
             var symbols = typesInFile
                 .Select(t => model.GetDeclaredSymbol(t))
                 .OfType<INamedTypeSymbol>()
