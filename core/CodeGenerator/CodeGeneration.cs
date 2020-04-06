@@ -52,7 +52,11 @@ namespace IncrementalCompiler
         public static bool TreeContains(SyntaxReference? syntaxRef, TypeDeclarationSyntax tds) {
             return
                 // filter out partial classes in other files, or even the same file
-                syntaxRef != null && tds.Span.Contains(syntaxRef.Span);
+                syntaxRef != null
+                // compare local position in file
+                && tds.Span.Contains(syntaxRef.Span)
+                // compare file
+                && syntaxRef.SyntaxTree == tds.SyntaxTree;
         }
     }
 

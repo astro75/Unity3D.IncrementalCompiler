@@ -5,6 +5,9 @@ using GenerationAttributes;
 
 public class TestScript : MonoBehaviour {
     void Start() {
+        log(lazyTicks);
+        log(ticks);
+
         var test = new ToStringEnumerableTestClass();
         Debug.LogWarning(test.ToString());
         Debug.LogWarning(testExpr(2 + 4));
@@ -18,9 +21,14 @@ public class TestScript : MonoBehaviour {
         nestedExpr(testExpr(20 + 20));
 
         Debug.LogWarning(lazyBaby);
+
+        log(lazyTicks);
+        log(ticks);
     }
 
-    [LazyProperty] string lazyBaby => GetType().FullName;
+    [LazyProperty] public string lazyBaby => GetType().FullName;
+    [LazyProperty] public long lazyTicks => DateTime.Now.Ticks;
+    public long ticks => DateTime.Now.Ticks;
 
     enum Enum { Val1, Val2 }
 
@@ -28,7 +36,10 @@ public class TestScript : MonoBehaviour {
     static string testExpr(int value) => throw new MacroException();
 
     [SimpleMethodMacro(@"Debug.LogWarning(${s})")]
-    static string nestedExpr(string s) => throw new MacroException();
+    static void nestedExpr(string s) => throw new MacroException();
+
+    [SimpleMethodMacro(@"Debug.LogWarning(""${s} = "" + ${s})")]
+    static void log(object s) => throw new MacroException();
 
     [SimpleMethodMacro(@"""${value}, ${value2}, ${value3}, ${value4}, ${value5}, ${value6}, ${value7}, ${value8}""")]
     static string testExprWithDefault(
@@ -46,7 +57,7 @@ public class TestScript : MonoBehaviour {
         [StatementMethodMacro(@"if (true) Debug.LogWarning(""${this}"");")]
         public void statementMacro() => throw new MacroException();
 
-        [VarMethodMacro(@"int ${varName}_backup = 10; { ${varType} ${varName} = ${varName}_backup + 2; return; }")]
+        [VarMethodMacro(@"int ${varName}_backup = 10; { ${varType} ${varName} = ${varName}_backup + 2; }")]
         public int testClassExpr2() => throw new MacroException();
     }
 
