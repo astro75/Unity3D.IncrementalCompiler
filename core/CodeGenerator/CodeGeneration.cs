@@ -245,6 +245,7 @@ namespace IncrementalCompiler
                 addMacroAttribute<SimpleMethodMacro>();
                 addMacroAttribute<StatementMethodMacro>();
                 addMacroAttribute<VarMethodMacro>();
+                addMacroAttribute<Inline>();
 
                 void addAttribute<A>(Action<A, GeneratorCtx, TypeDeclarationSyntax, INamedTypeSymbol> act) where A : Attribute {
                     var compilationType = compilation.GetTypeByMetadataName(typeof(A).FullName);
@@ -653,10 +654,11 @@ namespace IncrementalCompiler
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         }
 
-        struct FieldOrProp {
-            public readonly TypeSyntax type;
+        struct FieldOrProp
+        {
+            public readonly string type;
             public readonly ITypeSymbol typeInfo;
-            public readonly SyntaxToken identifier;
+            public readonly string identifier;
             public readonly string identifierFirstLetterUpper;
             public readonly bool initialized;
             public readonly bool traversable;
@@ -665,18 +667,17 @@ namespace IncrementalCompiler
             static readonly string iEnumName = typeof(IEnumerable<>).FullName!;
 
             public FieldOrProp(
-                TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model
+                ITypeSymbol typeInfo, string identifier, bool initialized, SemanticModel model
             ) {
-                this.type = type;
+                type = typeInfo.ToDisplayString();
+                this.typeInfo = typeInfo;
                 this.identifier = identifier;
-                identifierFirstLetterUpper = identifier.Text.FirstLetterToUpper();
+                identifierFirstLetterUpper = identifier.FirstLetterToUpper();
                 this.initialized = initialized;
 
                 bool interfaceInIEnumerable(INamedTypeSymbol info) =>
                     info.ContainingNamespace + "." + info.Name + "`" + info.Arity == iEnumName;
 
-                var typeInfoLocal = model.GetTypeInfo(type).Type;
-                typeInfo = typeInfoLocal ?? throw new Exception($"Type info not found for {identifier}");
                 var typeName = typeInfo.ToDisplayString();
 
                 var typeIsIEnumerableItself = typeInfo is INamedTypeSymbol ti && interfaceInIEnumerable(ti);
@@ -696,8 +697,8 @@ namespace IncrementalCompiler
             TypeDeclarationSyntax cds, ICollection<FieldOrProp> props
         ) {
             var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
-            var funcParamsStr = joinCommaSeparated(props, p => p.type + " " + p.identifier.ValueText);
-            var funcArgs = joinCommaSeparated(props, p => p.identifier.ValueText);
+            var funcParamsStr = joinCommaSeparated(props, p => p.type + " " + p.identifier);
+            var funcArgs = joinCommaSeparated(props, p => p.identifier);
 
             return ParseClassMembers(
                 $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +

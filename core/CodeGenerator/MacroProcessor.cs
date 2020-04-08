@@ -64,6 +64,7 @@ namespace IncrementalCompiler
             var simpleMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(SimpleMethodMacro).FullName!);
             var statementMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(StatementMethodMacro).FullName!);
             var varMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(VarMethodMacro).FullName!);
+            var inlineType = macrosAssembly.GetTypeByMetadataName(typeof(Inline).FullName!);
             var lazyPropertyType = macrosAssembly.GetTypeByMetadataName(typeof(LazyProperty).FullName!);
             var typesWithMacroAttributesType = macrosAssembly.GetTypeByMetadataName(typeof(TypesWithMacroAttributes).FullName!);
             // var allMethods = compilation.GetAllTypes().SelectMany(t => t.GetMembers().OfType<IMethodSymbol>());
@@ -270,6 +271,52 @@ namespace IncrementalCompiler
                                 }
                             });
                         }, diagnostic);
+                }
+
+                if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, inlineType))
+                {
+                    CodeGeneration.tryAttribute<Inline>(
+                        attribute, _ => builder.Add(method, (ctx, op) =>
+                        {
+                            if (op is IInvocationOperation iop)
+                            {
+                                var parent = op.Parent;
+                                if (parent is IExpressionStatementOperation statementOperation)
+                                {
+                                    var methodSyntax = (MethodDeclarationSyntax) method.DeclaringSyntaxReferences.Single().GetSyntax();
+                                    var body = methodSyntax.Body!;
+
+                                    var newName = "HAHAHA_" + methodSyntax.Identifier;
+
+                                    var parameters = methodSyntax.ParameterList;
+                                    if (parameters.Parameters.Count > 0)
+                                    {
+                                        parameters = methodSyntax.ParameterList.WithParameters(
+                                            methodSyntax.ParameterList.Parameters.Replace(
+                                                methodSyntax.ParameterList.Parameters[0],
+                                                methodSyntax.ParameterList.Parameters[0]
+                                                    .WithModifiers(SF.TokenList())));
+                                    }
+
+                                    var localFunction = SF
+                                        .LocalFunctionStatement(returnType: methodSyntax.ReturnType, identifier: newName)
+                                        .WithParameterList(parameters)
+                                        .WithBody(body);
+
+                                    var invocation = (InvocationExpressionSyntax) iop.Syntax;
+
+                                    var arguments = SF.ArgumentList(SF.SeparatedList(iop.Arguments.Select(_ => _.Value.Syntax)));
+
+                                    var newInvocation = SF.InvocationExpression(SF.IdentifierName(newName), arguments);
+
+                                    var updatedLine = SF.ExpressionStatement(newInvocation);
+
+                                    ctx.ChangedStatements.Add(
+                                        statementOperation.Syntax,
+                                        SF.List(new StatementSyntax[]{localFunction, updatedLine}));
+                                }
+                            }
+                        }), diagnostic);
                 }
             }
 

@@ -33,14 +33,6 @@ namespace IncrementalCompiler
             return rewritten;
         }
 
-        #region Overrides of CSharpSyntaxRewriter
-
-        public override SyntaxNode? VisitClassDeclaration(ClassDeclarationSyntax node) {
-            return base.VisitClassDeclaration(node);
-        }
-
-        #endregion
-
         public override SyntaxList<TNode> VisitList<TNode>(SyntaxList<TNode> list) {
             List<TNode>? alternate = null;
 
