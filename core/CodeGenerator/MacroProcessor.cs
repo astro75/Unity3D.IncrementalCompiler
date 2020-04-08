@@ -21,8 +21,8 @@ namespace IncrementalCompiler
             public readonly SemanticModel Model;
             public readonly Dictionary<SyntaxNode, SyntaxNode> ChangedNodes =
                 new Dictionary<SyntaxNode, SyntaxNode>();
-            public readonly Dictionary<SyntaxNode, SyntaxList<SyntaxNode>> ChangedStatements =
-                new Dictionary<SyntaxNode, SyntaxList<SyntaxNode>>();
+            public readonly Dictionary<SyntaxNode, SyntaxNode?[]> ChangedStatements =
+                new Dictionary<SyntaxNode, SyntaxNode?[]>();
             public readonly MacroReplacer Replacer;
             readonly StringBuilder stringBuilder = new StringBuilder();
 
@@ -219,7 +219,7 @@ namespace IncrementalCompiler
                                             replaceArguments(ctx, sb, iop);
 
                                             var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
-                                            ctx.ChangedStatements.Add(statementOperation.Syntax, parsedBlock.Statements);
+                                            ctx.ChangedStatements.Add(statementOperation.Syntax, parsedBlock.Statements.ToArray());
                                         }
                                         else
                                         {
@@ -261,7 +261,7 @@ namespace IncrementalCompiler
                                             sb.Replace("${varType}", varDecl.Symbol.Type.ToDisplayString());
 
                                             var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
-                                            ctx.ChangedStatements.Add(vdgop.Syntax, parsedBlock.Statements);
+                                            ctx.ChangedStatements.Add(vdgop.Syntax, parsedBlock.Statements.ToArray());
                                         }
                                         else
                                         {
@@ -313,7 +313,7 @@ namespace IncrementalCompiler
 
                                     ctx.ChangedStatements.Add(
                                         statementOperation.Syntax,
-                                        SF.List(new StatementSyntax[]{localFunction, updatedLine}));
+                                        new StatementSyntax[]{localFunction, updatedLine});
                                 }
                             }
                         }), diagnostic);
@@ -415,24 +415,27 @@ namespace IncrementalCompiler
                                             )).WithModifiers(modifiers);
 
                                             // object baseName => __lazy_value_baseName ??= __lazy_init_baseName;
+                                            // object baseName => __lazy_value_baseName ??= {expression};
                                             var originalReplacement = SF.PropertyDeclaration(
                                                 syntax.Type,
                                                 baseName
                                             ).WithExpressionBody(SF.ArrowExpressionClause(SF.AssignmentExpression(
                                                 SyntaxKind.CoalesceAssignmentExpression,
                                                 SF.IdentifierName(backingValueName),
-                                                SF.IdentifierName(backingInitName)
+                                                syntax.ExpressionBody?.Expression ?? SF.IdentifierName(backingInitName)
                                             )))
                                             .WithSemicolonToken(SF.Token(SyntaxKind.SemicolonToken))
                                             .WithModifiers(syntax.Modifiers);
 
-                                            ctx.ChangedStatements.Add(syntax, SF.List(new MemberDeclarationSyntax[] {
+                                            ctx.ChangedStatements.Add(syntax, new MemberDeclarationSyntax?[] {
                                                 variableDecl,
-                                                syntax.WithIdentifier(backingInitName)
-                                                    .WithModifiers(modifiers)
-                                                    .WithAttributeLists(SF.List<AttributeListSyntax>()),
+                                                syntax.ExpressionBody == null
+                                                    ? syntax.WithIdentifier(backingInitName)
+                                                        .WithModifiers(modifiers)
+                                                        .WithAttributeLists(SF.List<AttributeListSyntax>())
+                                                    : null,
                                                 originalReplacement
-                                            }));
+                                            });
                                         }, diagnostic);
                                     }
                                 }

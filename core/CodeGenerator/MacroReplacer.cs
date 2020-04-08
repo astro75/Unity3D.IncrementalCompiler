@@ -52,13 +52,14 @@ namespace IncrementalCompiler
 
                 if (replaced)
                 {
-                    for (var index = 0; index < replacementList.Count; index++)
+                    for (var index = 0; index < replacementList.Length; index++)
                     {
                         // TODO: finish whitespace logic
-                        var replacement = replacementList[index].NormalizeWhitespace();
+                        var replacement = replacementList[index]?.NormalizeWhitespace();
+                        if (replacement == null) continue;
                         if (index == 0)
                             replacement = replacement.WithLeadingTrivia(item.GetLeadingTrivia());
-                        if (index == replacementList.Count - 1)
+                        if (index == replacementList.Length - 1)
                             replacement = replacement.WithTrailingTrivia(item.GetTrailingTrivia());
                         else
                             replacement = replacement.WithTrailingTrivia(SyntaxFactory.TriviaList(SyntaxFactory.LineFeed));
