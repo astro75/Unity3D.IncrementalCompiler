@@ -75,7 +75,10 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
             .OfType<string>()
             .ToArray();
 
-        var commonPrefix = allCsPaths.Length > 1 ? FindCommonPrefix(allCsPaths) : "";
+        // var commonPrefix = allCsPaths.Length > 1 ? FindCommonPrefix(allCsPaths) : "";
+        // disabled unity cs file linking, because it does not work good with rider
+        // (can't create new cs files, file rename does not rename associated .meta file)
+        var commonPrefix = "";
 
         if (commonPrefix.Length > 0)
         {

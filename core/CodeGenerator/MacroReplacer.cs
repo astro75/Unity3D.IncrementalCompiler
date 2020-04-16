@@ -9,9 +9,14 @@ namespace IncrementalCompiler
     public class MacroReplacer : CSharpSyntaxRewriter
     {
         readonly MacroProcessor.MacroCtx ctx;
+        readonly List<SyntaxNode> toAdd = new List<SyntaxNode>();
 
         public MacroReplacer(MacroProcessor.MacroCtx ctx) {
             this.ctx = ctx;
+        }
+
+        public void Reset() {
+            toAdd.Clear();
         }
 
         public override SyntaxNode Visit(SyntaxNode node)
@@ -19,9 +24,14 @@ namespace IncrementalCompiler
             var rewritten = node;
             if (node != null)
             {
+                if (ctx.AddedStatements.TryGetValue(node, out var added))
+                {
+                    toAdd.Add(added);
+                }
                 if (ctx.ChangedNodes.TryGetValue(node, out var replacement))
                 {
                     rewritten = replacement;
+                    base.Visit(node);
                 }
                 else
                 {
@@ -33,6 +43,7 @@ namespace IncrementalCompiler
             return rewritten;
         }
 
+        // used with block statements, type members
         public override SyntaxList<TNode> VisitList<TNode>(SyntaxList<TNode> list) {
             List<TNode>? alternate = null;
 
@@ -70,6 +81,17 @@ namespace IncrementalCompiler
                 if (alternate != null && visited != null && !visited.IsKind(SyntaxKind.None) && !replaced)
                 {
                     alternate.Add(visited);
+                }
+            }
+
+            if (toAdd.Count > 0)
+            {
+                if (typeof(TNode) == typeof(MemberDeclarationSyntax)
+                    || typeof(TNode) == typeof(StatementSyntax))
+                {
+                    if (alternate == null) alternate = new List<TNode>(list);
+                    foreach (var sn in toAdd) alternate.Add((TNode) (SyntaxNode) sn);
+                    toAdd.Clear();
                 }
             }
 

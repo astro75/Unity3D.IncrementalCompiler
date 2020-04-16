@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
@@ -23,7 +24,9 @@ namespace IncrementalCompiler
                 new Dictionary<SyntaxNode, SyntaxNode>();
             public readonly Dictionary<SyntaxNode, SyntaxNode?[]> ChangedStatements =
                 new Dictionary<SyntaxNode, SyntaxNode?[]>();
-            public readonly MacroReplacer Replacer;
+            public readonly Dictionary<SyntaxNode, SyntaxNode> AddedStatements =
+                new Dictionary<SyntaxNode, SyntaxNode>();
+            readonly MacroReplacer Replacer;
             readonly StringBuilder stringBuilder = new StringBuilder();
 
             public MacroCtx(SemanticModel model) {
@@ -34,6 +37,11 @@ namespace IncrementalCompiler
             public StringBuilder EmptyStringBuilder() {
                 stringBuilder.Clear();
                 return stringBuilder;
+            }
+
+            public SyntaxNode Visit(SyntaxNode node) {
+                Replacer.Reset();
+                return Replacer.Visit(node);
             }
         }
 
@@ -140,7 +148,7 @@ namespace IncrementalCompiler
                     }
                     else
                     {
-                        expr = ctx.Replacer.Visit(arg.Syntax).ToString();
+                        expr = ctx.Visit(arg.Syntax).ToString();
                     }
                     sb.Replace("${" + arg.Parameter.Name + "}", expr);
                     sb.Replace("${expr" + (i) + "}", expr);
@@ -281,12 +289,14 @@ namespace IncrementalCompiler
                             if (op is IInvocationOperation iop)
                             {
                                 var parent = op.Parent;
-                                if (parent is IExpressionStatementOperation statementOperation)
+                                // if (parent is IExpressionStatementOperation statementOperation)
                                 {
                                     var methodSyntax = (MethodDeclarationSyntax) method.DeclaringSyntaxReferences.Single().GetSyntax();
                                     var body = methodSyntax.Body!;
 
-                                    var newName = "HAHAHA_" + methodSyntax.Identifier;
+                                    var sourceSpan = iop.Syntax.GetLocation().SourceSpan;
+
+                                    var newName = $"INLINED_{sourceSpan.Start}_{sourceSpan.End}_{methodSyntax.Identifier}";
 
                                     var parameters = methodSyntax.ParameterList;
                                     if (parameters.Parameters.Count > 0)
@@ -303,17 +313,30 @@ namespace IncrementalCompiler
                                         .WithParameterList(parameters)
                                         .WithBody(body);
 
+                                    var ooo = ctx.Model.GetOperation(methodSyntax, CancellationToken.None);
+
                                     var invocation = (InvocationExpressionSyntax) iop.Syntax;
 
-                                    var arguments = SF.ArgumentList(SF.SeparatedList(iop.Arguments.Select(_ => _.Value.Syntax)));
+                                    // left.call(one, two);
+                                    var argumentsArray = iop.Arguments.Select(_ =>
+                                    {
+                                        var visited = ctx.Visit(_.Value.Syntax);
+                                        return visited is ExpressionSyntax es
+                                            // one, two
+                                            ? SF.Argument(es)
+                                            // left
+                                            : SF.Argument(SF.ParseExpression(visited.ToString()));
+                                    }).ToArray();
+
+                                    var arguments = SF.ArgumentList(SF.SeparatedList(argumentsArray));
 
                                     var newInvocation = SF.InvocationExpression(SF.IdentifierName(newName), arguments);
 
-                                    var updatedLine = SF.ExpressionStatement(newInvocation);
+                                    // var updatedLine = SF.ExpressionStatement(newInvocation);
+                                    // new StatementSyntax[]{localFunction, updatedLine}
 
-                                    ctx.ChangedStatements.Add(
-                                        statementOperation.Syntax,
-                                        new StatementSyntax[]{localFunction, updatedLine});
+                                    ctx.ChangedNodes.Add(iop.Syntax, newInvocation);
+                                    ctx.AddedStatements.Add(iop.Syntax, localFunction);
                                 }
                             }
                         }), diagnostic);
@@ -342,7 +365,7 @@ namespace IncrementalCompiler
 
             var oldCompilation = compilation;
 
-            var treeEdits = trees.AsParallel().SelectMany(tree =>
+            var treeEdits = trees.SelectMany(tree =>
             {
 //                var walker = new Walker();
                 var root = tree.GetCompilationUnitRoot();
@@ -362,6 +385,16 @@ namespace IncrementalCompiler
                     var descendants = operation.DescendantsAndSelf().ToArray();
                     // reverse the order for nested macros to work
                     Array.Reverse(descendants);
+
+                    foreach (var op in descendants.OfType<IMethodReferenceOperation>())
+                    {
+                        if (resolvedMacros.ContainsKey(op.Method.OriginalDefinition))
+                        {
+                            diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                                "ER0003", "Error", "Can't reference a macro.", "Error", DiagnosticSeverity.Error, true
+                            ), op.Syntax.GetLocation()));
+                        }
+                    }
 
                     foreach (var op in descendants.OfType<IPropertyReferenceOperation>())
                     {
@@ -427,7 +460,7 @@ namespace IncrementalCompiler
                                             .WithSemicolonToken(SF.Token(SyntaxKind.SemicolonToken))
                                             .WithModifiers(syntax.Modifiers);
 
-                                            ctx.ChangedStatements.Add(syntax, new MemberDeclarationSyntax?[] {
+                                            ctx.ChangedStatements.Add(syntax, new SyntaxNode?[] {
                                                 variableDecl,
                                                 syntax.ExpressionBody == null
                                                     ? syntax.WithIdentifier(backingInitName)
@@ -448,7 +481,7 @@ namespace IncrementalCompiler
 
                 if (ctx.ChangedNodes.Any() || ctx.ChangedStatements.Any())
                 {
-                    var updatedTree = (CompilationUnitSyntax) ctx.Replacer.Visit(root);
+                    var updatedTree = (CompilationUnitSyntax) ctx.Visit(root);
                     // var updatedTree = root.ReplaceNodes(changes.Keys, (a, b) => changes[a]);
                     // Console.WriteLine(updatedTree.GetText());
                     newRoot = updatedTree;

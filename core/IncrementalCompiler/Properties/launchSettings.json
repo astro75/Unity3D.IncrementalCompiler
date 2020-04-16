@@ -2,7 +2,11 @@
   "profiles": {
     "IncrementalCompiler": {
       "commandName": "Project",
-      "commandLineArgs": "-dev \"C:\\work\\compiler\\Unity3D.IncrementalCompiler\\samples\\Basic\" UnityTempFile-4ee7c8e13eafe5b4db2a4c2941bce146"
+      "commandLineArgs": "-dev \"C:\\work\\compiler\\Unity3D.IncrementalCompiler\\samples\\Basic\" UnityTempFile-65c26bd3c20de5c438fef9a181324e79"
+    },
+    "IncrementalCompiler2": {
+      "commandName": "Project",
+      "commandLineArgs": "-dev \"G:\\work\\battleroyale\\quantum_unity\" UnityTempFile-738d638a34de22841aebd8fc995c72b1"
     }
   }
 }
