@@ -1,11 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <ProjectGuid>{0E0E523D-9842-4D2E-A304-59EF5C6CFFFD}</ProjectGuid>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <NoWarn>CS1591</NoWarn>
     <AssemblyTitle>GenerationAttributes</AssemblyTitle>
     <Product>GenerationAttributes</Product>
     <DocumentationFile>bin\$(Configuration)\GenerationAttributes.xml</DocumentationFile>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <TargetFrameworks>netstandard2.0;netstandard2.1</TargetFrameworks>
   </PropertyGroup>
 </Project>

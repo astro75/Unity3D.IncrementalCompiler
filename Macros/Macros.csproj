@@ -1,11 +1,11 @@
 ﻿<Project Sdk="Microsoft.NET.Sdk">
   <PropertyGroup>
     <ProjectGuid>{A0D9425D-10B7-443C-90A6-AA6732BBBA96}</ProjectGuid>
-    <TargetFramework>netstandard2.0</TargetFramework>
     <NoWarn>CS1591</NoWarn>
     <AssemblyTitle>Macros</AssemblyTitle>
     <Product>Macros</Product>
     <DocumentationFile>bin\$(Configuration)\Macros.xml</DocumentationFile>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
+    <TargetFrameworks>netstandard2.0;netstandard2.1</TargetFrameworks>
   </PropertyGroup>
 </Project>
