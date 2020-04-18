@@ -10,6 +10,7 @@ namespace IncrementalCompiler
     {
         readonly MacroProcessor.MacroCtx ctx;
         readonly List<SyntaxNode> toAdd = new List<SyntaxNode>();
+        public readonly List<SyntaxNode> successfulEdits = new List<SyntaxNode>();
 
         public MacroReplacer(MacroProcessor.MacroCtx ctx) {
             this.ctx = ctx;
@@ -31,6 +32,7 @@ namespace IncrementalCompiler
                 if (ctx.ChangedNodes.TryGetValue(node, out var replacement))
                 {
                     rewritten = replacement;
+                    successfulEdits.Add(node);
                     base.Visit(node);
                 }
                 else
@@ -63,6 +65,7 @@ namespace IncrementalCompiler
 
                 if (replaced)
                 {
+                    successfulEdits.Add(item);
                     for (var index = 0; index < replacementList.Length; index++)
                     {
                         // TODO: finish whitespace logic

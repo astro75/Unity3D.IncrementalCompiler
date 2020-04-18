@@ -3,7 +3,7 @@ using Assets.Scripts;
 using UnityEngine;
 using GenerationAttributes;
 
-public class TestScript : MonoBehaviour {
+public partial class TestScript : MonoBehaviour {
     void Start() {
         log(lazyTicks);
         log(ticks);
@@ -24,6 +24,39 @@ public class TestScript : MonoBehaviour {
 
         log(lazyTicks);
         log(ticks);
+
+        // cant reference a macro
+        // Func<int, string> act = testExpr;
+
+        // void exprTest(ExprClass c) => c.statementMacro();
+    }
+
+    void inlineTest() {
+        inlineUseless(20);
+
+        var c = new ClassWithInlines(10);
+        c.something(30);
+
+        var x = c.something(31);
+
+        var y = c.chained(1).chained(2).chained(3);
+
+        var z = c.chained(1).chained(c.chained(1).chained(2).chained(3)).chained(c.chained(1).chained(2).chained(3));
+    }
+
+    [Inline]
+    void inlineUseless(int value) {
+        var x = 10 * value;
+    }
+
+    [Record] public partial class ClassWithInlines {
+        public int takeMe;
+        // public int takeMeG { get; }
+        // public int takeMeG2 { get; set; }
+        public string subscribedFrom => $"Subscribed fro.";
+        public int cullMode {
+            set { }
+        }
     }
 
     [LazyProperty] public string lazyBaby => GetType().FullName;
@@ -65,3 +98,25 @@ public class TestScript : MonoBehaviour {
         int a;
     }
 }
+
+[Record]
+partial class RR {
+}
+
+public static class Exts {
+    [Inline]
+    public static int something(this TestScript.ClassWithInlines self, int mult) {
+        return self.takeMe * mult;
+    }
+
+    [Inline]
+    public static TestScript.ClassWithInlines chained(this TestScript.ClassWithInlines self, int mult) {
+        return self.withTakeMe(mult * self.takeMe);
+    }
+
+    [Inline]
+    public static TestScript.ClassWithInlines chained(this TestScript.ClassWithInlines self, TestScript.ClassWithInlines other) {
+        return self.withTakeMe(other.takeMe * self.takeMe);
+    }
+}
+

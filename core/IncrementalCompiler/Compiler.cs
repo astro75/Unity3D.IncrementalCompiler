@@ -329,6 +329,8 @@ namespace IncrementalCompiler
                 analyzers = ImmutableArray<DiagnosticAnalyzer>.Empty;
                 logTime("Loaded analyzers");
 
+                var ___generatedFiles__unfinished = new List<CodeGeneration.GeneratedCsFile>();
+
                 compilation = CodeGeneration.Run(
                     false,
                     compilation,
@@ -336,7 +338,8 @@ namespace IncrementalCompiler
                     parseOptions,
                     assemblyNameNoExtension,
                     filesMapping, sourceMap,
-                    settings
+                    settings,
+                    ___generatedFiles__unfinished
                 ).Tap((compAndDiag) =>
                 {
                     diagnostic.AddRange(compAndDiag.Item2);
@@ -350,7 +353,8 @@ namespace IncrementalCompiler
                     compilation.SyntaxTrees,
                     sourceMap,
                     diagnostic,
-                    settings
+                    settings,
+                    ___generatedFiles__unfinished
                 );
                 logTime("Macros completed");
             }
@@ -474,9 +478,12 @@ namespace IncrementalCompiler
             }
             else
             {
+                var ___generatedFiles__unfinished = new List<CodeGeneration.GeneratedCsFile>();
+
                 cache._compilation = CodeGeneration.Run(
                     true, cache._compilation, allAddedTrees, parseOptions, assemblyNameNoExtension,
-                    cache._filesMapping, cache._sourceMap, settings
+                    cache._filesMapping, cache._sourceMap, settings,
+                    ___generatedFiles__unfinished
                 ).Tap(t =>
                 {
                     diagnostic.AddRange(t.Item2);
@@ -498,7 +505,8 @@ namespace IncrementalCompiler
                     treesForMacroProcessor,
                     cache._sourceMap,
                     diagnostic,
-                    settings
+                    settings,
+                    ___generatedFiles__unfinished
                 );
                 // emit or reuse prebuilt output
             }

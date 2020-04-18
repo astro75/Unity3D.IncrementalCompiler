@@ -43,11 +43,21 @@ namespace IncrementalCompiler
                 Replacer.Reset();
                 return Replacer.Visit(node);
             }
+
+            public void CompleteVisit(List<Diagnostic> diagnostic) {
+                var unchanged = ChangedNodes.Keys.Concat(ChangedStatements.Keys).Except(Replacer.successfulEdits);
+                foreach (var node in unchanged)
+                {
+                    diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                        "ER0003", "Error", "Macro was not replaced.", "Error", DiagnosticSeverity.Error, true
+                    ), node.GetLocation()));
+                }
+            }
         }
 
         public static CSharpCompilation Run(
             CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
-            List<Diagnostic> diagnostic, GenerationSettings settings
+            List<Diagnostic> diagnostic, GenerationSettings settings, List<CodeGeneration.GeneratedCsFile> generatedFiles
         ) {
             var referencedAssemblies = compilation.Assembly.GetReferencedAssembliesAndSelf();
 
@@ -482,6 +492,7 @@ namespace IncrementalCompiler
                 if (ctx.ChangedNodes.Any() || ctx.ChangedStatements.Any())
                 {
                     var updatedTree = (CompilationUnitSyntax) ctx.Visit(root);
+                    ctx.CompleteVisit(diagnostic);
                     // var updatedTree = root.ReplaceNodes(changes.Keys, (a, b) => changes[a]);
                     // Console.WriteLine(updatedTree.GetText());
                     newRoot = updatedTree;
@@ -495,7 +506,7 @@ namespace IncrementalCompiler
                 }
                 return Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
             }).ToArray();
-            compilation = EditTrees(compilation, sourceMap, treeEdits, settings);
+            compilation = EditTrees(compilation, sourceMap, treeEdits, settings, generatedFiles);
             return compilation;
         }
 
@@ -503,19 +514,24 @@ namespace IncrementalCompiler
             CSharpCompilation compilation,
             Dictionary<string, SyntaxTree> sourceMap,
             IEnumerable<(SyntaxTree, CompilationUnitSyntax)> treeEdits,
-            GenerationSettings settings
+            GenerationSettings settings,
+            List<CodeGeneration.GeneratedCsFile> generatedFiles
         ) {
             foreach (var (tree, syntax) in treeEdits)
             {
                 var originalFilePath = settings.getRelativePath(tree.FilePath);
-                var editedFilePath = Path.Combine(
-                    settings.macrosFolder, originalFilePath.EnsureDoesNotEndWith(".cs") + ".transformed.cs");
+                var relativePath = originalFilePath.EnsureDoesNotEndWith(".cs") + ".transformed.cs";
+                var editedFilePath = Path.Combine(settings.macrosFolder, relativePath);
 
                 var newTree = tree.WithRootAndOptions(syntax, tree.Options).WithFilePath(editedFilePath);
                 sourceMap[tree.FilePath] = newTree;
                 compilation = compilation.ReplaceSyntaxTree(tree, newTree);
-                Directory.CreateDirectory(Path.GetDirectoryName(editedFilePath));
-                File.WriteAllText(editedFilePath, newTree.GetText().ToString());
+
+                generatedFiles.Add(new CodeGeneration.GeneratedCsFile(
+                    originalFilePath, relativePath: relativePath, tree.GetRoot().GetLocation(), newTree, true
+                ));
+                // Directory.CreateDirectory(Path.GetDirectoryName(editedFilePath));
+                // File.WriteAllText(editedFilePath, newTree.GetText().ToString());
             }
             return compilation;
         }

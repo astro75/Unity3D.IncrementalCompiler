@@ -35,9 +35,13 @@ namespace IncrementalCompiler
                     case IPropertySymbol propertySymbol: {
                         if (propertySymbol.IsStatic) break;
                         if (propertySymbol.IsIndexer) break;
-                        if (propertySymbol.GetMethod != null) break;
                         var syntax = (PropertyDeclarationSyntax)
                             propertySymbol.DeclaringSyntaxReferences.Single().GetSyntax();
+                        var hasGetterOrSetter = syntax.AccessorList?.Accessors.Any(ads =>
+                            ads.Body != null || ads.ExpressionBody != null
+                        ) ?? false;
+                        if (hasGetterOrSetter) break;
+                        if (syntax.ExpressionBody != null) break;
                         return new[] { new FieldOrProp(
                             propertySymbol.Type, propertySymbol.Name, syntax.Initializer != null, model
                         ) };

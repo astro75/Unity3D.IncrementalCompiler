@@ -38,14 +38,7 @@ namespace CompilationExtensionCodeGenerator {
                 txtForPartials: null,
                 baseDirectory: baseDirectory);
 
-            {
-                if (Directory.Exists(generatedForAssembly))
-                {
-                    // windows explorer likes to lock folders, so delete files only
-                    CodeGeneration.DeleteFilesRecursively(generatedForAssembly);
-                }
-                Directory.CreateDirectory(settings.partialsFolder);
-            }
+            var generatedFiles = new List<CodeGeneration.GeneratedCsFile>();
 
             var parseOptions =
                 compilation.SyntaxTrees.FirstOrDefault()?.Options as CSharpParseOptions ?? CSharpParseOptions.Default;
@@ -60,7 +53,8 @@ namespace CompilationExtensionCodeGenerator {
                 assemblyName,
                 mapping,
                 sourceMap,
-                settings
+                settings,
+                generatedFiles
             );
 
             debugPrint($"Code generation: {sw.Elapsed}");
@@ -71,10 +65,61 @@ namespace CompilationExtensionCodeGenerator {
                 compilation.SyntaxTrees,
                 sourceMap,
                 diagnostics,
-                settings
+                settings,
+                generatedFiles
             );
 
             debugPrint($"Macro processor: {sw.Elapsed}");
+
+            {
+                if (Directory.Exists(generatedForAssembly))
+                {
+                    // windows explorer likes to lock folders, so delete files only
+                    CodeGeneration.DeleteFilesRecursively(generatedForAssembly);
+                }
+                Directory.CreateDirectory(settings.partialsFolder);
+
+                foreach (var generatedFile in generatedFiles)
+                {
+                    try
+                    {
+                        Directory.CreateDirectory(Path.GetDirectoryName(generatedFile.FullPath));
+                        if (File.Exists(generatedFile.FullPath))
+                        {
+                            diagnostics.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                                "ER0002", "Error", $"Could not generate file '{generatedFile.FullPath}'. File already exists.", "Error", DiagnosticSeverity.Error, true
+                            ), generatedFile.Location));
+                        }
+                        else
+                        {
+                            File.WriteAllText(generatedFile.FullPath, generatedFile.Contents);
+                        }
+                    }
+                    catch (Exception e)
+                    {
+                        diagnostics.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                            "ER0003", "Error", $"Could not generate file '{generatedFile.FullPath}'. {e.Message}.", "Error", DiagnosticSeverity.Error, true
+                        ), generatedFile.Location));
+                    }
+                }
+                {
+                    var targetsFileName = generatedForAssembly + ".targets";
+                    File.WriteAllText(targetsFileName, generateTargetsXml(settings, generatedFiles));
+                }
+            }
+
+            /*var generatedPath = file.FilePath;
+                Directory.CreateDirectory(Path.GetDirectoryName(generatedPath));
+                if (File.Exists(generatedPath))
+                {
+                    diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                        "ER0002", "Error", $"Could not generate file '{generatedPath}'. File already exists.", "Error", DiagnosticSeverity.Error, true
+                    ), file.Location));
+                }
+                else
+                {
+                    File.WriteAllText(generatedPath, file.Contents);
+                }*/
 
             return (diagnostics, newCompilation);
         }
@@ -87,5 +132,26 @@ namespace CompilationExtensionCodeGenerator {
             compilation.RemoveSyntaxTrees(compilation.SyntaxTrees.Where(tree =>
                 tree.FilePath.Replace("\\", "/").Contains($"/{SharedData.GeneratedFolder}/")
             ));
+
+        static string generateTargetsXml(GenerationSettings settings, IEnumerable<CodeGeneration.GeneratedCsFile> files) {
+            var str = string.Join("\n", files.Select(f =>
+            {
+                var relativeToWorkingDir = settings.getRelativePath(f.FullPath);
+                var type = f.TransformedFile ? "None" : "Compile";
+                return $"  <{type} Include=\"{relativeToWorkingDir}\" Link=\"{f.RelativePath}\" />";
+            }).ToArray());
+            return targetsXml(str);
+        }
+
+        // no space at the beginning is allowed
+        static string targetsXml(string itemGroupContent) => $@"<?xml version=""1.0"" encoding=""utf-8""?>
+<Project ToolsVersion=""4.0"" xmlns=""http://schemas.microsoft.com/developer/msbuild/2003"">
+
+<ItemGroup>
+{itemGroupContent}
+</ItemGroup>
+
+</Project>
+";
     }
 }
