@@ -4,6 +4,7 @@ using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
 using System.Text;
+using System.Threading;
 using System.Threading.Tasks;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
@@ -21,9 +22,11 @@ namespace IncrementalCompiler
             public readonly SemanticModel Model;
             public readonly Dictionary<SyntaxNode, SyntaxNode> ChangedNodes =
                 new Dictionary<SyntaxNode, SyntaxNode>();
-            public readonly Dictionary<SyntaxNode, SyntaxList<SyntaxNode>> ChangedStatements =
-                new Dictionary<SyntaxNode, SyntaxList<SyntaxNode>>();
-            public readonly MacroReplacer Replacer;
+            public readonly Dictionary<SyntaxNode, SyntaxNode?[]> ChangedStatements =
+                new Dictionary<SyntaxNode, SyntaxNode?[]>();
+            public readonly Dictionary<SyntaxNode, SyntaxNode> AddedStatements =
+                new Dictionary<SyntaxNode, SyntaxNode>();
+            readonly MacroReplacer Replacer;
             readonly StringBuilder stringBuilder = new StringBuilder();
 
             public MacroCtx(SemanticModel model) {
@@ -35,11 +38,26 @@ namespace IncrementalCompiler
                 stringBuilder.Clear();
                 return stringBuilder;
             }
+
+            public SyntaxNode Visit(SyntaxNode node) {
+                Replacer.Reset();
+                return Replacer.Visit(node);
+            }
+
+            public void CompleteVisit(List<Diagnostic> diagnostic) {
+                var unchanged = ChangedNodes.Keys.Concat(ChangedStatements.Keys).Except(Replacer.successfulEdits);
+                foreach (var node in unchanged)
+                {
+                    diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                        "ER0003", "Error", "Macro was not replaced.", "Error", DiagnosticSeverity.Error, true
+                    ), node.GetLocation()));
+                }
+            }
         }
 
         public static CSharpCompilation Run(
             CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
-            List<Diagnostic> diagnostic, GenerationSettings settings
+            List<Diagnostic> diagnostic, GenerationSettings settings, List<CodeGeneration.GeneratedCsFile> generatedFiles
         ) {
             var referencedAssemblies = compilation.Assembly.GetReferencedAssembliesAndSelf();
 
@@ -64,6 +82,7 @@ namespace IncrementalCompiler
             var simpleMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(SimpleMethodMacro).FullName!);
             var statementMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(StatementMethodMacro).FullName!);
             var varMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(VarMethodMacro).FullName!);
+            var inlineType = macrosAssembly.GetTypeByMetadataName(typeof(Inline).FullName!);
             var lazyPropertyType = macrosAssembly.GetTypeByMetadataName(typeof(LazyProperty).FullName!);
             var typesWithMacroAttributesType = macrosAssembly.GetTypeByMetadataName(typeof(TypesWithMacroAttributes).FullName!);
             // var allMethods = compilation.GetAllTypes().SelectMany(t => t.GetMembers().OfType<IMethodSymbol>());
@@ -139,7 +158,7 @@ namespace IncrementalCompiler
                     }
                     else
                     {
-                        expr = ctx.Replacer.Visit(arg.Syntax).ToString();
+                        expr = ctx.Visit(arg.Syntax).ToString();
                     }
                     sb.Replace("${" + arg.Parameter.Name + "}", expr);
                     sb.Replace("${expr" + (i) + "}", expr);
@@ -218,7 +237,7 @@ namespace IncrementalCompiler
                                             replaceArguments(ctx, sb, iop);
 
                                             var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
-                                            ctx.ChangedStatements.Add(statementOperation.Syntax, parsedBlock.Statements);
+                                            ctx.ChangedStatements.Add(statementOperation.Syntax, parsedBlock.Statements.ToArray());
                                         }
                                         else
                                         {
@@ -260,7 +279,7 @@ namespace IncrementalCompiler
                                             sb.Replace("${varType}", varDecl.Symbol.Type.ToDisplayString());
 
                                             var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
-                                            ctx.ChangedStatements.Add(vdgop.Syntax, parsedBlock.Statements);
+                                            ctx.ChangedStatements.Add(vdgop.Syntax, parsedBlock.Statements.ToArray());
                                         }
                                         else
                                         {
@@ -270,6 +289,67 @@ namespace IncrementalCompiler
                                 }
                             });
                         }, diagnostic);
+                }
+
+                if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, inlineType))
+                {
+                    CodeGeneration.tryAttribute<Inline>(
+                        attribute, _ => builder.Add(method, (ctx, op) =>
+                        {
+                            if (op is IInvocationOperation iop)
+                            {
+                                var parent = op.Parent;
+                                // if (parent is IExpressionStatementOperation statementOperation)
+                                {
+                                    var methodSyntax = (MethodDeclarationSyntax) method.DeclaringSyntaxReferences.Single().GetSyntax();
+                                    var body = methodSyntax.Body!;
+
+                                    var sourceSpan = iop.Syntax.GetLocation().SourceSpan;
+
+                                    var newName = $"INLINED_{sourceSpan.Start}_{sourceSpan.End}_{methodSyntax.Identifier}";
+
+                                    var parameters = methodSyntax.ParameterList;
+                                    if (parameters.Parameters.Count > 0)
+                                    {
+                                        parameters = methodSyntax.ParameterList.WithParameters(
+                                            methodSyntax.ParameterList.Parameters.Replace(
+                                                methodSyntax.ParameterList.Parameters[0],
+                                                methodSyntax.ParameterList.Parameters[0]
+                                                    .WithModifiers(SF.TokenList())));
+                                    }
+
+                                    var localFunction = SF
+                                        .LocalFunctionStatement(returnType: methodSyntax.ReturnType, identifier: newName)
+                                        .WithParameterList(parameters)
+                                        .WithBody(body);
+
+                                    var ooo = ctx.Model.GetOperation(methodSyntax, CancellationToken.None);
+
+                                    var invocation = (InvocationExpressionSyntax) iop.Syntax;
+
+                                    // left.call(one, two);
+                                    var argumentsArray = iop.Arguments.Select(_ =>
+                                    {
+                                        var visited = ctx.Visit(_.Value.Syntax);
+                                        return visited is ExpressionSyntax es
+                                            // one, two
+                                            ? SF.Argument(es)
+                                            // left
+                                            : SF.Argument(SF.ParseExpression(visited.ToString()));
+                                    }).ToArray();
+
+                                    var arguments = SF.ArgumentList(SF.SeparatedList(argumentsArray));
+
+                                    var newInvocation = SF.InvocationExpression(SF.IdentifierName(newName), arguments);
+
+                                    // var updatedLine = SF.ExpressionStatement(newInvocation);
+                                    // new StatementSyntax[]{localFunction, updatedLine}
+
+                                    ctx.ChangedNodes.Add(iop.Syntax, newInvocation);
+                                    ctx.AddedStatements.Add(iop.Syntax, localFunction);
+                                }
+                            }
+                        }), diagnostic);
                 }
             }
 
@@ -295,7 +375,7 @@ namespace IncrementalCompiler
 
             var oldCompilation = compilation;
 
-            var treeEdits = trees.AsParallel().SelectMany(tree =>
+            var treeEdits = trees.SelectMany(tree =>
             {
 //                var walker = new Walker();
                 var root = tree.GetCompilationUnitRoot();
@@ -315,6 +395,16 @@ namespace IncrementalCompiler
                     var descendants = operation.DescendantsAndSelf().ToArray();
                     // reverse the order for nested macros to work
                     Array.Reverse(descendants);
+
+                    foreach (var op in descendants.OfType<IMethodReferenceOperation>())
+                    {
+                        if (resolvedMacros.ContainsKey(op.Method.OriginalDefinition))
+                        {
+                            diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                                "ER0003", "Error", "Can't reference a macro.", "Error", DiagnosticSeverity.Error, true
+                            ), op.Syntax.GetLocation()));
+                        }
+                    }
 
                     foreach (var op in descendants.OfType<IPropertyReferenceOperation>())
                     {
@@ -368,24 +458,27 @@ namespace IncrementalCompiler
                                             )).WithModifiers(modifiers);
 
                                             // object baseName => __lazy_value_baseName ??= __lazy_init_baseName;
+                                            // object baseName => __lazy_value_baseName ??= {expression};
                                             var originalReplacement = SF.PropertyDeclaration(
                                                 syntax.Type,
                                                 baseName
                                             ).WithExpressionBody(SF.ArrowExpressionClause(SF.AssignmentExpression(
                                                 SyntaxKind.CoalesceAssignmentExpression,
                                                 SF.IdentifierName(backingValueName),
-                                                SF.IdentifierName(backingInitName)
+                                                syntax.ExpressionBody?.Expression ?? SF.IdentifierName(backingInitName)
                                             )))
                                             .WithSemicolonToken(SF.Token(SyntaxKind.SemicolonToken))
                                             .WithModifiers(syntax.Modifiers);
 
-                                            ctx.ChangedStatements.Add(syntax, SF.List(new MemberDeclarationSyntax[] {
+                                            ctx.ChangedStatements.Add(syntax, new SyntaxNode?[] {
                                                 variableDecl,
-                                                syntax.WithIdentifier(backingInitName)
-                                                    .WithModifiers(modifiers)
-                                                    .WithAttributeLists(SF.List<AttributeListSyntax>()),
+                                                syntax.ExpressionBody == null
+                                                    ? syntax.WithIdentifier(backingInitName)
+                                                        .WithModifiers(modifiers)
+                                                        .WithAttributeLists(SF.List<AttributeListSyntax>())
+                                                    : null,
                                                 originalReplacement
-                                            }));
+                                            });
                                         }, diagnostic);
                                     }
                                 }
@@ -398,7 +491,8 @@ namespace IncrementalCompiler
 
                 if (ctx.ChangedNodes.Any() || ctx.ChangedStatements.Any())
                 {
-                    var updatedTree = (CompilationUnitSyntax) ctx.Replacer.Visit(root);
+                    var updatedTree = (CompilationUnitSyntax) ctx.Visit(root);
+                    ctx.CompleteVisit(diagnostic);
                     // var updatedTree = root.ReplaceNodes(changes.Keys, (a, b) => changes[a]);
                     // Console.WriteLine(updatedTree.GetText());
                     newRoot = updatedTree;
@@ -412,7 +506,7 @@ namespace IncrementalCompiler
                 }
                 return Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
             }).ToArray();
-            compilation = EditTrees(compilation, sourceMap, treeEdits, settings);
+            compilation = EditTrees(compilation, sourceMap, treeEdits, settings, generatedFiles);
             return compilation;
         }
 
@@ -420,19 +514,24 @@ namespace IncrementalCompiler
             CSharpCompilation compilation,
             Dictionary<string, SyntaxTree> sourceMap,
             IEnumerable<(SyntaxTree, CompilationUnitSyntax)> treeEdits,
-            GenerationSettings settings
+            GenerationSettings settings,
+            List<CodeGeneration.GeneratedCsFile> generatedFiles
         ) {
             foreach (var (tree, syntax) in treeEdits)
             {
                 var originalFilePath = settings.getRelativePath(tree.FilePath);
-                var editedFilePath = Path.Combine(
-                    settings.macrosFolder, originalFilePath.EnsureDoesNotEndWith(".cs") + ".transformed.cs");
+                var relativePath = originalFilePath.EnsureDoesNotEndWith(".cs") + ".transformed.cs";
+                var editedFilePath = Path.Combine(settings.macrosFolder, relativePath);
 
                 var newTree = tree.WithRootAndOptions(syntax, tree.Options).WithFilePath(editedFilePath);
                 sourceMap[tree.FilePath] = newTree;
                 compilation = compilation.ReplaceSyntaxTree(tree, newTree);
-                Directory.CreateDirectory(Path.GetDirectoryName(editedFilePath));
-                File.WriteAllText(editedFilePath, newTree.GetText().ToString());
+
+                generatedFiles.Add(new CodeGeneration.GeneratedCsFile(
+                    originalFilePath, relativePath: relativePath, tree.GetRoot().GetLocation(), newTree, true
+                ));
+                // Directory.CreateDirectory(Path.GetDirectoryName(editedFilePath));
+                // File.WriteAllText(editedFilePath, newTree.GetText().ToString());
             }
             return compilation;
         }

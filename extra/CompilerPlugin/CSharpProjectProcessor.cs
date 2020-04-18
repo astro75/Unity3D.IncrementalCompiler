@@ -68,6 +68,7 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
         var compileName = ns + "Compile";
         var noneName = ns + "None";
         var includeName = (XName) "Include";
+        var projectName = (XName) "Project";
         var linkName = (XName) "Link";
 
         var allCsPaths = xdoc.Descendants(compileName)
@@ -75,7 +76,10 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
             .OfType<string>()
             .ToArray();
 
-        var commonPrefix = allCsPaths.Length > 1 ? FindCommonPrefix(allCsPaths) : "";
+        // var commonPrefix = allCsPaths.Length > 1 ? FindCommonPrefix(allCsPaths) : "";
+        // disabled unity cs file linking, because it does not work good with rider
+        // (can't create new cs files, file rename does not rename associated .meta file)
+        var commonPrefix = "";
 
         if (commonPrefix.Length > 0)
         {
@@ -93,8 +97,11 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
 
         {
             var generatedPathStart = SharedData.GeneratedFolder + Path.DirectorySeparatorChar;
+            var assemblyName = xdoc.Root.Descendants(ns + "AssemblyName").Select(el => el.Value).First();
+            // .dll suffix appears here if we select VS2017 in unity preferences
+            assemblyName = EnsureDoesNotEndWith(assemblyName, ".dll");
 
-            void RemoveOldGeneratedFiles() {
+            /*void RemoveOldGeneratedFiles() {
                 var toRemove = xdoc.Root.Descendants(compileName).Where(fileNode =>
                     fileNode.Attribute(includeName)?.Value
                         .StartsWith(generatedPathStart, StringComparison.Ordinal) ?? false
@@ -104,9 +111,6 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
 
             void AddGeneratedFiles()
             {
-                var assemblyName = xdoc.Root.Descendants(ns + "AssemblyName").Select(el => el.Value).First();
-                // .dll suffix appears here if we select VS2017 in unity preferences
-                assemblyName = EnsureDoesNotEndWith(assemblyName, ".dll");
                 {
                     var partialsFolder = Path.Combine(SharedData.GeneratedFolder, assemblyName, "partials");
                     var files = GetCsFiles(partialsFolder).ToArray();
@@ -140,11 +144,19 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
                     }
                     return EnsureDoesNotStartWith(file, commonPrefix);
                 }
+            }*/
 
+            void AddImport() {
+                var targetsPath = Path.Combine(SharedData.GeneratedFolder, assemblyName + ".targets");
+                if (File.Exists(targetsPath))
+                {
+                    xdoc.Root.Add(new XElement(ns + "Import", new XAttribute(projectName, targetsPath)));
+                }
             }
 
-            RemoveOldGeneratedFiles();
-            AddGeneratedFiles();
+            // RemoveOldGeneratedFiles();
+            // AddGeneratedFiles();
+            AddImport();
         }
 
         var writer = new Utf8StringWriter();

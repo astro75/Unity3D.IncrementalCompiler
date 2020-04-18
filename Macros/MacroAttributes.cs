@@ -129,6 +129,11 @@ namespace GenerationAttributes
     {
     }
 
+    [AttributeUsage(AttributeTargets.Method)]
+    public class Inline : Attribute
+    {
+    }
+
 
     /// <summary>
     /// Used internally by compiler

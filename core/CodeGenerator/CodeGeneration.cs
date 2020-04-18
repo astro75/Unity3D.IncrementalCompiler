@@ -26,6 +26,11 @@ namespace IncrementalCompiler
             this.partialsFolder = partialsFolder;
             this.macrosFolder = macrosFolder;
             this.txtForPartials = txtForPartials;
+
+            if (!(
+                baseDirectory.EndsWith("\\", StringComparison.Ordinal)
+                || baseDirectory.EndsWith("/", StringComparison.Ordinal)
+            )) baseDirectory += "\\";
             baseDirectoryUri = new Uri(Path.GetFullPath(baseDirectory));
         }
 
@@ -69,7 +74,7 @@ namespace IncrementalCompiler
 
         public partial class GeneratedFilesMapping
         {
-            public Dictionary<string, List<string>> filesDict = new Dictionary<string, List<string>>();
+            public readonly Dictionary<string, List<string>> filesDict = new Dictionary<string, List<string>>();
 
             static void addValue<A>(Dictionary<string, List<A>> dict, string key, A value) {
                 if (!dict.ContainsKey(key)) dict[key] = new List<A>();
@@ -111,7 +116,7 @@ namespace IncrementalCompiler
             }
         }
 
-        abstract class GeneratedFile : IGenerationResult
+        public abstract class GeneratedFile : IGenerationResult
         {
             public readonly string SourcePath;
             public readonly Location Location;
@@ -123,14 +128,19 @@ namespace IncrementalCompiler
         }
 
 
-        class GeneratedCsFile : GeneratedFile
+        public class GeneratedCsFile : GeneratedFile
         {
             public readonly SyntaxTree Tree;
-            public readonly string FilePath, Contents;
+            public readonly string FullPath, Contents, RelativePath;
+            public readonly bool TransformedFile;
 
-            public GeneratedCsFile(string sourcePath, Location location, SyntaxTree tree) : base(sourcePath, location) {
+            public GeneratedCsFile(string sourcePath, string relativePath, Location location, SyntaxTree tree, bool transformedFile)
+                : base(sourcePath, location)
+            {
+                RelativePath = relativePath;
                 Tree = tree;
-                FilePath = tree.FilePath;
+                TransformedFile = transformedFile;
+                FullPath = tree.FilePath;
                 Contents = tree.GetText().ToString();
             }
         }
@@ -196,7 +206,8 @@ namespace IncrementalCompiler
             string assemblyName,
             GeneratedFilesMapping filesMapping,
             Dictionary<string, SyntaxTree> sourceMap,
-            GenerationSettings settings
+            GenerationSettings settings,
+            List<GeneratedCsFile> generatedCsFiles
         ) {
             var oldCompilation = compilation;
             var diagnostic = new List<Diagnostic>();
@@ -245,6 +256,7 @@ namespace IncrementalCompiler
                 addMacroAttribute<SimpleMethodMacro>();
                 addMacroAttribute<StatementMethodMacro>();
                 addMacroAttribute<VarMethodMacro>();
+                addMacroAttribute<Inline>();
 
                 void addAttribute<A>(Action<A, GeneratorCtx, TypeDeclarationSyntax, INamedTypeSymbol> act) where A : Attribute {
                     var compilationType = compilation.GetTypeByMetadataName(typeof(A).FullName);
@@ -423,16 +435,20 @@ namespace IncrementalCompiler
                 if (ctx.NewMembers.Count > 0)
                 {
                     var treePath = settings.getRelativePath(tree.FilePath);
+                    var relativePath = treePath.EnsureDoesNotEndWith(".cs") + ".partials.cs";
                     var nt = CSharpSyntaxTree.Create(
                         SF.CompilationUnit()
                             .WithUsings(cleanUsings(root.Usings))
                             .WithLeadingTrivia(SyntaxTriviaList.Create(SyntaxFactory.Comment("// ReSharper disable all")))
                             .WithMembers(SF.List(ctx.NewMembers))
                             .NormalizeWhitespace(),
-                        path: Path.Combine(settings.partialsFolder, treePath.EnsureDoesNotEndWith(".cs") + ".partials.cs"),
+                        path: Path.Combine(settings.partialsFolder, relativePath),
                         options: parseOptions,
                         encoding: Encoding.UTF8);
-                    results.Add(new GeneratedCsFile(sourcePath: treePath, tree: nt, location: root.GetLocation()));
+                    results.Add(new GeneratedCsFile(
+                        sourcePath: treePath, relativePath: relativePath, tree: nt,
+                        location: root.GetLocation(), transformedFile: false
+                    ));
                 }
                 return (results, ctx.TypesWithMacros);
             }).ToArray();
@@ -455,22 +471,30 @@ namespace IncrementalCompiler
                         $"[assembly: {typeof(TypesWithMacroAttributes).FullName}({typesString})]"
                     ).GetCompilationUnitRoot();
 
+                    var name = "MacroList.cs";
                     var nt = CSharpSyntaxTree.Create(
                         syntax,
-                        path: Path.Combine(settings.partialsFolder, "MacroList.cs"),
+                        path: Path.Combine(settings.partialsFolder, name),
                         options: parseOptions,
                         encoding: Encoding.UTF8);
 
-                    results.Add(new GeneratedCsFile(sourcePath: "MacroList.cs", tree: nt, location: Location.None));
+                    results.Add(new GeneratedCsFile(
+                        sourcePath: name, relativePath: name, tree: nt, location: Location.None, transformedFile: false
+                    ));
                 }
             }
 
             var csFiles = results.OfType<GeneratedCsFile>().ToArray();
             compilation = compilation.AddSyntaxTrees(csFiles.Select(_ => _.Tree));
+
+            generatedCsFiles.AddRange(csFiles);
+
             foreach (var file in csFiles)
             {
-                sourceMap[file.FilePath] = file.Tree;
-                var generatedPath = file.FilePath;
+                sourceMap[file.FullPath] = file.Tree;
+                filesMapping.add(file.SourcePath, file.FullPath);
+
+                /*var generatedPath = file.FilePath;
                 Directory.CreateDirectory(Path.GetDirectoryName(generatedPath));
                 if (File.Exists(generatedPath))
                 {
@@ -481,8 +505,7 @@ namespace IncrementalCompiler
                 else
                 {
                     File.WriteAllText(generatedPath, file.Contents);
-                    filesMapping.add(file.SourcePath, generatedPath);
-                }
+                }*/
             }
             foreach (var file in results.OfType<GeneratedJavaFile>())
             {
@@ -495,7 +518,7 @@ namespace IncrementalCompiler
             }
 
             compilation = MacroProcessor.EditTrees(
-                compilation, sourceMap, results.OfType<ModifiedFile>().Select(f => (f.From, f.To)), settings
+                compilation, sourceMap, results.OfType<ModifiedFile>().Select(f => (f.From, f.To)), settings, generatedCsFiles
             );
             compilation = filesMapping.updateCompilation(compilation, parseOptions, assemblyName: assemblyName, generatedFilesDir: settings.partialsFolder);
             if (settings.txtForPartials != null)
@@ -653,10 +676,11 @@ namespace IncrementalCompiler
             IEnumerator IEnumerable.GetEnumerator() => GetEnumerator();
         }
 
-        struct FieldOrProp {
-            public readonly TypeSyntax type;
+        struct FieldOrProp
+        {
+            public readonly string type;
             public readonly ITypeSymbol typeInfo;
-            public readonly SyntaxToken identifier;
+            public readonly string identifier;
             public readonly string identifierFirstLetterUpper;
             public readonly bool initialized;
             public readonly bool traversable;
@@ -665,18 +689,17 @@ namespace IncrementalCompiler
             static readonly string iEnumName = typeof(IEnumerable<>).FullName!;
 
             public FieldOrProp(
-                TypeSyntax type, SyntaxToken identifier, bool initialized, SemanticModel model
+                ITypeSymbol typeInfo, string identifier, bool initialized, SemanticModel model
             ) {
-                this.type = type;
+                type = typeInfo.ToDisplayString();
+                this.typeInfo = typeInfo;
                 this.identifier = identifier;
-                identifierFirstLetterUpper = identifier.Text.FirstLetterToUpper();
+                identifierFirstLetterUpper = identifier.FirstLetterToUpper();
                 this.initialized = initialized;
 
                 bool interfaceInIEnumerable(INamedTypeSymbol info) =>
                     info.ContainingNamespace + "." + info.Name + "`" + info.Arity == iEnumName;
 
-                var typeInfoLocal = model.GetTypeInfo(type).Type;
-                typeInfo = typeInfoLocal ?? throw new Exception($"Type info not found for {identifier}");
                 var typeName = typeInfo.ToDisplayString();
 
                 var typeIsIEnumerableItself = typeInfo is INamedTypeSymbol ti && interfaceInIEnumerable(ti);
@@ -696,8 +719,8 @@ namespace IncrementalCompiler
             TypeDeclarationSyntax cds, ICollection<FieldOrProp> props
         ) {
             var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
-            var funcParamsStr = joinCommaSeparated(props, p => p.type + " " + p.identifier.ValueText);
-            var funcArgs = joinCommaSeparated(props, p => p.identifier.ValueText);
+            var funcParamsStr = joinCommaSeparated(props, p => p.type + " " + p.identifier);
+            var funcArgs = joinCommaSeparated(props, p => p.identifier);
 
             return ParseClassMembers(
                 $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +

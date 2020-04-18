@@ -29,7 +29,7 @@
     <PackageReference Include="Microsoft.CodeAnalysis.Analyzers" Version="3.0.0-beta2.20059.3">
       <PrivateAssets>all</PrivateAssets>
     </PackageReference>
-    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="3.6.0-2.final" />
+<!--    <PackageReference Include="Microsoft.CodeAnalysis.CSharp" Version="3.6.0-2.final" />-->
     <PackageReference Include="Microsoft.Composition" Version="1.0.31" />
     <PackageReference Include="Microsoft.CSharp" Version="4.7.0" />
     <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="3.1.1" />
@@ -40,4 +40,17 @@
     <PackageReference Include="System.Data.DataSetExtensions" Version="4.5.0" />
     <PackageReference Include="System.IO" Version="4.3.0" />
   </ItemGroup>
+
+  <ItemGroup>
+    <Reference Include="Microsoft.CodeAnalysis, Version=42.42.42.42, Culture=neutral, PublicKeyToken=31bf3856ad364e35">
+      <HintPath>..\..\tools\csc\net472\Microsoft.CodeAnalysis.dll</HintPath>
+    </Reference>
+    <Reference Include="Microsoft.CodeAnalysis.CSharp, Version=42.42.42.42, Culture=neutral, PublicKeyToken=31bf3856ad364e35">
+      <HintPath>..\..\tools\csc\net472\Microsoft.CodeAnalysis.CSharp.dll</HintPath>
+    </Reference>
+    <Reference Include="System.Collections.Immutable, Version=1.2.3.0, Culture=neutral, PublicKeyToken=b03f5f7f11d50a3a">
+      <HintPath>..\..\tools\csc\net472\System.Collections.Immutable.dll</HintPath>
+    </Reference>
+  </ItemGroup>
+  
 </Project>

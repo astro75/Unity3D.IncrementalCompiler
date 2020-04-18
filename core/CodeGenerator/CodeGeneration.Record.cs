@@ -1,10 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Collections.ObjectModel;
-using System.IO;
 using System.Linq;
-using System.Text;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
@@ -19,33 +16,39 @@ namespace IncrementalCompiler
         static CaseClass GenerateCaseClass(
             RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds, INamedTypeSymbol symbolInfo
         ) {
-            var properties = cds.Members.OfType<PropertyDeclarationSyntax>()
-                .Where(prop => prop.Modifiers.HasNot(SyntaxKind.StaticKeyword))
-                .Where(prop => prop.AccessorList?.Accessors.Any(ads =>
-                    ads.IsKind(SyntaxKind.GetAccessorDeclaration)
-                    && ads.Body == null
-                    && ads.ExpressionBody == null
-                ) ?? false)
-                .Select(prop => new FieldOrProp(
-                    prop.Type, prop.Identifier, prop.Initializer != null, model
-                ));
+            var members = symbolInfo.GetMembers();
 
-            var fields =
-                cds.Members.OfType<FieldDeclarationSyntax>()
-                .Where(field => {
-                    var modifiers = field.Modifiers;
-                    return modifiers.HasNot(SyntaxKind.StaticKeyword)
-                        && modifiers.HasNot(SyntaxKind.ConstKeyword);
-                })
-                .SelectMany(field => {
-                    var decl = field.Declaration;
-                    var type = decl.Type;
-                    return decl.Variables.Select(varDecl => new FieldOrProp(
-                        type, varDecl.Identifier, varDecl.Initializer != null, model
-                    ));
-                });
-
-            var fieldsAndProps = fields.Concat(properties).ToArray();
+            var fieldsAndProps = members.SelectMany(member =>
+            {
+                switch (member)
+                {
+                    case IFieldSymbol fieldSymbol: {
+                        if (fieldSymbol.IsConst || fieldSymbol.IsStatic) break;
+                        // backing fields of properties
+                        if (fieldSymbol.DeclaringSyntaxReferences.Length == 0) break;
+                        var untypedSyntax = fieldSymbol.DeclaringSyntaxReferences.Single().GetSyntax();
+                        var syntax = (Microsoft.CodeAnalysis.CSharp.Syntax.VariableDeclaratorSyntax) untypedSyntax;
+                        return new[] { new FieldOrProp(
+                            fieldSymbol.Type, fieldSymbol.Name, syntax.Initializer != null, model
+                        ) };
+                    }
+                    case IPropertySymbol propertySymbol: {
+                        if (propertySymbol.IsStatic) break;
+                        if (propertySymbol.IsIndexer) break;
+                        var syntax = (PropertyDeclarationSyntax)
+                            propertySymbol.DeclaringSyntaxReferences.Single().GetSyntax();
+                        var hasGetterOrSetter = syntax.AccessorList?.Accessors.Any(ads =>
+                            ads.Body != null || ads.ExpressionBody != null
+                        ) ?? false;
+                        if (hasGetterOrSetter) break;
+                        if (syntax.ExpressionBody != null) break;
+                        return new[] { new FieldOrProp(
+                            propertySymbol.Type, propertySymbol.Name, syntax.Initializer != null, model
+                        ) };
+                    }
+                }
+                return Enumerable.Empty<FieldOrProp>();
+            }).ToArray();
 
             var hasAnyFields = fieldsAndProps.Any();
 
@@ -57,7 +60,7 @@ namespace IncrementalCompiler
                     var params_ = initializedFieldsAndProps.joinCommaSeparated(f => f.type + " " + f.identifier);
                     var body = initializedFieldsAndProps.Any()
                         ? initializedFieldsAndProps
-                            .Select(f => $"this.{f.identifier} = {f.identifier}; // {f.typeInfo.Kind} {f.typeInfo.GetType()}")
+                            .Select(f => $"this.{f.identifier} = {f.identifier};")
                             .Tap(s => Join("\n", s) + "\n")
                         : "";
 
@@ -73,10 +76,10 @@ namespace IncrementalCompiler
                 () => {
                     var returnString = fieldsAndProps
                         .joinCommaSeparated(f => f.traversable
-                            ? f.identifier.ValueText +
-                                ": [\" + Helpers.enumerableToString(" + f.identifier.ValueText + ") + \"]"
-                            : f.identifier.ValueText +
-                                ": \" + " + f.identifier.ValueText + " + \""
+                            ? f.identifier +
+                                ": [\" + Helpers.enumerableToString(" + f.identifier + ") + \"]"
+                            : f.identifier +
+                                ": \" + " + f.identifier + " + \""
                         );
 
                     return ParseClassMembers(
@@ -91,7 +94,7 @@ namespace IncrementalCompiler
                     {
                         var type = f.typeInfo;
                         var isValueType = type.IsValueType;
-                        var name = f.identifier.ValueText;
+                        var name = f.identifier;
 
 
                         string ValueTypeHash(ITypeSymbol t) {
@@ -155,7 +158,7 @@ namespace IncrementalCompiler
                     var comparisons = fieldsAndProps.Select(f =>
                     {
                         var type = f.typeInfo;
-                        var name = f.identifier.ValueText;
+                        var name = f.identifier;
                         var otherName = "other." + name;
 
                         if (type.IsEnum(out _)) return $"{name} == {otherName}";
@@ -209,7 +212,7 @@ namespace IncrementalCompiler
                 initializedFieldsAndProps.Length >= 1 && !symbolInfo.IsAbstract,
                 () => {
                     // pubilc Type withVal1(int val1) => new Type(val2, val2);
-                    var args = initializedFieldsAndProps.joinCommaSeparated(f => f.identifier.Text);
+                    var args = initializedFieldsAndProps.joinCommaSeparated(f => f.identifier);
                     return ParseClassMembers(Join("\n", initializedFieldsAndProps.Select(f =>
                         $"public {typeName} with{f.identifierFirstLetterUpper} ({f.type + " " + f.identifier}) => " +
                         $"new {typeName}({args});"
