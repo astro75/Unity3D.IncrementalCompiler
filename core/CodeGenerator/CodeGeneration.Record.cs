@@ -303,7 +303,6 @@ namespace IncrementalCompiler
         }
     }
 
-    [Record(GenerateConstructor = ConstructorFlags.Apply)]
     static class ConstructorFlagsExts
     {
         public static bool HasFlag(this ConstructorFlags flags, ConstructorFlags flag) => (flags & flag) == flag;

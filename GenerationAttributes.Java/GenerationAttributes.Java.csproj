@@ -6,6 +6,6 @@
     <Product>GenerationAttributes.Java</Product>
     <DocumentationFile>bin\$(Configuration)\GenerationAttributes.Java.xml</DocumentationFile>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
-    <TargetFrameworks>netstandard2.0;netstandard2.1</TargetFrameworks>
+    <TargetFramework>netstandard2.0</TargetFramework>
   </PropertyGroup>
 </Project>
