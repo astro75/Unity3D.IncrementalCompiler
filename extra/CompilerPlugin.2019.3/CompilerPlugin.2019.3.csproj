@@ -21,9 +21,7 @@
   </ItemGroup>
   <ItemGroup>
     <Compile Include="..\..\core\CodeGenerator\SharedData.cs" Link="SharedData.cs" />
-    <Compile Include="..\..\core\UnityPackage\Assets\Editor\CompilerSettings.cs">
-      <Link>CompilerSettings.cs</Link>
-    </Compile>
+    <Compile Include="..\CompilerPlugin\CompilerSettings.cs"  Link="CompilerSettings.cs" />
     <Compile Include="..\CompilerPlugin\CSharpProjectProcessor.cs" Link="CSharpProjectProcessor.cs" />
   </ItemGroup>
 </Project>
