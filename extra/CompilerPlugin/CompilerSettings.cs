@@ -1,177 +1,188 @@
 ﻿﻿using System;
 using System.Collections.Generic;
-using UnityEngine;
-using UnityEditor;
-using System.Diagnostics;
 using System.Globalization;
 using System.IO;
-using System.Linq;
-using System.Reflection;
+using UnityEngine;
+using UnityEditor;
 using UnityEditor.Compilation;
-using Debug = UnityEngine.Debug;
 
+[InitializeOnLoad]
 public class CompilerSettings : EditorWindow
 {
-    struct LogElement {
-        public readonly string target;
-        public readonly long durationMs;
-        public readonly DateTime time;
+    class Data : ScriptableSingleton<Data> {
+        public List<Compilation> compilations = new List<Compilation>();
+    }
 
-        public LogElement(string target, long durationMs, DateTime time) {
-            this.target = target;
+    [Serializable]
+    public struct Element {
+        public string assemblyName;
+        public int start, durationMs;
+        public bool success;
+
+        public int end => start + durationMs;
+
+        public Element(string assemblyName, int start, int durationMs, bool success) {
+            this.assemblyName = assemblyName;
+            this.start = start;
             this.durationMs = durationMs;
-            this.time = time;
+            this.success = success;
         }
     }
 
-    const string UcLogFilePath = "./Compiler/Temp/UniversalCompiler.log";
+    [Serializable]
+    public class Compilation {
+        public int durationMs;
+        public Element[] elements;
 
-    string? _ucVersion;
-    LogElement[] _ucLastBuildLog = new LogElement[0];
-    DateTime _ucLogLastWriteTime;
-
-    [MenuItem("Assets/Open C# Compiler Settings...")]
-    public static void ShowWindow() => GetWindow(typeof(CompilerSettings));
-
-    public void OnDisable()
-    {
-        // When unity3d builds project reloads built assemblies, build logs should be updated.
-        // OnDisable is called just after starting building and it can make unity3d redraw this window.
-        // http://answers.unity3d.com/questions/704066/callback-before-unity-reloads-editor-assemblies.html
-        Repaint();
+        public Compilation(Element[] elements, int durationMs) {
+            this.elements = elements;
+            this.durationMs = durationMs;
+        }
     }
 
-    public void OnGUI()
-    {
+    static DateTime compilationStartTime;
+    static bool compilationRunning;
+    static readonly List<Element> currentCompilation = new List<Element>();
+    static int timeSinceCompilationStart(DateTime dt) => (int) (dt - compilationStartTime).TotalMilliseconds;
+    static int timeSinceCompilationStart() => timeSinceCompilationStart(DateTime.UtcNow);
+
+    [MenuItem("Assets/C# Compiler...")]
+    static void showWindow() => GetWindow<CompilerSettings>("C# Compiler");
+
+    static CompilerSettings() {
+        var assemblies = new Dictionary<string, int>();
+
+        CompilationPipeline.compilationStarted += o => {
+            currentCompilation.Clear();
+            assemblies.Clear();
+            compilationStartTime = DateTime.UtcNow;
+            compilationRunning = true;
+        };
+
+        CompilationPipeline.compilationFinished += o => {
+            var compilations = Data.instance.compilations;
+            var durationMs = timeSinceCompilationStart();
+            compilations.Add(new Compilation(currentCompilation.ToArray(), durationMs));
+            currentCompilation.Clear();
+            if (compilations.Count > 20) compilations.RemoveAt(0);
+            compilationRunning = false;
+        };
+
+        CompilationPipeline.assemblyCompilationStarted += target => {
+            assemblies[target] = timeSinceCompilationStart();
+        };
+        CompilationPipeline.assemblyCompilationFinished += (target, messages) => {
+            var assemblyName = Path.GetFileName(target);
+            try {
+                {
+                    var lines = File.ReadAllLines(SharedData.CompileTimesFileName(assemblyName));
+                    var dateTime = DateTime.Parse(lines[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
+                    var durationMs = int.Parse(lines[1]);
+                    var exitCode = int.Parse(lines[2]);
+                    var start = timeSinceCompilationStart(dateTime);
+                    currentCompilation.Add(new Element(assemblyName, start, durationMs, success: exitCode == 0));
+                }
+                {
+                    // var startTime = assemblies[target];
+                    // var durationMs = timeSinceCompilationStart() - startTime;
+                    // currentCompilation.Add(new Element(
+                    //     assemblyName, startTime, durationMs,
+                    //     success: messages.All(_ => _.type != CompilerMessageType.Error)
+                    // ));
+                }
+            }
+            catch (Exception e) {
+                Debug.LogError(e);
+            }
+        };
+    }
+
+    void Update() {
+        if (compilationRunning) Repaint();
+    }
+
+    public void OnGUI() {
         OnGUI_Compiler();
-        OnGUI_IncrementalCompilerStatus();
         OnGUI_BuildTime();
     }
 
     void OnGUI_Compiler()
     {
-        GUILayout.Label("Compiler", EditorStyles.boldLabel);
+        GUILayout.Label("Compiler", EditorStyles.largeLabel);
         if (GUILayout.Button("Recompile")) CompilationPipeline.RequestScriptCompilation();
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.LabelField("Version", GetUniversalCompilerVersion());
-        EditorGUI.BeginDisabledGroup(!File.Exists(UcLogFilePath));
-        if (GUILayout.Button("Log"))
-            ShowUniversalCompilerClientLog();
-        EditorGUI.EndDisabledGroup();
-        EditorGUILayout.EndHorizontal();
     }
 
-    void OnGUI_BuildTime()
-    {
-        var durations = GetUniversalCompilerLastBuildLogs();
-        GUILayout.Label("Last Build Times");
-        EditorGUI.indentLevel += 1;
-        var now = TrimToSeconds(DateTime.UtcNow);
-        for (var index = 0; index < durations.Length; index++) {
-            var duration = durations[index];
-            if (index > 0) {
-                var prevDuration = durations[index - 1];
-                if ((prevDuration.time - duration.time).TotalSeconds > 15) {
-                    // insert space between different compilation runs
-                    EditorGUILayout.LabelField("---");
+    Vector2 scrollPosition;
+
+    void OnGUI_BuildTime() {
+        var compilations = Data.instance.compilations;
+
+        GUILayout.Label("Build Times", EditorStyles.largeLabel);
+        scrollPosition = EditorGUILayout.BeginScrollView(scrollPosition);
+        var labelRight = new GUIStyle(GUI.skin.label) {alignment = TextAnchor.MiddleRight};
+
+        if (compilationRunning) {
+            displayElements(isCompiling: true, currentCompilation, timeSinceCompilationStart());
+        }
+
+        for (var i = compilations.Count - 1; i >= 0; i--) {
+            var compilation = compilations[i];
+            GUILayout.Space(10);
+            displayElements(isCompiling: false, compilation.elements, compilation.durationMs);
+        }
+
+        EditorGUILayout.EndScrollView();
+
+        void displayElements(bool isCompiling, IEnumerable<Element> elements, int compilationDuration) {
+            GUILayout.Label(isCompiling ? "... Compiling ..." : $"{compilationDuration:N0} ms", EditorStyles.boldLabel);
+            foreach (var element in elements) {
+                using (new GUILayout.HorizontalScope()) {
+                    GUILayout.Label($"{element.durationMs} ms", labelRight, GUILayout.Width(70));
+
+                    var prevColor = GUI.color;
+                    GUI.color = element.success ? GUI.skin.label.normal.textColor : Color.red;
+                    GUILayout.Label(element.assemblyName, GUILayout.Width(300));
+                    GUI.color = prevColor;
                 }
+
+                var rect = GUILayoutUtility.GetLastRect();
+                rect.xMin += 370;
+                rect.height -= 5;
+                var newRect = rect;
+                newRect.xMin = Mathf.Lerp(rect.xMin, rect.xMax,
+                    Mathf.InverseLerp(0, compilationDuration, element.start)
+                );
+                newRect.xMax = Mathf.Lerp(rect.xMin, rect.xMax,
+                    Mathf.InverseLerp(0, compilationDuration, element.end)
+                );
+                EditorGuiTools.drawRect(newRect, isCompiling ? Color.red : GUI.skin.label.normal.textColor);
             }
-            var ago = now - duration.time;
-            var seconds = (int) ago.TotalSeconds;
-            EditorGUILayout.LabelField($"{seconds,4} s ago, {duration.durationMs,6:N0} ms, {duration.target}");
-        }
-        EditorGUI.indentLevel -= 1;
 
-        static DateTime TrimToSeconds(DateTime date) =>
-            new DateTime(date.Ticks - (date.Ticks % TimeSpan.TicksPerSecond), date.Kind);
-    }
-
-    string GetUniversalCompilerVersion()
-    {
-        if (_ucVersion != null) {
-            return _ucVersion;
-        }
-
-        var assemblyName = AssemblyName.GetAssemblyName("./Compiler/UniversalCompiler.exe");
-        _ucVersion = assemblyName != null ? assemblyName.Version.ToString() : "";
-        return _ucVersion;
-    }
-
-    void ShowUniversalCompilerClientLog() => Process.Start(Path.GetFullPath(UcLogFilePath));
-
-    LogElement[] GetUniversalCompilerLastBuildLogs()
-    {
-        if (!File.Exists(UcLogFilePath)) return _ucLastBuildLog;
-        var ucLogLastWriteTime = GetFileLastWriteTime(UcLogFilePath);
-        if (ucLogLastWriteTime == _ucLogLastWriteTime) return _ucLastBuildLog;
-        _ucLogLastWriteTime = ucLogLastWriteTime;
-
-        var result = new List<LogElement>();
-        try
-        {
-            var lines = File.ReadAllLines(UcLogFilePath);
-
-            var totalFound = 0;
-            foreach (var line in lines.Reverse())
-            {
-                if (line.StartsWith("compilation-info;", StringComparison.Ordinal)) {
-                    var split = line.Split(';');
-                    if (split.Length < 4) continue;
-
-                    var target = split[1];
-                    var elapsed = long.TryParse(split[2], out var res) ? res : 0;
-                    var dateTime = DateTime.TryParse(
-                        split[3], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind, out var dt
-                    ) ? dt : DateTime.UtcNow;
-                    result.Add(new LogElement(target, elapsed, dateTime));
-
-                    totalFound++;
-                    if (totalFound >= 50) break;
-                }
+            if (isCompiling) {
+                GUILayout.Label("---------", EditorStyles.whiteLargeLabel);
+                GUILayout.Label("Compiling", EditorStyles.whiteLargeLabel);
+                GUILayout.Label("---------", EditorStyles.whiteLargeLabel);
             }
         }
-        catch (Exception e)
-        {
-            Debug.LogWarning("GetUniversalCompilerLastBuildLogs:" + e);
-        }
-
-        _ucLastBuildLog = result.ToArray();
-
-        return _ucLastBuildLog;
     }
 
-    void OnGUI_IncrementalCompilerStatus()
-    {
-        GUILayout.Label("Compiler Status", EditorStyles.boldLabel);
-        EditorGUILayout.TextField("Version", GetIncrementalCompilerVersion());
+    static class EditorGuiTools {
+        static readonly Texture2D backgroundTexture = Texture2D.whiteTexture;
+        static readonly GUIStyle textureStyle = new GUIStyle { normal = new GUIStyleState { background = backgroundTexture } };
 
-        EditorGUILayout.BeginHorizontal();
-        EditorGUILayout.PrefixLabel("Log");
-        if (GUILayout.Button("Client")) ShowIncrementalCompilerClientLog();
-        if (GUILayout.Button("Server")) ShowIncrementalCompilerServerLog();
-        EditorGUILayout.EndHorizontal();
+        public static void drawRect(Rect position, Color color) {
+            var backgroundColor = GUI.backgroundColor;
+            GUI.backgroundColor = color;
+            GUI.Box(position, GUIContent.none, textureStyle);
+            GUI.backgroundColor = backgroundColor;
+        }
     }
 
-    string GetIncrementalCompilerVersion()
+    public static class SharedData
     {
-        var assemblyName = AssemblyName.GetAssemblyName("./Compiler/IncrementalCompiler.exe");
-        return assemblyName?.Version.ToString() ?? "";
-    }
+        public const string GeneratedFolder = "generated-by-compiler";
 
-    void ShowIncrementalCompilerClientLog() => Process.Start(Path.GetFullPath(@"./Compiler/Temp/IncrementalCompiler.log"));
-
-    void ShowIncrementalCompilerServerLog() => Process.Start(Path.GetFullPath(@"./Compiler/Temp/IncrementalCompiler-Server.log"));
-
-    DateTime GetFileLastWriteTime(string path)
-    {
-        try
-        {
-            var fi = new FileInfo(path);
-            return fi.LastWriteTimeUtc;
-        }
-        catch (Exception)
-        {
-            return DateTime.MinValue;
-        }
+        public static string CompileTimesFileName(string assemblyName) =>
+            Path.Combine(GeneratedFolder, $"{assemblyName}.compile-times.txt");
     }
 }
