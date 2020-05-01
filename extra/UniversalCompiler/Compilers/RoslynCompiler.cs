@@ -13,7 +13,7 @@ internal class RoslynCompiler : Compiler
     }
 
 	protected override Process CreateCompilerProcess(
-        Platform platform, string unityEditorDataDir, string targetProfileDir, string responseFile)
+        Platform platform, string unityEditorDataDir, string responseFile)
 	{
         var processArguments = "-shared -noconfig " + responseFile;
         var process = new Process { StartInfo = CreateOSDependentStartInfo(

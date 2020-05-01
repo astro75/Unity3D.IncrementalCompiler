@@ -18,9 +18,9 @@ internal abstract class Compiler
 		this.logger = logger;
 	}
 
-	public int Compile(Platform platform, string unityEditorDataDir, string targetProfileDir, string responseFile)
+	public int Compile(Platform platform, string unityEditorDataDir, string responseFile)
 	{
-		var process = CreateCompilerProcess(platform, unityEditorDataDir, targetProfileDir, responseFile);
+		var process = CreateCompilerProcess(platform, unityEditorDataDir, responseFile);
 		process.OutputDataReceived += (sender, e) => outputLines.Add(e.Data);
         // used to be errorLines, changed in unity 2019.3
 		process.ErrorDataReceived += (sender, e) => outputLines.Add(e.Data);
@@ -68,7 +68,7 @@ internal abstract class Compiler
 		}
 	}
 
-	protected abstract Process CreateCompilerProcess(Platform platform, string unityEditorDataDir, string targetProfileDir, string responseFile);
+	protected abstract Process CreateCompilerProcess(Platform platform, string unityEditorDataDir, string responseFile);
 
 	protected static ProcessStartInfo CreateOSDependentStartInfo(Platform platform, string processPath,
 																 string processArguments, string unityEditorDataDir)

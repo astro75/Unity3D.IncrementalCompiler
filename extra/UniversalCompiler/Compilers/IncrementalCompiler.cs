@@ -12,7 +12,7 @@ internal class IncrementalCompiler : Compiler
         compilerExePath = Path.Combine(directory, ExeName);
     }
 
-	protected override Process CreateCompilerProcess(Platform platform, string unityEditorDataDir, string targetProfileDir, string responseFile)
+	protected override Process CreateCompilerProcess(Platform platform, string unityEditorDataDir, string responseFile)
 	{
 	    if (platform == Platform.Mac)
         {

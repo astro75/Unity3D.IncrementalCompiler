@@ -13,7 +13,7 @@ internal class DotnetRoslynCompiler : Compiler
     }
 
 	protected override Process CreateCompilerProcess(
-        Platform platform, string unityEditorDataDir, string targetProfileDir, string responseFile)
+        Platform platform, string unityEditorDataDir, string responseFile)
 	{
         var processArguments = $"{compilerExePath} -shared -noconfig {responseFile}";
         var process = new Process { StartInfo = CreateStartInfo("dotnet", processArguments) };

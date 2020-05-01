@@ -31,3 +31,7 @@ namespace Assets.Scripts {
         #endregion
     }
 }
+
+partial class RR {
+    int asdf;
+}

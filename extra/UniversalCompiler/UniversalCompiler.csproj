@@ -15,4 +15,7 @@
   <ItemGroup>
     <Reference Include="System.Data.DataSetExtensions" />
   </ItemGroup>
+  <ItemGroup>
+    <Compile Include="..\..\core\CodeGenerator\SharedData.cs" Link="SharedData.cs" />
+  </ItemGroup>
 </Project>

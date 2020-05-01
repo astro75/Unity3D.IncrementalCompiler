@@ -36,7 +36,10 @@ internal class Program
 	}
 
 	private static int Compile(string[] args, Logger logger)
-	{
+    {
+        var startTime = DateTime.UtcNow;
+        var sw = Stopwatch.StartNew();
+
 		logger?.AppendHeader();
 
         logger?.Append("mono path");
@@ -46,7 +49,6 @@ internal class Program
 
 		var responseFile = args[0];
 		var compilationOptions = File.ReadAllLines(responseFile.TrimStart('@'));
-        var targetProfileDir = GetTargetProfileDir(compilationOptions);
         var unityEditorDataDir = GetUnityEditorDataDir();
         var projectDir = Directory.GetCurrentDirectory();
         var targetAssembly = compilationOptions.First(line => line.StartsWith("-out:"))
@@ -58,7 +60,6 @@ internal class Program
 		logger?.Append($"Platform: {platform}");
 		logger?.Append($"Target assembly: {targetAssembly}");
 		logger?.Append($"Project directory: {projectDir}");
-		logger?.Append($"Target profile directory: {targetProfileDir}");
 		logger?.Append($"Unity 'Data' or 'Frameworks' directory: {unityEditorDataDir}");
 
 
@@ -76,14 +77,30 @@ internal class Program
 		logger?.Append("- Compilation -----------------------------------------------");
 		logger?.Append("");
 
-		var stopwatch = Stopwatch.StartNew();
-		int exitCode = compiler.Compile(platform, unityEditorDataDir, targetProfileDir, responseFile);
-		stopwatch.Stop();
+		var exitCode = compiler.Compile(platform, unityEditorDataDir, responseFile);
+		sw.Stop();
 
-		logger?.Append($"Elapsed time: {stopwatch.ElapsedMilliseconds / 1000f:F2} sec");
+		logger?.Append($"Elapsed time: {sw.ElapsedMilliseconds / 1000f:F2} sec");
         // this line will be parsed by code in CompilerSettings.cs
-		logger?.Append($"compilation-info;{targetAssembly};{stopwatch.ElapsedMilliseconds};{DateTime.UtcNow:O}");
+		logger?.Append($"compilation-info;{targetAssembly};{sw.ElapsedMilliseconds};{DateTime.UtcNow:O}");
 		logger?.Append("");
+
+        {
+            var fileName = SharedData.CompileTimesFileName(targetAssembly);
+            try
+            {
+                File.WriteAllLines(fileName, new [] {
+                    startTime.ToString("O"),
+                    sw.ElapsedMilliseconds.ToString(),
+                    exitCode.ToString()
+                });
+            }
+            catch (Exception e)
+            {
+                logger?.Append(e.ToString());
+            }
+        }
+
 		compiler.PrintCompilerOutputAndErrors();
         return exitCode;
 	}
@@ -117,37 +134,17 @@ internal class Program
         }
     }
 
-	private static Platform CurrentPlatform
-	{
-		get
-		{
-			switch (Environment.OSVersion.Platform)
-			{
-				case PlatformID.Unix:
-					// Well, there are chances MacOSX is reported as Unix instead of MacOSX.
-					// Instead of platform check, we'll do a feature checks (Mac specific root folders)
-					if (Directory.Exists("/Applications")
-						& Directory.Exists("/System")
-						& Directory.Exists("/Users")
-						& Directory.Exists("/Volumes"))
-					{
-						return Platform.Mac;
-					}
-					return Platform.Linux;
+	static Platform CurrentPlatform =>
+        Environment.OSVersion.Platform switch {
+            PlatformID.Unix => Platform.Linux,
+            PlatformID.MacOSX => Platform.Mac,
+            _ => Platform.Windows
+        };
 
-				case PlatformID.MacOSX:
-					return Platform.Mac;
-
-				default:
-					return Platform.Windows;
-			}
-		}
-	}
-
-	/// <summary>
+    /// <summary>
 	/// Returns the directory that contains Mono and MonoBleedingEdge directories
 	/// </summary>
-	private static string GetUnityEditorDataDir()
+	static string GetUnityEditorDataDir()
 	{
 		// Windows:
 		// UNITY_DATA: C:\Program Files\Unity\Editor\Data\Mono
@@ -158,29 +155,7 @@ internal class Program
 		return Environment.GetEnvironmentVariable("UNITY_DATA").Replace("\\", "/");
     }
 
-	private static string GetTargetProfileDir(string[] compilationOptions)
-	{
-		/* Looking for something like
-		-r:"C:\Program Files\Unity\Editor\Data\Mono\lib\mono\unity\System.Xml.Linq.dll"
-		or
-		-r:'C:\Program Files\Unity\Editor\Data\Mono\lib\mono\unity\System.Xml.Linq.dll'
-		*/
-
-		var reference = compilationOptions.First(line =>
-            (
-                line.StartsWith("-r:", StringComparison.Ordinal)
-                || line.StartsWith("-reference:", StringComparison.Ordinal)
-            )
-            && line.Contains("System.Xml.Linq.dll")
-        );
-
-        var replaced = reference.Replace("'", "").Replace("\"", "");
-		var systemXmlLinqPath = replaced.Substring(replaced.IndexOf(":", StringComparison.Ordinal) + 1);
-		var profileDir = Path.GetDirectoryName(systemXmlLinqPath);
-		return profileDir;
-	}
-
-	private static string GetExecutingAssemblyFileVersion()
+	static string GetExecutingAssemblyFileVersion()
 	{
 		var assembly = Assembly.GetExecutingAssembly();
 		var fvi = FileVersionInfo.GetVersionInfo(assembly.Location);
