@@ -134,7 +134,7 @@ public class CompilerSettings : EditorWindow
         EditorGUILayout.EndScrollView();
 
         void displayElements(bool isCompiling, IEnumerable<Element> elements, int compilationDuration) {
-            GUILayout.Label(isCompiling ? "... Compiling ..." : $"{compilationDuration:N0} ms", EditorStyles.boldLabel);
+            GUILayout.Label($"{compilationDuration:N0} ms", EditorStyles.boldLabel);
             foreach (var element in elements) {
                 using (new GUILayout.HorizontalScope()) {
                     GUILayout.Label($"{element.durationMs} ms", labelRight, GUILayout.Width(70));
@@ -156,6 +156,8 @@ public class CompilerSettings : EditorWindow
                     Mathf.InverseLerp(0, compilationDuration, element.end)
                 );
                 EditorGuiTools.drawRect(newRect, isCompiling ? Color.red : GUI.skin.label.normal.textColor);
+                rect.height = 1;
+                EditorGuiTools.drawRect(rect, GUI.skin.label.normal.textColor);
             }
 
             if (isCompiling) {
