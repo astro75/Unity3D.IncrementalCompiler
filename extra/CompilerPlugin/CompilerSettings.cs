@@ -16,16 +16,27 @@ public class CompilerSettings : EditorWindow
     [Serializable]
     public struct Element {
         public string assemblyName;
-        public int start, durationMs;
+        public int start;
+        [SerializeField] int _durationMs;
         public bool success;
+        public bool compiling;
 
-        public int end => start + durationMs;
+        public int? durationMs => _durationMs == -1 ? (int?) null : _durationMs;
 
         public Element(string assemblyName, int start, int durationMs, bool success) {
             this.assemblyName = assemblyName;
             this.start = start;
-            this.durationMs = durationMs;
+            _durationMs = durationMs;
             this.success = success;
+            compiling = false;
+        }
+
+        public Element(string assemblyName, int start) {
+            this.assemblyName = assemblyName;
+            this.start = start;
+            _durationMs = -1;
+            success = true;
+            compiling = true;
         }
     }
 
@@ -70,17 +81,23 @@ public class CompilerSettings : EditorWindow
 
         CompilationPipeline.assemblyCompilationStarted += target => {
             assemblies[target] = timeSinceCompilationStart();
+
+            var assemblyName = Path.GetFileName(target);
+            currentCompilation.Add(new Element(assemblyName, timeSinceCompilationStart()));
         };
         CompilationPipeline.assemblyCompilationFinished += (target, messages) => {
             var assemblyName = Path.GetFileName(target);
             try {
+                var idx = currentCompilation.FindIndex(_ => _.assemblyName == assemblyName);
                 {
                     var lines = File.ReadAllLines(SharedData.CompileTimesFileName(assemblyName));
                     var dateTime = DateTime.Parse(lines[0], CultureInfo.InvariantCulture, DateTimeStyles.RoundtripKind);
                     var durationMs = int.Parse(lines[1]);
                     var exitCode = int.Parse(lines[2]);
                     var start = timeSinceCompilationStart(dateTime);
-                    currentCompilation.Add(new Element(assemblyName, start, durationMs, success: exitCode == 0));
+                    var newElement = new Element(assemblyName, start, durationMs, success: exitCode == 0);
+                    if (idx == -1) currentCompilation.Add(newElement);
+                    else currentCompilation[idx] = newElement;
                 }
                 {
                     // var startTime = assemblies[target];
@@ -122,18 +139,21 @@ public class CompilerSettings : EditorWindow
         var labelRight = new GUIStyle(GUI.skin.label) {alignment = TextAnchor.MiddleRight};
 
         if (compilationRunning) {
-            displayElements(isCompiling: true, currentCompilation, timeSinceCompilationStart());
+            displayElements(currentCompilation, timeSinceCompilationStart());
+            GUILayout.Label("---------", EditorStyles.whiteLargeLabel);
+            GUILayout.Label("Compiling", EditorStyles.whiteLargeLabel);
+            GUILayout.Label("---------", EditorStyles.whiteLargeLabel);
         }
 
         for (var i = compilations.Count - 1; i >= 0; i--) {
             var compilation = compilations[i];
             GUILayout.Space(10);
-            displayElements(isCompiling: false, compilation.elements, compilation.durationMs);
+            displayElements(compilation.elements, compilation.durationMs);
         }
 
         EditorGUILayout.EndScrollView();
 
-        void displayElements(bool isCompiling, IEnumerable<Element> elements, int compilationDuration) {
+        void displayElements(IEnumerable<Element> elements, int compilationDuration) {
             GUILayout.Label($"{compilationDuration:N0} ms", EditorStyles.boldLabel);
             foreach (var element in elements) {
                 using (new GUILayout.HorizontalScope()) {
@@ -153,17 +173,11 @@ public class CompilerSettings : EditorWindow
                     Mathf.InverseLerp(0, compilationDuration, element.start)
                 );
                 newRect.xMax = Mathf.Lerp(rect.xMin, rect.xMax,
-                    Mathf.InverseLerp(0, compilationDuration, element.end)
+                    Mathf.InverseLerp(0, compilationDuration, (element.start + element.durationMs) ?? int.MaxValue)
                 );
-                EditorGuiTools.drawRect(newRect, isCompiling ? Color.red : GUI.skin.label.normal.textColor);
+                EditorGuiTools.drawRect(newRect, element.compiling ? Color.red : GUI.skin.label.normal.textColor);
                 rect.height = 1;
                 EditorGuiTools.drawRect(rect, GUI.skin.label.normal.textColor);
-            }
-
-            if (isCompiling) {
-                GUILayout.Label("---------", EditorStyles.whiteLargeLabel);
-                GUILayout.Label("Compiling", EditorStyles.whiteLargeLabel);
-                GUILayout.Label("---------", EditorStyles.whiteLargeLabel);
             }
         }
     }
