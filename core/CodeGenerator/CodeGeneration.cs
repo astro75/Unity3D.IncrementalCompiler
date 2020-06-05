@@ -225,6 +225,11 @@ namespace IncrementalCompiler
                 Action<AttributeData, GeneratorCtx, TypeDeclarationSyntax, IMethodSymbol>
             >();
 
+            var parameterAttributes = new Dictionary<
+                INamedTypeSymbol,
+                Action<AttributeData, GeneratorCtx, TypeDeclarationSyntax, IParameterSymbol>
+            >();
+
             {
                 addAttribute<RecordAttribute>((instance, ctx, tds, symbol) =>
                 {
@@ -253,10 +258,12 @@ namespace IncrementalCompiler
                     ctx.NewMembers.Add(AddAncestors(tds, matcher, onlyNamespace: true));
                 });
 
-                addMacroAttribute<SimpleMethodMacro>();
-                addMacroAttribute<StatementMethodMacro>();
-                addMacroAttribute<VarMethodMacro>();
-                addMacroAttribute<Inline>();
+                addMacroAttributeMethod<SimpleMethodMacro>();
+                addMacroAttributeMethod<StatementMethodMacro>();
+                addMacroAttributeMethod<VarMethodMacro>();
+                addMacroAttributeMethod<Inline>();
+
+                addMacroAttributeParameter<Implicit>();
 
                 void addAttribute<A>(Action<A, GeneratorCtx, TypeDeclarationSyntax, INamedTypeSymbol> act) where A : Attribute {
                     var compilationType = compilation.GetTypeByMetadataName(typeof(A).FullName);
@@ -269,11 +276,22 @@ namespace IncrementalCompiler
                     }
                 }
 
-                void addMacroAttribute<A>() {
+                void addMacroAttributeMethod<A>() {
                     var compilationType = compilation.GetTypeByMetadataName(typeof(A).FullName);
                     if (compilationType != null)
                     {
                         methodAttributes.Add(
+                            compilationType,
+                            (attr, ctx, tds, symbol) => ctx.AddMacroMethod(symbol.ContainingType)
+                        );
+                    }
+                }
+
+                void addMacroAttributeParameter<A>() {
+                    var compilationType = compilation.GetTypeByMetadataName(typeof(A).FullName);
+                    if (compilationType != null)
+                    {
+                        parameterAttributes.Add(
                             compilationType,
                             (attr, ctx, tds, symbol) => ctx.AddMacroMethod(symbol.ContainingType)
                         );
@@ -397,6 +415,19 @@ namespace IncrementalCompiler
                                     //         replaceSyntax(syntax, replacedSyntax);
                                     //     });
                                     // }
+                                }
+
+                                foreach (var parameterSymbol in methodSymbol.Parameters)
+                                {
+                                    foreach (var attr in parameterSymbol.GetAttributes())
+                                    {
+                                        if (!GeneratorCtx.TreeContains(attr.ApplicationSyntaxReference, tds)) continue;
+                                        if (attr.AttributeClass == null) continue;
+                                        if (parameterAttributes.TryGetValue(attr.AttributeClass, out var action))
+                                        {
+                                            action(attr, ctx, tds, parameterSymbol);
+                                        }
+                                    }
                                 }
                                 break;
                         }
