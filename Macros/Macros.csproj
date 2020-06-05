@@ -7,5 +7,11 @@
     <DocumentationFile>bin\$(Configuration)\Macros.xml</DocumentationFile>
     <AppendTargetFrameworkToOutputPath>false</AppendTargetFrameworkToOutputPath>
     <TargetFramework>netstandard2.0</TargetFramework>
+    <DefineConstants>TRACE;JETBRAINS_ANNOTATIONS</DefineConstants>
   </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="JetBrains.Annotations">
+      <HintPath>..\extra\JetBrains.Annotations.dll</HintPath>
+    </Reference>
+  </ItemGroup>
 </Project>

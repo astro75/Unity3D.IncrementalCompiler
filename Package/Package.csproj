@@ -48,6 +48,8 @@
         <Copy SourceFiles="..\GenerationAttributes.Java\bin\$(Configuration)\GenerationAttributes.Java.xml" DestinationFolder="$(PluginsDir)" />
         <Copy SourceFiles="..\Macros\bin\Release\Macros.dll" DestinationFolder="$(PluginsDir)" />
         <Copy SourceFiles="..\Macros\bin\Release\Macros.xml" DestinationFolder="$(PluginsDir)" />
+        <Copy SourceFiles="..\extra\JetBrains.Annotations.dll" DestinationFolder="$(PluginsDir)" />
+        <Copy SourceFiles="..\extra\JetBrains.Annotations.dll.meta" DestinationFolder="$(PluginsDir)" />
         
         <Copy SourceFiles="..\extra\UniversalCompiler\bin\$(Configuration)\UniversalCompiler.exe" DestinationFolder="$(CompilerDir)" />
         

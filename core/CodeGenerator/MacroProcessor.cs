@@ -243,12 +243,17 @@ namespace IncrementalCompiler
                                             isStatic |= current.IsStatic;
                                         }
 
+                                        const string HIDDEN_IMPLICIT_HELP =
+                                            "This happens when you have a non-implicit variable/field with the same name as " +
+                                            "the implicit one. Make sure your implicit value has a unique name in the scope where you " +
+                                            "want the implicit to be passed.";
+
                                         if (current is IMethodSymbol methodSymbol)
                                         {
                                             foreach (var parameter in methodSymbol.Parameters)
                                             {
                                                 if (containsImplicit(parameter.GetAttributes()) && !implicitSymbols.Contains(parameter))
-                                                    throw new MacroProcessorError($"Hidden implicit symbol: method parameter {parameter.Name}");
+                                                    throw new MacroProcessorError($"Hidden implicit symbol: method parameter {parameter.Name}. {HIDDEN_IMPLICIT_HELP}");
                                             }
                                         }
 
@@ -260,7 +265,7 @@ namespace IncrementalCompiler
                                                 foreach (var member in currentTs.GetMembers())
                                                 {
                                                     if (containsImplicit(member.GetAttributes()) && !implicitSymbols.Contains(member))
-                                                        throw new MacroProcessorError($"Hidden implicit symbol: {member.ToDisplayString()}");
+                                                        throw new MacroProcessorError($"Hidden implicit symbol: {member.ToDisplayString()}. {HIDDEN_IMPLICIT_HELP}");
                                                 }
                                                 currentTs = currentTs.BaseType;
                                             }
@@ -269,8 +274,8 @@ namespace IncrementalCompiler
 
                                     var implicitSymbolsWithNames =
                                         implicitSymbols.Select(s => s switch {
-                                            IParameterSymbol parameter => (parameter.Type, parameter.Name),
-                                            IFieldSymbol field => (field.Type, field.Name),
+                                            IParameterSymbol parameter => (symbol: s, parameter.Type, parameter.Name),
+                                            IFieldSymbol field => (symbol: s, field.Type, field.Name),
                                             _ => throw new ArgumentOutOfRangeException(nameof(s)),
                                         })
                                         .ToArray();
@@ -285,7 +290,7 @@ namespace IncrementalCompiler
                                         if (matchingImplicits.Length > 1) throw new MacroProcessorError(
                                             $"{matchingImplicits.Length} matching implicits found for " +
                                             $"parameter {parameter.Name} of type {parameter.Type}. " +
-                                            $"Candidates: {string.Join(", ", matchingImplicits.Select(_ => _.Name))}"
+                                            $"Candidates: {string.Join(", ", matchingImplicits.Select(_ => symbolToDisplayString(_.symbol)))}"
                                         );
                                         return (parameter, fieldName: matchingImplicits[0].Name);
                                     }).ToArray();
@@ -300,6 +305,14 @@ namespace IncrementalCompiler
                                     var invocation = (InvocationExpressionSyntax) iop.Syntax;
                                     var updated = invocation.WithArgumentList(invocation.ArgumentList.AddArguments(addedArguments));
                                     ctx.ChangedNodes.Add(iop.Syntax, updated);
+
+                                    static string symbolToDisplayString(ISymbol s) {
+                                        return s switch {
+                                            IParameterSymbol parameter => s.Name,
+                                            IFieldSymbol field => s.IsStatic ? s.ToDisplayString() : $"this.{s.Name}",
+                                            _ => throw new ArgumentOutOfRangeException(nameof(s)),
+                                        };
+                                    }
                                 }
                             });
                         }
