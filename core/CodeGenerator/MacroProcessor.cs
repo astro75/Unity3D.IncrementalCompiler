@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -21,10 +22,12 @@ namespace IncrementalCompiler {
     ) {
       var referencedAssemblies = compilation.Assembly.GetReferencedAssembliesAndSelf();
 
-      var macrosAssembly = referencedAssemblies.FirstOrDefault(_ => _.Name == "Macros");
+      var maybeMacrosAssembly = referencedAssemblies.FirstOrDefault(_ => _.Name == "Macros");
 
-      if (macrosAssembly == null) // skip this step if macros dll is not referenced
+      if (maybeMacrosAssembly == null) // skip this step if macros dll is not referenced
         return compilation;
+
+      var macrosAssembly = maybeMacrosAssembly;
 
       // GetTypeByMetadataName searches in assembly and its direct references only
       var macrosClass = macrosAssembly.GetTypeByMetadataName(typeof(Macros).FullName!)!;
@@ -36,21 +39,22 @@ namespace IncrementalCompiler {
         return compilation;
       }
 
-      var simpleMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(SimpleMethodMacro).FullName!);
-      var statementMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(StatementMethodMacro).FullName!);
-      var varMethodMacroType = macrosAssembly.GetTypeByMetadataName(typeof(VarMethodMacro).FullName!);
-      var inlineType = macrosAssembly.GetTypeByMetadataName(typeof(Inline).FullName!);
-      var lazyPropertyType = macrosAssembly.GetTypeByMetadataName(typeof(LazyProperty).FullName!);
-      var implicitType = macrosAssembly.GetTypeByMetadataName(typeof(Implicit).FullName!);
-      var typesWithMacroAttributesType =
-        macrosAssembly.GetTypeByMetadataName(typeof(TypesWithMacroAttributes).FullName!);
+      var simpleMethodMacroType = getTypeSymbol<SimpleMethodMacro>();
+      var statementMethodMacroType = getTypeSymbol<StatementMethodMacro>();
+      var varMethodMacroType = getTypeSymbol<VarMethodMacro>();
+      var inlineType = getTypeSymbol<Inline>();
+      var lazyPropertyType = getTypeSymbol<LazyProperty>();
+      var implicitType = getTypeSymbol<Implicit>();
+      var implicitPassThroughType = getTypeSymbol<ImplicitPassThrough>();
+
+      var typesWithMacroAttributesType = getTypeSymbol<TypesWithMacroAttributes>();
       // var allMethods = compilation.GetAllTypes().SelectMany(t => t.GetMembers().OfType<IMethodSymbol>());
+
+      INamedTypeSymbol getTypeSymbol<T>() => macrosAssembly.GetTypeByMetadataName(typeof(T).FullName!)!;
 
       var builder = ImmutableDictionary.CreateBuilder<ISymbol, Action<MacroCtx, IOperation>>();
 
-      ISymbol macroSymbol(string name) {
-        return macrosClass.GetMembers(name).First();
-      }
+      ISymbol macroSymbol(string name) => macrosClass.GetMembers(name).First();
 
       builder.Add(
         macroSymbol(nameof(Macros.className)),
@@ -406,7 +410,10 @@ namespace IncrementalCompiler {
 
       var oldCompilation = compilation;
 
-      var treeEdits = trees.SelectMany(tree => {
+
+
+      var treeEdits = new ConcurrentBag<(SyntaxTree, CompilationUnitSyntax)>();
+      trees.AsParallel().ForAll(tree => {
 //                var walker = new Walker();
         var root = tree.GetCompilationUnitRoot();
         var model = oldCompilation.GetSemanticModel(tree);
@@ -524,10 +531,9 @@ namespace IncrementalCompiler {
         if (newRoot != root)
           // TODO: do not normalize whitespace for the whole file
           // need to fix whitespace in MacroReplacer first
-          return new[] {(tree, newRoot.NormalizeWhitespace())};
-        return Enumerable.Empty<(SyntaxTree, CompilationUnitSyntax)>();
-      }).ToArray();
-      compilation = EditTrees(compilation, sourceMap, treeEdits, settings, generatedFiles);
+          treeEdits.Add((tree, newRoot.NormalizeWhitespace()));
+      });
+      compilation = EditTrees(compilation, sourceMap, treeEdits.ToArray(), settings, generatedFiles);
       return compilation;
     }
 

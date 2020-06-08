@@ -1,5 +1,6 @@
 ﻿using System;
 using System.Collections;
+using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
@@ -188,6 +189,7 @@ namespace IncrementalCompiler {
         addMacroAttributeMethod<StatementMethodMacro>();
         addMacroAttributeMethod<VarMethodMacro>();
         addMacroAttributeMethod<Inline>();
+        addMacroAttributeMethod<ImplicitPassThrough>();
 
         addMacroAttributeParameter<Implicit>();
 
@@ -219,12 +221,14 @@ namespace IncrementalCompiler {
         }
       }
 
-      var resultsFromTrees = trees.AsParallel().Select(originalTree => {
+      var results = new ConcurrentBag<IGenerationResult>();
+      var typesWithMacrosResults = new ConcurrentBag<INamedTypeSymbol>();
+
+      trees.AsParallel().ForAll(originalTree => {
         var tree = originalTree;
 
         var model = oldCompilation.GetSemanticModel(tree);
         var root = tree.GetCompilationUnitRoot();
-        var results = new List<IGenerationResult>();
 
         var treeEdited = false;
         var editsList = new List<(SyntaxNode, SyntaxNode)>();
@@ -377,14 +381,13 @@ namespace IncrementalCompiler {
           ));
         }
 
-        return (results, ctx.TypesWithMacros);
-      }).ToArray();
-
-      var results = resultsFromTrees.SelectMany(_ => _.results).ToList();
+        foreach (var t in ctx.TypesWithMacros) {
+          typesWithMacrosResults.Add(t);
+        }
+      });
 
       {
-        var typesWithMacros = resultsFromTrees
-          .SelectMany(_ => _.TypesWithMacros)
+        var typesWithMacros = typesWithMacrosResults
           .Distinct()
           .OrderBy(_ => _.Name)
           .ToArray();
