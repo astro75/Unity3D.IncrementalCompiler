@@ -257,8 +257,14 @@ namespace IncrementalCompiler {
           });
       }
 
+      var passThroughMethods = new HashSet<IMethodSymbol>();
+
       foreach (var method in allMethods)
       foreach (var attribute in method.GetAttributes()) {
+        if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, implicitPassThroughType)) {
+          passThroughMethods.Add(method);
+        }
+
         if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, simpleMethodMacroType))
           CodeGeneration.tryAttribute<SimpleMethodMacro>(
             attribute, a => {
@@ -410,7 +416,25 @@ namespace IncrementalCompiler {
 
       var oldCompilation = compilation;
 
+      var passthroughReferences = new ConcurrentBag<(IMethodSymbol, IMethodSymbol)>();
+      var passthroughMissingImplicits = new ConcurrentBag<(IMethodSymbol, IMethodSymbol[])>();
+      trees.AsParallel().ForAll(tree => {
+        var root = tree.GetCompilationUnitRoot();
+        var model = oldCompilation.GetSemanticModel(tree);
+        var opFinder = new RootOperationsFinder(model);
+        opFinder.Visit(root);
+        foreach (var operation in opFinder.results) {
+          var symbol = model.GetEnclosingSymbol(operation.Syntax.SpanStart);
+          if (symbol is IMethodSymbol ms && passThroughMethods.Contains(ms)) {
+            var descendants = operation.DescendantsAndSelf().ToArray();
 
+            foreach (var op in descendants.OfType<IInvocationOperation>()) {
+              var method = op.TargetMethod.OriginalDefinition;
+              if (passThroughMethods.Contains(method)) passthroughReferences.Add((ms, method));
+            }
+          }
+        }
+      });
 
       var treeEdits = new ConcurrentBag<(SyntaxTree, CompilationUnitSyntax)>();
       trees.AsParallel().ForAll(tree => {
