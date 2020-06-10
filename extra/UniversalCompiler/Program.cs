@@ -62,14 +62,6 @@ internal class Program
 		logger?.Append($"Project directory: {projectDir}");
 		logger?.Append($"Unity 'Data' or 'Frameworks' directory: {unityEditorDataDir}");
 
-
-		if (platform == Platform.Linux)
-		{
-			logger?.Append("");
-			logger?.Append("Platform is not supported");
-			return -1;
-		}
-
 	    var compiler = CreateCompiler(logger, projectDir, platform);
 
         logger?.Append($"Compiler: {compiler.Name}");

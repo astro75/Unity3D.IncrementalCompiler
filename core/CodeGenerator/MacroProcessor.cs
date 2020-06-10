@@ -73,15 +73,19 @@ namespace IncrementalCompiler {
         var message = expectedException
           ? e.Message
           : $"Error for macro {method.Name}: {e.Message}. ({e.Source}) at {e.StackTrace}";
-        diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
-          "ER0001",
-          "Error",
-          message,
-          "Error",
-          DiagnosticSeverity.Error,
-          true
-        ), location.GetLocation()));
+        addError(location, message);
       }
+    }
+
+    public void addError(SyntaxNode location, string message) {
+      diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+        "ER0001",
+        "Error",
+        message,
+        "Error",
+        DiagnosticSeverity.Error,
+        true
+      ), location.GetLocation()));
     }
   }
 
@@ -174,7 +178,7 @@ namespace IncrementalCompiler {
 
       foreach (var method in helper.allMethods)
       foreach (var attribute in method.GetAttributes()) {
-        implicits.CheckMehodAttribute(method, attribute);
+        implicits.CheckMethodAttribute(method, attribute);
 
         if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, simpleMethodMacroType))
           CodeGeneration.tryAttribute<SimpleMethodMacro>(

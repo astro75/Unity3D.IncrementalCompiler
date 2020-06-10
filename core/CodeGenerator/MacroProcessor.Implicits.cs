@@ -13,8 +13,7 @@ using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 namespace IncrementalCompiler {
   public class MacroProcessorImplicits {
     readonly MacroHelper helper;
-    readonly INamedTypeSymbol implicitType;
-    readonly INamedTypeSymbol implicitPassThroughType;
+    readonly INamedTypeSymbol implicitType, implicitPassThroughType;
     readonly HashSet<IMethodSymbol> passThroughMethods = new HashSet<IMethodSymbol>();
     readonly Dictionary<IMethodSymbol, ImmutableHashSet<IParameterSymbol>> implicitMethods =
       new Dictionary<IMethodSymbol, ImmutableHashSet<IParameterSymbol>>();
@@ -25,18 +24,35 @@ namespace IncrementalCompiler {
       implicitPassThroughType = helper.getTypeSymbol<ImplicitPassThrough>();
 
       foreach (var method in helper.allMethods) {
-        // this line duplicates with findImplicits
         var implicitParameters = method.Parameters
-          .Where(p => containsImplicit(p.GetAttributes()))
+          .Where(p => ContainsImplicit(p.GetAttributes()))
           .ToImmutableHashSet();
 
         if (implicitParameters.Count > 0) {
           implicitMethods.Add(method, implicitParameters);
+          // foreach (var parameterSymbol in implicitParameters) {
+          //   var defaultValue = parameterSymbol.ExplicitDefaultValue;
+          //   if (!parameterSymbol.HasExplicitDefaultValue ||
+          //       (defaultValue != null && defaultValue != GetDefault(defaultValue.GetType()))
+          //   ) {
+          //     helper.addError(
+          //       parameterSymbol.DeclaringSyntaxReferences[0].GetSyntax(),
+          //       $"Implicit parameter '{parameterSymbol.Name}' must have a default value '= default'"
+          //     );
+          //   }
+          // }
         }
       }
     }
 
-    bool containsImplicit(ImmutableArray<AttributeData> attributes) {
+    public static object? GetDefault(Type type) {
+      if (type.IsValueType) {
+        return Activator.CreateInstance(type);
+      }
+      return null;
+    }
+
+    bool ContainsImplicit(ImmutableArray<AttributeData> attributes) {
       return attributes.Any(a => SymbolEqualityComparer.Default.Equals(a.AttributeClass, implicitType));
     }
 
@@ -45,7 +61,7 @@ namespace IncrementalCompiler {
         .LookupSymbols(position)
         .Where(s =>
           (s is IParameterSymbol || (s is IFieldSymbol && (!isStatic || s.IsStatic))) &&
-          containsImplicit(s.GetAttributes())
+          ContainsImplicit(s.GetAttributes())
         )
         .ToImmutableHashSet();
     }
@@ -87,7 +103,7 @@ namespace IncrementalCompiler {
 
           if (current is IMethodSymbol methodSymbol)
             foreach (var parameter in methodSymbol.Parameters)
-              if (containsImplicit(parameter.GetAttributes()) && !implicitSymbols.Contains(parameter))
+              if (ContainsImplicit(parameter.GetAttributes()) && !implicitSymbols.Contains(parameter))
                 throw new MacroProcessorError(
                   $"Hidden implicit symbol: method parameter '{parameter.Name}'. {HIDDEN_IMPLICIT_HELP}");
 
@@ -97,7 +113,7 @@ namespace IncrementalCompiler {
             while (currentTs != null) {
               foreach (var member in currentTs.GetMembers())
                 if ((!isStatic || member.IsStatic) &&
-                    containsImplicit(member.GetAttributes()) &&
+                    ContainsImplicit(member.GetAttributes()) &&
                     !implicitSymbols.Contains(member)
                 ) {
                   throw new MacroProcessorError(
@@ -117,7 +133,7 @@ namespace IncrementalCompiler {
       return (Array.Empty<ImplicitParameter>(), Array.Empty<ImplicitSymbolRef>(), current);
     }
 
-    public void CheckMehodAttribute(IMethodSymbol method, AttributeData attribute) {
+    public void CheckMethodAttribute(IMethodSymbol method, AttributeData attribute) {
       if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, implicitPassThroughType)) {
         passThroughMethods.Add(method);
       }
@@ -254,7 +270,7 @@ namespace IncrementalCompiler {
                   : ImmutableHashSet<IParameterSymbol>.Empty;
 
               var passThroughToFill =
-                passthroughMissingImplicits!.TryGetValue(method, out var val)
+                passthroughMissingImplicits.TryGetValue(method, out var val)
                   ? val
                   : Array.Empty<ImplicitParameter>();
 
@@ -268,7 +284,7 @@ namespace IncrementalCompiler {
 
               if (t.toFill.Length > 0 || passThroughToFill.Length > 0) {
                 var passThrough =
-                  t.maybeMethod is IMethodSymbol ms && passthroughMissingImplicits!.TryGetValue(ms, out var val2)
+                  t.maybeMethod is IMethodSymbol ms && passthroughMissingImplicits.TryGetValue(ms, out var val2)
                     ? val2
                     : Array.Empty<ImplicitParameter>();
                 var allFound = t.found.Concat(passThrough.Select(_ => _.toRef)).ToArray();
