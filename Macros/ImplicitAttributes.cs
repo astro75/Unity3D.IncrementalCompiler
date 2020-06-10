@@ -1,4 +1,5 @@
 ﻿using System;
+using System.Diagnostics;
 using JetBrains.Annotations;
 
 namespace GenerationAttributes
@@ -8,5 +9,10 @@ namespace GenerationAttributes
     public class Implicit : Attribute { }
 
     [AttributeUsage(AttributeTargets.Method)]
+    [Conditional(Consts.UNUSED_NAME)]
     public class ImplicitPassThrough : Attribute { }
+
+    static class Consts {
+      public const string UNUSED_NAME = "CodeGeneration";
+    }
 }

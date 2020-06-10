@@ -15,7 +15,77 @@ using Microsoft.CodeAnalysis.Operations;
 using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler {
-  public static class MacroProcessor {
+  public class MacroHelper {
+    public readonly IAssemblySymbol macrosAssembly;
+    readonly List<Diagnostic> diagnostic;
+    public readonly ImmutableArray<SyntaxTree> trees;
+    public readonly CSharpCompilation compilation;
+    public readonly IMethodSymbol[] allMethods;
+    public readonly ImmutableDictionary<ISymbol, Action<MacroProcessor.MacroCtx, IOperation>>.Builder builderInvocations =
+      ImmutableDictionary.CreateBuilder<ISymbol, Action<MacroProcessor.MacroCtx, IOperation>>();
+    public readonly ImmutableDictionary<IMethodSymbol, Action<MacroProcessor.MacroCtx>>.Builder builderDefinitions =
+      ImmutableDictionary.CreateBuilder<IMethodSymbol, Action<MacroProcessor.MacroCtx>>();
+
+    public MacroHelper(IAssemblySymbol macrosAssembly, List<Diagnostic> diagnostic,
+      IAssemblySymbol[] referencedAssemblies, ImmutableArray<SyntaxTree> trees, CSharpCompilation compilation) {
+      this.macrosAssembly = macrosAssembly;
+      this.diagnostic = diagnostic;
+      this.trees = trees;
+      this.compilation = compilation;
+
+      var typesToCheck = new List<INamedTypeSymbol>();
+
+      {
+        var typesWithMacroAttributesType = getTypeSymbol<TypesWithMacroAttributes>();
+
+        foreach (var assembly in referencedAssemblies) collectTypesForMacros(assembly);
+
+        void collectTypesForMacros(IAssemblySymbol assembly) {
+          foreach (var attr in assembly.GetAttributes()) {
+            var c = attr.AttributeClass;
+            if (c != null && SymbolEqualityComparer.Default.Equals(c, typesWithMacroAttributesType)) {
+              var s = attr.ConstructorArguments[0].Values.Select(_ => {
+                var symbol = (INamedTypeSymbol?) _.Value;
+                if (symbol == null) throw new Exception();
+                return symbol;
+              });
+              typesToCheck.AddRange(s);
+            }
+          }
+        }
+      }
+
+      allMethods = typesToCheck.SelectMany(_ => _.GetMembers().OfType<IMethodSymbol>()).ToArray();
+    }
+
+    public INamedTypeSymbol getTypeSymbol<T>() =>
+      macrosAssembly.GetTypeByMetadataName(typeof(T).FullName!)!;
+
+    public void tryMacro(IOperation op, IMethodSymbol method, Action act) =>
+      tryMacro(op.Syntax, method, act);
+
+    public void tryMacro(SyntaxNode location, IMethodSymbol method, Action act) {
+      try {
+        act();
+      }
+      catch (Exception e) {
+        var expectedException = e is MacroProcessorError;
+        var message = expectedException
+          ? e.Message
+          : $"Error for macro {method.Name}: {e.Message}. ({e.Source}) at {e.StackTrace}";
+        diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+          "ER0001",
+          "Error",
+          message,
+          "Error",
+          DiagnosticSeverity.Error,
+          true
+        ), location.GetLocation()));
+      }
+    }
+  }
+
+  public static partial class MacroProcessor {
     public static CSharpCompilation Run(
       CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
       List<Diagnostic> diagnostic, GenerationSettings settings, List<CodeGeneration.GeneratedCsFile> generatedFiles
@@ -39,56 +109,29 @@ namespace IncrementalCompiler {
         return compilation;
       }
 
-      var simpleMethodMacroType = getTypeSymbol<SimpleMethodMacro>();
-      var statementMethodMacroType = getTypeSymbol<StatementMethodMacro>();
-      var varMethodMacroType = getTypeSymbol<VarMethodMacro>();
-      var inlineType = getTypeSymbol<Inline>();
-      var lazyPropertyType = getTypeSymbol<LazyProperty>();
-      var implicitType = getTypeSymbol<Implicit>();
-      var implicitPassThroughType = getTypeSymbol<ImplicitPassThrough>();
+      var helper = new MacroHelper(macrosAssembly, diagnostic, referencedAssemblies, trees, compilation);
 
-      var typesWithMacroAttributesType = getTypeSymbol<TypesWithMacroAttributes>();
-      // var allMethods = compilation.GetAllTypes().SelectMany(t => t.GetMembers().OfType<IMethodSymbol>());
-
-      INamedTypeSymbol getTypeSymbol<T>() => macrosAssembly.GetTypeByMetadataName(typeof(T).FullName!)!;
-
-      var builder = ImmutableDictionary.CreateBuilder<ISymbol, Action<MacroCtx, IOperation>>();
+      var simpleMethodMacroType = helper.getTypeSymbol<SimpleMethodMacro>();
+      var statementMethodMacroType = helper.getTypeSymbol<StatementMethodMacro>();
+      var varMethodMacroType = helper.getTypeSymbol<VarMethodMacro>();
+      var inlineType = helper.getTypeSymbol<Inline>();
+      var lazyPropertyType = helper.getTypeSymbol<LazyProperty>();
 
       ISymbol macroSymbol(string name) => macrosClass.GetMembers(name).First();
 
-      builder.Add(
+      helper.builderInvocations.Add(
         macroSymbol(nameof(Macros.className)),
         (ctx, op) => {
           var enclosingSymbol = ctx.Model.GetEnclosingSymbol(op.Syntax.SpanStart);
           ctx.ChangedNodes.Add(op.Syntax, enclosingSymbol.ContainingType.ToDisplayString().StringLiteral());
         });
 
-      builder.Add(
+      helper.builderInvocations.Add(
         macroSymbol(nameof(Macros.classAndMethodName)),
         (ctx, op) => {
           var enclosingSymbol = ctx.Model.GetEnclosingSymbol(op.Syntax.SpanStart);
           ctx.ChangedNodes.Add(op.Syntax, enclosingSymbol.ToDisplayString().StringLiteral());
         });
-
-      void tryMacro(IOperation op, IMethodSymbol method, Action act) {
-        try {
-          act();
-        }
-        catch (Exception e) {
-          var expectedException = e is MacroProcessorError;
-          var message = expectedException
-            ? e.Message
-            : $"Error for macro {method.Name}: {e.Message}. ({e.Source}) at {e.StackTrace}";
-          diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
-            "ER0001",
-            "Error",
-            message,
-            "Error",
-            DiagnosticSeverity.Error,
-            true
-          ), op.Syntax.GetLocation()));
-        }
-      }
 
       void replaceArguments(MacroCtx ctx, StringBuilder sb, IInvocationOperation iop) {
         for (var i = 0; i < iop.Arguments.Length; i++) {
@@ -127,150 +170,18 @@ namespace IncrementalCompiler {
         if (iop.Instance != null) sb.Replace("${this}", iop.Instance.Syntax.ToString());
       }
 
-      var typesToCheck = new List<INamedTypeSymbol>();
+      var implicits = new MacroProcessorImplicits(helper);
 
-      {
-        foreach (var assembly in referencedAssemblies) collectTypesForMacros(assembly);
-
-        void collectTypesForMacros(IAssemblySymbol assembly) {
-          foreach (var attr in assembly.GetAttributes()) {
-            var c = attr.AttributeClass;
-            if (c != null && SymbolEqualityComparer.Default.Equals(c, typesWithMacroAttributesType)) {
-              var s = attr.ConstructorArguments[0].Values.Select(_ => {
-                var symbol = (INamedTypeSymbol?) _.Value;
-                if (symbol == null) throw new Exception();
-                return symbol;
-              });
-              typesToCheck.AddRange(s);
-            }
-          }
-        }
-      }
-
-      var allMethods = typesToCheck.SelectMany(_ => _.GetMembers().OfType<IMethodSymbol>());
-
-      foreach (var method in allMethods) {
-        bool containsImplicit(ImmutableArray<AttributeData> attributes) {
-          return attributes.Any(a => SymbolEqualityComparer.Default.Equals(a.AttributeClass, implicitType));
-        }
-
-        var implicitParameters = method.Parameters
-          .Where(p => containsImplicit(p.GetAttributes()))
-          .ToImmutableHashSet();
-        if (implicitParameters.Count > 0)
-          builder.Add(method, (ctx, op) => {
-            if (op is IInvocationOperation iop)
-              tryMacro(op, method, () => {
-                var missingImplicits = iop.Arguments
-                  .Where(a => a.IsImplicit && implicitParameters.Contains(a.Parameter))
-                  .Select(a => a.Parameter)
-                  .ToArray();
-                if (missingImplicits.Length > 0) {
-                  var allSymbols = ctx.Model
-                    .LookupSymbols(iop.Syntax.SpanStart)
-                    .ToArray();
-
-                  var implicitSymbols = allSymbols
-                    .Where(s => (s is IParameterSymbol || s is IFieldSymbol) && containsImplicit(s.GetAttributes()))
-                    .ToImmutableHashSet();
-
-                  {
-                    var enclosingSymbol = ctx.Model.GetEnclosingSymbol(iop.Syntax.SpanStart);
-
-                    var current = enclosingSymbol;
-                    var isStatic = current.IsStatic;
-                    // skips local functions and gets to the method
-                    while (!(current.ContainingSymbol is ITypeSymbol)) {
-                      current = current.ContainingSymbol;
-                      isStatic |= current.IsStatic;
-                    }
-
-                    const string HIDDEN_IMPLICIT_HELP =
-                      "This happens when you have a non-implicit variable/field with the same name as " +
-                      "the implicit one. Make sure your implicit value has a unique name in the scope where you " +
-                      "want the implicit to be passed.";
-
-                    if (current is IMethodSymbol methodSymbol)
-                      foreach (var parameter in methodSymbol.Parameters)
-                        if (containsImplicit(parameter.GetAttributes()) && !implicitSymbols.Contains(parameter))
-                          throw new MacroProcessorError(
-                            $"Hidden implicit symbol: method parameter {parameter.Name}. {HIDDEN_IMPLICIT_HELP}");
-
-                    {
-                      // search for hidden implicits in class and all base classes
-                      var currentTs = current.ContainingSymbol as ITypeSymbol;
-                      while (currentTs != null) {
-                        foreach (var member in currentTs.GetMembers())
-                          if (containsImplicit(member.GetAttributes()) && !implicitSymbols.Contains(member))
-                            throw new MacroProcessorError(
-                              $"Hidden implicit symbol: {member.ToDisplayString()}. {HIDDEN_IMPLICIT_HELP}");
-                        currentTs = currentTs.BaseType;
-                      }
-                    }
-                  }
-
-                  var implicitSymbolsWithNames =
-                    implicitSymbols.Select(s => s switch {
-                        IParameterSymbol parameter => (symbol: s, parameter.Type, parameter.Name),
-                        IFieldSymbol field => (symbol: s, field.Type, field.Name),
-                        _ => throw new ArgumentOutOfRangeException(nameof(s))
-                      })
-                      .ToArray();
-
-                  var resolvedImplicits = missingImplicits.Select(parameter => {
-                    var matchingImplicits =
-                      implicitSymbolsWithNames.Where(s => s.Type == parameter.Type).ToArray();
-                    if (matchingImplicits.Length == 0)
-                      throw new MacroProcessorError(
-                        "No matching implicits found for " +
-                        $"parameter {parameter.Name} of type {parameter.Type}"
-                      );
-                    if (matchingImplicits.Length > 1)
-                      throw new MacroProcessorError(
-                        $"{matchingImplicits.Length} matching implicits found for " +
-                        $"parameter {parameter.Name} of type {parameter.Type}. " +
-                        $"Candidates: {string.Join(", ", matchingImplicits.Select(_ => symbolToDisplayString(_.symbol)))}"
-                      );
-                    return (parameter, fieldName: matchingImplicits[0].Name);
-                  }).ToArray();
-
-                  var addedArguments =
-                    resolvedImplicits.Select(tpl => SF.Argument(
-                      SF.NameColon(SF.IdentifierName(tpl.parameter.Name)),
-                      default,
-                      SF.IdentifierName(tpl.fieldName))
-                    ).ToArray();
-
-                  var invocation = (InvocationExpressionSyntax) iop.Syntax;
-                  var updated = invocation.WithArgumentList(invocation.ArgumentList.AddArguments(addedArguments));
-                  ctx.ChangedNodes.Add(iop.Syntax, updated);
-
-                  static string symbolToDisplayString(ISymbol s) {
-                    return s switch {
-                      IParameterSymbol parameter => s.Name,
-                      IFieldSymbol field => s.IsStatic ? s.ToDisplayString() : $"this.{s.Name}",
-                      _ => throw new ArgumentOutOfRangeException(nameof(s))
-                    };
-                  }
-                }
-              });
-          });
-      }
-
-      var passThroughMethods = new HashSet<IMethodSymbol>();
-
-      foreach (var method in allMethods)
+      foreach (var method in helper.allMethods)
       foreach (var attribute in method.GetAttributes()) {
-        if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, implicitPassThroughType)) {
-          passThroughMethods.Add(method);
-        }
+        implicits.CheckMehodAttribute(method, attribute);
 
         if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, simpleMethodMacroType))
           CodeGeneration.tryAttribute<SimpleMethodMacro>(
             attribute, a => {
-              builder.Add(method, (ctx, op) => {
+              helper.builderInvocations.Add(method, (ctx, op) => {
                 if (op is IInvocationOperation iop)
-                  tryMacro(op, method, () => {
+                  helper.tryMacro(op, method, () => {
                     var sb = ctx.EmptyStringBuilder();
                     sb.Append(a.Pattern);
                     replaceArguments(ctx, sb, iop);
@@ -282,9 +193,9 @@ namespace IncrementalCompiler {
         if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, statementMethodMacroType))
           CodeGeneration.tryAttribute<StatementMethodMacro>(
             attribute, a => {
-              builder.Add(method, (ctx, op) => {
+              helper.builderInvocations.Add(method, (ctx, op) => {
                 if (op is IInvocationOperation iop)
-                  tryMacro(op, method, () => {
+                  helper.tryMacro(op, method, () => {
                     var parent = op.Parent;
                     if (parent is IExpressionStatementOperation statementOperation) {
                       var sb = ctx.EmptyStringBuilder();
@@ -307,9 +218,9 @@ namespace IncrementalCompiler {
         if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, varMethodMacroType))
           CodeGeneration.tryAttribute<VarMethodMacro>(
             attribute, a => {
-              builder.Add(method, (ctx, op) => {
+              helper.builderInvocations.Add(method, (ctx, op) => {
                 if (op is IInvocationOperation iop)
-                  tryMacro(op, method, () => {
+                  helper.tryMacro(op, method, () => {
                     var parent4 = op.Parent?.Parent?.Parent?.Parent;
                     if (parent4 is IVariableDeclarationGroupOperation vdgop) {
                       if (vdgop.Declarations.Length != 1)
@@ -341,7 +252,7 @@ namespace IncrementalCompiler {
 
         if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, inlineType))
           CodeGeneration.tryAttribute<Inline>(
-            attribute, _ => builder.Add(method, (ctx, op) => {
+            attribute, _ => helper.builderInvocations.Add(method, (ctx, op) => {
               if (op is IInvocationOperation iop) {
                 var parent = op.Parent;
                 // if (parent is IExpressionStatementOperation statementOperation)
@@ -367,7 +278,6 @@ namespace IncrementalCompiler {
                     .WithBody(body);
 
                   var ooo = ctx.Model.GetOperation(methodSyntax, CancellationToken.None);
-
                   var invocation = (InvocationExpressionSyntax) iop.Syntax;
 
                   // left.call(one, two);
@@ -394,47 +304,14 @@ namespace IncrementalCompiler {
             }), diagnostic);
       }
 
-      var resolvedMacros = builder.ToImmutable();
-
-//            var namedTypeSymbols = CustomSymbolFinder.GetAllSymbols(compilation);
-
-      /*
-      foreach (var typeSymbol in namedTypeSymbols)
-      {
-          if (typeSymbol == null)
-          {
-              Console.WriteLine("null");
-              continue;
-          }
-          var members = typeSymbol.GetMembers();
-          foreach (var member in members)
-          {
-              Console.WriteLine(member.Name);
-          }
-      }
-      */
+      // var namedTypeSymbols = CustomSymbolFinder.GetAllSymbols(compilation);
 
       var oldCompilation = compilation;
 
-      var passthroughReferences = new ConcurrentBag<(IMethodSymbol, IMethodSymbol)>();
-      var passthroughMissingImplicits = new ConcurrentBag<(IMethodSymbol, IMethodSymbol[])>();
-      trees.AsParallel().ForAll(tree => {
-        var root = tree.GetCompilationUnitRoot();
-        var model = oldCompilation.GetSemanticModel(tree);
-        var opFinder = new RootOperationsFinder(model);
-        opFinder.Visit(root);
-        foreach (var operation in opFinder.results) {
-          var symbol = model.GetEnclosingSymbol(operation.Syntax.SpanStart);
-          if (symbol is IMethodSymbol ms && passThroughMethods.Contains(ms)) {
-            var descendants = operation.DescendantsAndSelf().ToArray();
+      implicits.AfterCheckAttributes();
 
-            foreach (var op in descendants.OfType<IInvocationOperation>()) {
-              var method = op.TargetMethod.OriginalDefinition;
-              if (passThroughMethods.Contains(method)) passthroughReferences.Add((ms, method));
-            }
-          }
-        }
-      });
+      var resolvedMacros = helper.builderInvocations.ToImmutable();
+      var resolvedMacros2 = helper.builderDefinitions.ToImmutable();
 
       var treeEdits = new ConcurrentBag<(SyntaxTree, CompilationUnitSyntax)>();
       trees.AsParallel().ForAll(tree => {
@@ -449,6 +326,8 @@ namespace IncrementalCompiler {
         var ctx = new MacroCtx(model);
 
         foreach (var operation in opFinder.results) {
+
+
           // Console.WriteLine("Found Operation: " + operation);
           // Console.WriteLine(operation.Syntax);
 
@@ -468,9 +347,12 @@ namespace IncrementalCompiler {
 
           foreach (var op in descendants.OfType<IInvocationOperation>()) {
             var method = op.TargetMethod.OriginalDefinition;
-            {
-              if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
-            }
+            if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
+          }
+
+          var symbol = model.GetDeclaredSymbol(operation.Syntax);
+          if (symbol is IMethodSymbol ms) {
+            if (resolvedMacros2.TryGetValue(ms, out var act)) act(ctx);
           }
         }
 
@@ -624,10 +506,10 @@ namespace IncrementalCompiler {
           ), node.GetLocation()));
       }
     }
+  }
 
-    public class MacroProcessorError : Exception {
-      public MacroProcessorError(string message) : base(message) { }
-    }
+  public class MacroProcessorError : Exception {
+    public MacroProcessorError(string message) : base(message) { }
   }
 
   public class RootOperationsFinder : CSharpSyntaxWalker {
