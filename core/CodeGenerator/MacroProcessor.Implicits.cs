@@ -67,9 +67,9 @@ namespace IncrementalCompiler {
     }
 
     static ImplicitParameter[] ImplicitsToFill(
-      ImmutableHashSet<IParameterSymbol> implicitParameters, IInvocationOperation iop
+      ImmutableHashSet<IParameterSymbol> implicitParameters, ImmutableArray<IArgumentOperation> arguments
     ) {
-      return iop.Arguments
+      return arguments
         .Where(a => a.IsImplicit && implicitParameters.Contains(a.Parameter))
         .Select(a => new ImplicitParameter(a.Parameter))
         .ToArray();
@@ -77,10 +77,11 @@ namespace IncrementalCompiler {
 
     // TODO: cache
     (ImplicitParameter[] toFill, ImplicitSymbolRef[] found, ISymbol maybeMethod) FindImplicits(
-      ImmutableHashSet<IParameterSymbol> implicitParameters, IInvocationOperation iop, SemanticModel model,
+      ImmutableHashSet<IParameterSymbol> implicitParameters, IOperation iop,
+      ImmutableArray<IArgumentOperation> arguments, SemanticModel model,
       bool throwIfHidden, bool forceFindReferences
     ) {
-      var implicitsToFill = ImplicitsToFill(implicitParameters, iop);
+      var implicitsToFill = ImplicitsToFill(implicitParameters, arguments);
 
       var enclosingSymbol = model.GetEnclosingSymbol(iop.Syntax.SpanStart);
       var current = enclosingSymbol;
@@ -155,11 +156,14 @@ namespace IncrementalCompiler {
             var descendants = operation.DescendantsAndSelf().ToArray();
             var directImplicits = new HashSet<ITypeSymbol>();
 
-            foreach (var op in descendants.OfType<IInvocationOperation>()) {
-              var method = op.TargetMethod.OriginalDefinition;
+            foreach (var op in descendants.OfType<IInvocationOperation>()) tryInvocation(op.TargetMethod, op.Arguments);
+            foreach (var op in descendants.OfType<IObjectCreationOperation>()) tryInvocation(op.Constructor, op.Arguments);
+
+            void tryInvocation(IMethodSymbol targetMethod, ImmutableArray<IArgumentOperation> arguments) {
+              var method = targetMethod.OriginalDefinition;
               if (passThroughMethods.Contains(method)) passthroughReferences.Add((ms, method));
               if (implicitMethods.TryGetValue(method, out var parameters)) {
-                foreach (var parameterSymbol in ImplicitsToFill(parameters, op)) {
+                foreach (var parameterSymbol in ImplicitsToFill(parameters, arguments)) {
                   directImplicits.Add(parameterSymbol.type);
                 }
               }
@@ -262,7 +266,7 @@ namespace IncrementalCompiler {
 
       foreach (var method in passThroughMethods.Union(implicitMethods.Keys)) {
         helper.builderInvocations.Add(method, (ctx, op) => {
-          if (op is IInvocationOperation iop)
+          if (op is IInvocationOperation || op is IObjectCreationOperation)
             helper.tryMacro(op, method, () => {
               var implicitParameters =
                 implicitMethods.TryGetValue(method, out var parameters)
@@ -276,7 +280,12 @@ namespace IncrementalCompiler {
 
               var t = FindImplicits(
                 implicitParameters,
-                iop,
+                op,
+                op switch {
+                  IInvocationOperation iop => iop.Arguments,
+                  IObjectCreationOperation oop => oop.Arguments,
+                  _ => throw new ArgumentOutOfRangeException(nameof(op))
+                },
                 ctx.Model,
                 throwIfHidden: true,
                 forceFindReferences: passThroughToFill.Length > 0
@@ -312,9 +321,14 @@ namespace IncrementalCompiler {
                     SF.IdentifierName(tpl.fieldName))
                   ).ToArray();
 
-                var invocation = (InvocationExpressionSyntax) iop.Syntax;
-                var updated = invocation.WithArgumentList(invocation.ArgumentList.AddArguments(addedArguments));
-                ctx.ChangedNodes.Add(iop.Syntax, updated);
+                var updated = op.Syntax switch {
+                  InvocationExpressionSyntax iSyntax =>
+                    (CSharpSyntaxNode) iSyntax.WithArgumentList(iSyntax.ArgumentList.AddArguments(addedArguments)),
+                  ObjectCreationExpressionSyntax oSyntax =>
+                    oSyntax.WithArgumentList((oSyntax.ArgumentList ?? SF.ArgumentList()).AddArguments(addedArguments)),
+                  _ => throw new ArgumentOutOfRangeException()
+                };
+                ctx.ChangedNodes.Add(op.Syntax, updated);
               }
             });
         });

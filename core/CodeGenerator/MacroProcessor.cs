@@ -354,6 +354,11 @@ namespace IncrementalCompiler {
             if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
           }
 
+          foreach (var op in descendants.OfType<IObjectCreationOperation>()) {
+            var method = op.Constructor.OriginalDefinition;
+            if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
+          }
+
           var symbol = model.GetDeclaredSymbol(operation.Syntax);
           if (symbol is IMethodSymbol ms) {
             if (resolvedMacros2.TryGetValue(ms, out var act)) act(ctx);
