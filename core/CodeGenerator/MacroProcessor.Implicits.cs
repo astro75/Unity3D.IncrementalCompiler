@@ -70,7 +70,7 @@ namespace IncrementalCompiler {
       ImmutableHashSet<IParameterSymbol> implicitParameters, ImmutableArray<IArgumentOperation> arguments
     ) {
       return arguments
-        .Where(a => a.IsImplicit && implicitParameters.Contains(a.Parameter))
+        .Where(a => a.IsImplicit && implicitParameters.Contains(a.Parameter.OriginalDefinition))
         .Select(a => new ImplicitParameter(a.Parameter))
         .ToArray();
     }
