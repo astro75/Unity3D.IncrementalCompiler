@@ -4,7 +4,7 @@ using JetBrains.Annotations;
 
 namespace GenerationAttributes
 {
-    [AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Field)]
+    [AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Field | AttributeTargets.Property)]
     [MeansImplicitUse]
     public class Implicit : Attribute { }
 

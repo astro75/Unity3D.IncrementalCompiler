@@ -60,7 +60,14 @@ namespace IncrementalCompiler {
       return model
         .LookupSymbols(position)
         .Where(s =>
-          (s is IParameterSymbol || (s is IFieldSymbol && (!isStatic || s.IsStatic))) &&
+          (
+            s is IParameterSymbol ||
+            (
+              (s is IFieldSymbol || s is IPropertySymbol prop && prop.GetMethod != null)
+              &&
+              (!isStatic || s.IsStatic)
+            )
+          ) &&
           ContainsImplicit(s.GetAttributes())
         )
         .ToImmutableHashSet();
@@ -368,6 +375,7 @@ namespace IncrementalCompiler {
         displayString = symbol switch {
           IParameterSymbol s => s.Name,
           IFieldSymbol s => s.IsStatic ? s.ToDisplayString() : $"this.{s.Name}",
+          IPropertySymbol s => s.IsStatic ? s.ToDisplayString() : $"this.{s.Name}",
           _ => throw new ArgumentOutOfRangeException(nameof(symbol))
         };
         switch (symbol) {
@@ -376,6 +384,10 @@ namespace IncrementalCompiler {
             name = s.Name;
             break;
           case IFieldSymbol s:
+            type = s.Type;
+            name = s.Name;
+            break;
+          case IPropertySymbol s:
             type = s.Type;
             name = s.Name;
             break;
