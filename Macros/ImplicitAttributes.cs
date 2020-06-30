@@ -8,7 +8,7 @@ namespace GenerationAttributes
     [MeansImplicitUse]
     public class Implicit : Attribute { }
 
-    [AttributeUsage(AttributeTargets.Method)]
+    [AttributeUsage(AttributeTargets.Method | AttributeTargets.Constructor)]
     [Conditional(Consts.UNUSED_NAME)]
     public class ImplicitPassThrough : Attribute { }
 
