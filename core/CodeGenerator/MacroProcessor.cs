@@ -55,7 +55,10 @@ namespace IncrementalCompiler {
         }
       }
 
-      allMethods = typesToCheck.SelectMany(_ => _.GetMembers().OfType<IMethodSymbol>()).ToArray();
+      allMethods = typesToCheck
+        .SelectMany(_ => _.ConstructedFrom.GetMembers().OfType<IMethodSymbol>())
+        .Select(_ => _.OriginalDefinition)
+        .ToArray();
     }
 
     public INamedTypeSymbol getTypeSymbol<T>() =>

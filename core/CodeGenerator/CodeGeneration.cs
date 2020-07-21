@@ -393,7 +393,19 @@ namespace IncrementalCompiler {
           .ToArray();
 
         if (typesWithMacros.Length > 0) {
-          var typesString = Join(", ", typesWithMacros.Select(_ => $"typeof({_.ToDisplayString()})"));
+          var typesString = Join(", ", typesWithMacros.Select(_ => {
+            return $"typeof({nestedTypeName(_)})";
+            static string nestedTypeName(INamedTypeSymbol symbol) {
+              var genericAddition = symbol.IsGenericType ? $"<{new string(',', symbol.Arity - 1)}>" : "";
+              var baseName = symbol.ContainingSymbol switch {
+                INamedTypeSymbol nts => nestedTypeName(nts) + ".",
+                INamespaceSymbol ns when ns.IsGlobalNamespace => "global::",
+                { } s => s.ToDisplayString(SymbolDisplayFormat.FullyQualifiedFormat) + ".",
+                _ => ""
+              };
+              return $"{baseName}{symbol.Name}{genericAddition}";
+            }
+          }));
 
           var syntax = CSharpSyntaxTree.ParseText(
             "// generated\n" +

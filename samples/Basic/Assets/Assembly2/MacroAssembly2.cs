@@ -11,4 +11,10 @@ public static class MacroAssembly2
     }
 
     [LazyProperty] public static string lazyTest2 => "str";
+
+    [Implicit] static int xz;
+
+    public static void x() {
+      Generic2<int, bool>.NesetedGeneric<string>.withImplicit();
+    }
 }
