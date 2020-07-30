@@ -330,9 +330,14 @@ namespace IncrementalCompiler {
 
                 var updated = op.Syntax switch {
                   InvocationExpressionSyntax iSyntax =>
-                    (CSharpSyntaxNode) iSyntax.WithArgumentList(iSyntax.ArgumentList.AddArguments(addedArguments)),
+                    (CSharpSyntaxNode) iSyntax.WithArgumentList(
+                      ((ArgumentListSyntax)ctx.Visit(iSyntax.ArgumentList)).AddArguments(addedArguments)
+                    ),
                   ObjectCreationExpressionSyntax oSyntax =>
-                    oSyntax.WithArgumentList((oSyntax.ArgumentList ?? SF.ArgumentList()).AddArguments(addedArguments)),
+                    oSyntax.WithArgumentList(
+                      ((ArgumentListSyntax)ctx.Visit(oSyntax.ArgumentList ?? SF.ArgumentList()))
+                        .AddArguments(addedArguments)
+                    ),
                   _ => throw new ArgumentOutOfRangeException()
                 };
                 ctx.ChangedNodes.Add(op.Syntax, updated);
