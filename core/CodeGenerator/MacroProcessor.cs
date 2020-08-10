@@ -2,6 +2,7 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -19,6 +20,7 @@ namespace IncrementalCompiler {
     public readonly IAssemblySymbol macrosAssembly;
     readonly List<Diagnostic> diagnostic;
     public readonly ImmutableArray<SyntaxTree> trees;
+    public readonly ImmutableArray<RootOperationsFinder> operations;
     public readonly CSharpCompilation compilation;
     public readonly IMethodSymbol[] allMethods;
     public readonly ImmutableDictionary<ISymbol, Action<MacroProcessor.MacroCtx, IOperation>>.Builder builderInvocations =
@@ -59,6 +61,18 @@ namespace IncrementalCompiler {
         .SelectMany(_ => _.ConstructedFrom.GetMembers().OfType<IMethodSymbol>())
         .Select(_ => _.OriginalDefinition)
         .ToArray();
+
+      {
+        var bag = new ConcurrentBag<RootOperationsFinder>();
+        trees.AsParallel().ForAll(tree => {
+          var root = tree.GetCompilationUnitRoot();
+          var model = compilation.GetSemanticModel(tree);
+          var opFinder = new RootOperationsFinder(model, tree);
+          opFinder.Visit(root);
+          bag.Add(opFinder);
+        });
+        operations = bag.ToImmutableArray();
+      }
     }
 
     public INamedTypeSymbol getTypeSymbol<T>() =>
@@ -95,8 +109,13 @@ namespace IncrementalCompiler {
   public static partial class MacroProcessor {
     public static CSharpCompilation Run(
       CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
-      List<Diagnostic> diagnostic, GenerationSettings settings, List<CodeGeneration.GeneratedCsFile> generatedFiles
+      List<Diagnostic> diagnostic, GenerationSettings settings, List<CodeGeneration.GeneratedCsFile> generatedFiles,
+      Action<string>? logTime = null
     ) {
+      // return compilation;
+
+      // #pragma warning disable
+
       var referencedAssemblies = compilation.Assembly.GetReferencedAssembliesAndSelf();
 
       var maybeMacrosAssembly = referencedAssemblies.FirstOrDefault(_ => _.Name == "Macros");
@@ -116,6 +135,10 @@ namespace IncrementalCompiler {
         return compilation;
       }
 
+      // var ss = Stopwatch.StartNew();
+      // compilation.Emit(new MemoryStream());
+      // Console.Out.WriteLine("ss " + ss.Elapsed);
+
       var helper = new MacroHelper(macrosAssembly, diagnostic, referencedAssemblies, trees, compilation);
 
       var simpleMethodMacroType = helper.getTypeSymbol<SimpleMethodMacro>();
@@ -123,6 +146,8 @@ namespace IncrementalCompiler {
       var varMethodMacroType = helper.getTypeSymbol<VarMethodMacro>();
       var inlineType = helper.getTypeSymbol<Inline>();
       var lazyPropertyType = helper.getTypeSymbol<LazyProperty>();
+
+      logTime?.Invoke("a1");
 
       ISymbol macroSymbol(string name) => macrosClass.GetMembers(name).First();
 
@@ -178,6 +203,8 @@ namespace IncrementalCompiler {
       }
 
       var implicits = new MacroProcessorImplicits(helper);
+
+      logTime?.Invoke("a2");
 
       foreach (var method in helper.allMethods)
       foreach (var attribute in method.GetAttributes()) {
@@ -311,24 +338,25 @@ namespace IncrementalCompiler {
             }), diagnostic);
       }
 
+      logTime?.Invoke("a3");
+
       // var namedTypeSymbols = CustomSymbolFinder.GetAllSymbols(compilation);
 
       var oldCompilation = compilation;
 
-      implicits.AfterCheckAttributes();
+      implicits.AfterCheckAttributes(logTime);
+
+      logTime?.Invoke("a4");
 
       var resolvedMacros = helper.builderInvocations.ToImmutable();
       var resolvedMacros2 = helper.builderDefinitions.ToImmutable();
 
+      logTime?.Invoke("a5");
+
       var treeEdits = new ConcurrentBag<(SyntaxTree, CompilationUnitSyntax)>();
-      trees.AsParallel().ForAll(tree => {
-//                var walker = new Walker();
-        var root = tree.GetCompilationUnitRoot();
-        var model = oldCompilation.GetSemanticModel(tree);
-
-        var opFinder = new RootOperationsFinder(model);
-
-        opFinder.Visit(root);
+      helper.operations.AsParallel().ForAll(opFinder => {
+        var root = opFinder.tree.GetCompilationUnitRoot();
+        var model = opFinder.model;
 
         var ctx = new MacroCtx(model);
 
@@ -449,9 +477,11 @@ namespace IncrementalCompiler {
         if (newRoot != root)
           // TODO: do not normalize whitespace for the whole file
           // need to fix whitespace in MacroReplacer first
-          treeEdits.Add((tree, newRoot.NormalizeWhitespace()));
+          treeEdits.Add((opFinder.tree, newRoot.NormalizeWhitespace()));
       });
+      logTime?.Invoke("a6");
       compilation = EditTrees(compilation, sourceMap, treeEdits.ToArray(), settings, generatedFiles);
+      logTime?.Invoke("a7");
       return compilation;
     }
 
@@ -525,16 +555,29 @@ namespace IncrementalCompiler {
   }
 
   public class RootOperationsFinder : CSharpSyntaxWalker {
-    readonly SemanticModel model;
-    public List<IOperation> results = new List<IOperation>();
+    public readonly SemanticModel model;
+    public readonly SyntaxTree tree;
+    public readonly List<IOperation> results = new List<IOperation>();
 
-    public RootOperationsFinder(SemanticModel model) {
+    public TimeSpan tsNull, tsOther;
+
+    public RootOperationsFinder(SemanticModel model, SyntaxTree tree) {
       this.model = model;
+      this.tree = tree;
     }
 
     public override void Visit(SyntaxNode? node) {
       if (node == null) return;
+      var sw = Stopwatch.StartNew();
       var operation = model.GetOperation(node);
+      if (operation == null) {
+        tsNull += sw.Elapsed;
+      }
+      else {
+        var elapsed = sw.Elapsed;
+        // if (elapsed.TotalMilliseconds > 200) Console.WriteLine(elapsed + "   " + node.ToFullString().Substring(0, 200));
+        tsOther += elapsed;
+      }
       if (operation == null) base.Visit(node);
       else results.Add(operation);
     }

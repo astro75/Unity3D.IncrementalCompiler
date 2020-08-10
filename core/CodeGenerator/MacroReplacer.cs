@@ -1,8 +1,18 @@
 ﻿using System.Collections.Generic;
+using System.Diagnostics.CodeAnalysis;
 using System.Linq;
 using Microsoft.CodeAnalysis;
 using Microsoft.CodeAnalysis.CSharp;
 using Microsoft.CodeAnalysis.CSharp.Syntax;
+
+namespace System.Diagnostics.CodeAnalysis {
+  [AttributeUsage(AttributeTargets.Parameter | AttributeTargets.Property | AttributeTargets.ReturnValue, AllowMultiple = true, Inherited = false)]
+  sealed class NotNullIfNotNullAttribute : Attribute
+  {
+    public NotNullIfNotNullAttribute(string parameterName) => ParameterName = parameterName;
+    public string ParameterName { get; }
+  }
+}
 
 namespace IncrementalCompiler {
   public class MacroReplacer : CSharpSyntaxRewriter {
@@ -18,7 +28,8 @@ namespace IncrementalCompiler {
       toAdd.Clear();
     }
 
-    public override SyntaxNode Visit(SyntaxNode node) {
+    [return: NotNullIfNotNull("node")]
+    public override SyntaxNode? Visit(SyntaxNode? node) {
       var rewritten = node;
       if (node != null) {
         if (ctx.AddedStatements.TryGetValue(node, out var added)) toAdd.Add(added);

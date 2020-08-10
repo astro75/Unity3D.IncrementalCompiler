@@ -45,6 +45,8 @@ namespace CompilationExtensionCodeGenerator {
 
             var sw = Stopwatch.StartNew();
 
+            var treesBefore = compilation.SyntaxTrees;
+
             var (newCompilation, diagnostics) = CodeGeneration.Run(
                 incrementalRun: false,
                 compilation,
@@ -60,13 +62,19 @@ namespace CompilationExtensionCodeGenerator {
             debugPrint($"Code generation: {sw.Elapsed}");
             sw.Restart();
 
+            var sw2 = Stopwatch.StartNew();
+
             newCompilation = MacroProcessor.Run(
                 newCompilation,
-                compilation.SyntaxTrees,
+                treesBefore,
                 sourceMap,
                 diagnostics,
                 settings,
-                generatedFiles
+                generatedFiles,
+                logTime: label => {
+                  debugPrint($"Macro processor {label}: {sw2.Elapsed}");
+                  sw2.Restart();
+                }
             );
 
             debugPrint($"Macro processor: {sw.Elapsed}");
@@ -125,7 +133,7 @@ namespace CompilationExtensionCodeGenerator {
         }
 
         static void debugPrint(string message) {
-            // Console.Out.WriteLine(message);
+            Console.Out.WriteLine(message);
         }
 
         static CSharpCompilation removeGenerated(CSharpCompilation compilation) =>

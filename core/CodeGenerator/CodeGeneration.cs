@@ -145,7 +145,10 @@ namespace IncrementalCompiler {
       var diagnostic = new List<Diagnostic>();
 
       void tryAttributeLocal<A>(AttributeData attr, Action<A> a) where A : Attribute {
-        tryAttribute(attr, a, diagnostic);
+        // why do I need this check ???
+        if (diagnostic != null) {
+          tryAttribute(attr, a, diagnostic);
+        }
       }
 
       var typeAttributes = new Dictionary<

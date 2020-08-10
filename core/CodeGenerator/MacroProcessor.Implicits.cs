@@ -147,18 +147,21 @@ namespace IncrementalCompiler {
       }
     }
 
-    public void AfterCheckAttributes() {
+    public void AfterCheckAttributes(Action<string>? logTime) {
+      void log(string label) => logTime?.Invoke("AfterCheckAttributes " + label);
+
       var passthroughReferences = new ConcurrentBag<(IMethodSymbol, IMethodSymbol)>();
       var passthroughDirectImplicits = new ConcurrentBag<(IMethodSymbol, ITypeSymbol[])>();
       var passthroughFoundImplicits = new ConcurrentBag<(IMethodSymbol, ITypeSymbol[])>();
 
-      helper.trees.AsParallel().ForAll(tree => {
-        var root = tree.GetCompilationUnitRoot();
-        var model = helper.compilation.GetSemanticModel(tree);
-        var opFinder = new RootOperationsFinder(model);
-        opFinder.Visit(root);
+      log("1");
+
+      var tsNull = TimeSpan.Zero;
+      var tsOther = TimeSpan.Zero;
+
+      helper.operations.AsParallel().ForAll(opFinder => {
         foreach (var operation in opFinder.results) {
-          var symbol = model.GetDeclaredSymbol(operation.Syntax);
+          var symbol = opFinder.model.GetDeclaredSymbol(operation.Syntax);
           if (symbol is IMethodSymbol ms && passThroughMethods.Contains(ms)) {
             var descendants = operation.DescendantsAndSelf().ToArray();
             var directImplicits = new HashSet<ITypeSymbol>();
@@ -187,7 +190,7 @@ namespace IncrementalCompiler {
             if (maybeSpanStart != null) {
               passthroughFoundImplicits.Add((
                 ms,
-                ImplicitsAtPosition(model, ms.IsStatic, maybeSpanStart.Value)
+                ImplicitsAtPosition(opFinder.model, ms.IsStatic, maybeSpanStart.Value)
                   .Select(s => new ImplicitSymbolRef(s).type)
                   .ToArray()
               ));
@@ -195,6 +198,8 @@ namespace IncrementalCompiler {
           }
         }
       });
+
+      log($"2 {tsNull} {tsOther}");
 
       var childrenDict = passthroughReferences
         .GroupBy(_ => _.Item1)
@@ -208,6 +213,8 @@ namespace IncrementalCompiler {
       // [Implicit]
       var implicitAttributeList =
         SF.SingletonList(SF.AttributeList(SF.SingletonSeparatedList(SF.Attribute(SF.ParseName(implicitType.ToDisplayString())))));
+
+      log("3");
 
       foreach (var method in passThroughMethods) {
         var current = Resolve(method);
@@ -237,6 +244,8 @@ namespace IncrementalCompiler {
           });
         }
       }
+
+      log("4");
 
       HashSet<ITypeSymbol> Resolve(IMethodSymbol method) {
         if (resolved.TryGetValue(method, out var result)) return result;
@@ -345,6 +354,7 @@ namespace IncrementalCompiler {
             });
         });
       }
+      log("5");
     }
 
     readonly struct ImplicitParameter {
