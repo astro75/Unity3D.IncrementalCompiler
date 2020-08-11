@@ -133,7 +133,7 @@ namespace CompilationExtensionCodeGenerator {
         }
 
         static void debugPrint(string message) {
-            Console.Out.WriteLine(message);
+            //Console.Out.WriteLine(message);
         }
 
         static CSharpCompilation removeGenerated(CSharpCompilation compilation) =>

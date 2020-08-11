@@ -156,9 +156,6 @@ namespace IncrementalCompiler {
 
       log("1");
 
-      var tsNull = TimeSpan.Zero;
-      var tsOther = TimeSpan.Zero;
-
       helper.operations.AsParallel().ForAll(opFinder => {
         foreach (var operation in opFinder.results) {
           var symbol = opFinder.model.GetDeclaredSymbol(operation.Syntax);
@@ -199,7 +196,7 @@ namespace IncrementalCompiler {
         }
       });
 
-      log($"2 {tsNull} {tsOther}");
+      log($"2");
 
       var childrenDict = passthroughReferences
         .GroupBy(_ => _.Item1)
