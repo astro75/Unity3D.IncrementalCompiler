@@ -316,12 +316,12 @@ namespace IncrementalCompiler {
                   if (matchingImplicits.Length == 0)
                     throw new MacroProcessorError(
                       "No matching implicits found for " +
-                      $"parameter '{parameter.name}' of type {parameter.type}"
+                      $"parameter '{parameter.name}' of type {parameter.type} on operation '{opDisplay()}'"
                     );
                   if (matchingImplicits.Length > 1)
                     throw new MacroProcessorError(
                       $"{matchingImplicits.Length} matching implicits found for " +
-                      $"parameter '{parameter.name}' of type {parameter.type}. " +
+                      $"parameter '{parameter.name}' of type {parameter.type} on operation '{opDisplay()}'. " +
                       $"Candidates: {string.Join(", ", matchingImplicits.Select(_ => _.displayString))}"
                     );
                   return (parameter, fieldName: matchingImplicits[0].name);
@@ -347,6 +347,15 @@ namespace IncrementalCompiler {
                   _ => throw new ArgumentOutOfRangeException()
                 };
                 ctx.ChangedNodes.Add(op.Syntax, updated);
+
+                string opDisplay() =>
+                  op.Syntax switch {
+                    InvocationExpressionSyntax iSyntax => iSyntax.Expression.ToString()
+                      .Split(new []{'.'}, StringSplitOptions.RemoveEmptyEntries)
+                      .LastOrDefault() ?? iSyntax.Expression.ToString(),
+                    ObjectCreationExpressionSyntax oSyntax => $"new {oSyntax.Type}",
+                    _ => throw new ArgumentOutOfRangeException()
+                  };
               }
             });
         });

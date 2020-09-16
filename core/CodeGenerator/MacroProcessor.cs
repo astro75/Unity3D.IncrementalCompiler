@@ -414,8 +414,9 @@ namespace IncrementalCompiler {
                         if (propertySymbol.SetMethod != null)
                           throw new Exception("Lazy Property should not have a setter");
                         if (propertySymbol.GetMethod == null) throw new Exception("Lazy Property should have a getter");
-                        if (attributes.Length > 1)
-                          throw new Exception("Lazy Property should not have other attributes");
+                        // sometimes we want an Implicit attribute on this property
+                        // if (attributes.Length > 1)
+                          // throw new Exception("Lazy Property should not have other attributes");
                         var syntax =
                           (PropertyDeclarationSyntax) propertySymbol.DeclaringSyntaxReferences.Single().GetSyntax();
 
