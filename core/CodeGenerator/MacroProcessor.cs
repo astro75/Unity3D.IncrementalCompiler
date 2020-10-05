@@ -357,111 +357,111 @@ namespace IncrementalCompiler {
       helper.operations.AsParallel().ForAll(opFinder => {
         var root = opFinder.tree.GetCompilationUnitRoot();
         var model = opFinder.model;
-
         var ctx = new MacroCtx(model);
 
-        foreach (var operation in opFinder.results) {
-
-
+        foreach (var (mainOperation, tds) in opFinder.results) {
           // Console.WriteLine("Found Operation: " + operation);
           // Console.WriteLine(operation.Syntax);
 
-          var descendants = operation.DescendantsAndSelf().ToArray();
+          var descendants = mainOperation.DescendantsAndSelf().ToArray();
           // reverse the order for nested macros to work
           Array.Reverse(descendants);
 
-          foreach (var op in descendants.OfType<IMethodReferenceOperation>())
-            if (resolvedMacros.ContainsKey(op.Method.OriginalDefinition))
-              diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
-                "ER0003", "Error", "Can't reference a macro.", "Error", DiagnosticSeverity.Error, true
-              ), op.Syntax.GetLocation()));
-
-          foreach (var op in descendants.OfType<IPropertyReferenceOperation>())
-            if (resolvedMacros.TryGetValue(op.Property.OriginalDefinition, out var act))
-              act(ctx, op);
-
-          foreach (var op in descendants.OfType<IInvocationOperation>()) {
-            var method = op.TargetMethod.OriginalDefinition;
-            if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
+          foreach (var descendantOperation in descendants) {
+            switch (descendantOperation) {
+              case IMethodReferenceOperation op: {
+                if (resolvedMacros.ContainsKey(op.Method.OriginalDefinition))
+                  diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
+                    "ER0003", "Error", "Can't reference a macro.", "Error", DiagnosticSeverity.Error, true
+                  ), op.Syntax.GetLocation()));
+                break;
+              }
+              case IPropertyReferenceOperation op: {
+                if (resolvedMacros.TryGetValue(op.Property.OriginalDefinition, out var act))
+                  act(ctx, op);
+                break;
+              }
+              case IInvocationOperation op: {
+                var method = op.TargetMethod.OriginalDefinition;
+                if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
+                break;
+              }
+              case IObjectCreationOperation op: {
+                var method = op.Constructor.OriginalDefinition;
+                if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
+                break;
+              }
+            }
           }
 
-          foreach (var op in descendants.OfType<IObjectCreationOperation>()) {
-            var method = op.Constructor.OriginalDefinition;
-            if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
-          }
-
-          var symbol = model.GetDeclaredSymbol(operation.Syntax);
-          if (symbol is IMethodSymbol ms) {
-            if (resolvedMacros2.TryGetValue(ms, out var act)) act(ctx);
+          var symbol = model.GetDeclaredSymbol(mainOperation.Syntax);
+          switch (symbol) {
+            case IMethodSymbol ms: {
+              if (resolvedMacros2.TryGetValue(ms, out var act)) act(ctx);
+              break;
+            }
+            case IPropertySymbol ps: {
+              if (tds != null) tryLazyProperty(ps, tds);
+              break;
+            }
           }
         }
 
-        {
-          var generatorCtx = new GeneratorCtx(root, model);
+        void tryLazyProperty(IPropertySymbol propertySymbol, TypeDeclarationSyntax tds) {
+          var attributes = propertySymbol.GetAttributes();
+          foreach (var attr in attributes) {
+            if (!GeneratorCtx.TreeContains(attr.ApplicationSyntaxReference, tds)) continue;
+            if (attr.AttributeClass == null) continue;
+            if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, lazyPropertyType))
+              CodeGeneration.tryAttribute<LazyProperty>(attr, _ => {
+                if (propertySymbol.SetMethod != null)
+                  throw new Exception("Lazy Property should not have a setter");
+                if (propertySymbol.GetMethod == null) throw new Exception("Lazy Property should have a getter");
+                // sometimes we want an Implicit attribute on this property
+                // if (attributes.Length > 1)
+                // throw new Exception("Lazy Property should not have other attributes");
+                var syntax = (PropertyDeclarationSyntax) ctx.Visit(
+                  propertySymbol.DeclaringSyntaxReferences.Single().GetSyntax()
+                );
 
-          foreach (var tds in generatorCtx.TypesInFile) {
-            var symbol = model.GetDeclaredSymbol(tds);
-            if (symbol == null) continue;
-            foreach (var member in symbol.GetMembers())
-              switch (member) {
-                case IPropertySymbol propertySymbol:
-                  var attributes = propertySymbol.GetAttributes();
-                  foreach (var attr in attributes) {
-                    if (!GeneratorCtx.TreeContains(attr.ApplicationSyntaxReference, tds)) continue;
-                    if (attr.AttributeClass == null) continue;
-                    if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, lazyPropertyType))
-                      CodeGeneration.tryAttribute<LazyProperty>(attr, _ => {
-                        if (propertySymbol.SetMethod != null)
-                          throw new Exception("Lazy Property should not have a setter");
-                        if (propertySymbol.GetMethod == null) throw new Exception("Lazy Property should have a getter");
-                        // sometimes we want an Implicit attribute on this property
-                        // if (attributes.Length > 1)
-                          // throw new Exception("Lazy Property should not have other attributes");
-                        var syntax =
-                          (PropertyDeclarationSyntax) propertySymbol.DeclaringSyntaxReferences.Single().GetSyntax();
+                var baseName = syntax.Identifier;
+                var backingValueName = SF.Identifier("__lazy_value_" + baseName.Text);
+                var backingInitName = SF.Identifier("__lazy_init_" + baseName.Text);
 
-                        var baseName = syntax.Identifier;
-                        var backingValueName = SF.Identifier("__lazy_value_" + baseName.Text);
-                        var backingInitName = SF.Identifier("__lazy_init_" + baseName.Text);
+                var modifiers = propertySymbol.IsStatic
+                  ? SF.TokenList(SF.Token(SyntaxKind.StaticKeyword))
+                  : SF.TokenList();
 
-                        var modifiers = propertySymbol.IsStatic
-                          ? SF.TokenList(SF.Token(SyntaxKind.StaticKeyword))
-                          : SF.TokenList();
+                // object __lazy_value_baseName;
+                // int? __lazy_value_baseName;
+                var variableDecl = SF.FieldDeclaration(SF.VariableDeclaration(
+                  propertySymbol.Type.IsValueType ? SF.NullableType(syntax.Type) : syntax.Type,
+                  SF.SingletonSeparatedList(SF.VariableDeclarator(backingValueName))
+                )).WithModifiers(modifiers);
 
-                        // object __lazy_value_baseName;
-                        // int? __lazy_value_baseName;
-                        var variableDecl = SF.FieldDeclaration(SF.VariableDeclaration(
-                          propertySymbol.Type.IsValueType ? SF.NullableType(syntax.Type) : syntax.Type,
-                          SF.SingletonSeparatedList(SF.VariableDeclarator(backingValueName))
-                        )).WithModifiers(modifiers);
+                // object baseName => __lazy_value_baseName ??= __lazy_init_baseName;
+                // object baseName => __lazy_value_baseName ??= {expression};
+                var originalReplacement = SF.PropertyDeclaration(
+                    syntax.Type,
+                    baseName
+                  ).WithExpressionBody(SF.ArrowExpressionClause(SF.AssignmentExpression(
+                    SyntaxKind.CoalesceAssignmentExpression,
+                    SF.IdentifierName(backingValueName),
+                    syntax.ExpressionBody?.Expression ?? SF.IdentifierName(backingInitName)
+                  )))
+                  .WithSemicolonToken(SF.Token(SyntaxKind.SemicolonToken))
+                  .WithModifiers(syntax.Modifiers);
 
-                        // object baseName => __lazy_value_baseName ??= __lazy_init_baseName;
-                        // object baseName => __lazy_value_baseName ??= {expression};
-                        var originalReplacement = SF.PropertyDeclaration(
-                            syntax.Type,
-                            baseName
-                          ).WithExpressionBody(SF.ArrowExpressionClause(SF.AssignmentExpression(
-                            SyntaxKind.CoalesceAssignmentExpression,
-                            SF.IdentifierName(backingValueName),
-                            syntax.ExpressionBody?.Expression ?? SF.IdentifierName(backingInitName)
-                          )))
-                          .WithSemicolonToken(SF.Token(SyntaxKind.SemicolonToken))
-                          .WithModifiers(syntax.Modifiers);
-
-                        ctx.ChangedStatements.Add(syntax, new SyntaxNode?[] {
-                          variableDecl,
-                          syntax.ExpressionBody == null
-                            ? syntax.WithIdentifier(backingInitName)
-                              .WithModifiers(modifiers)
-                              .WithAttributeLists(SF.List<AttributeListSyntax>())
-                            : null,
-                          originalReplacement
-                        });
-                      }, diagnostic);
-                  }
-
-                  break;
-              }
+                ctx.ChangedStatements.Add(syntax, new SyntaxNode?[] {
+                  variableDecl,
+                  syntax.ExpressionBody == null
+                    ? syntax.WithIdentifier(backingInitName)
+                      .WithModifiers(modifiers)
+                      .WithAttributeLists(SF.List<AttributeListSyntax>())
+                    : null,
+                  originalReplacement
+                });
+              }, diagnostic);
           }
         }
 
@@ -558,9 +558,12 @@ namespace IncrementalCompiler {
   public class RootOperationsFinder : CSharpSyntaxWalker {
     public readonly SemanticModel model;
     public readonly SyntaxTree tree;
-    public readonly List<IOperation> results = new List<IOperation>();
+    public readonly List<(IOperation op, TypeDeclarationSyntax? tds)> results =
+      new List<(IOperation, TypeDeclarationSyntax?)>();
 
     public TimeSpan tsNull, tsOther;
+
+    Stack<TypeDeclarationSyntax> typeStack = new Stack<TypeDeclarationSyntax>();
 
     public RootOperationsFinder(SemanticModel model, SyntaxTree tree) {
       this.model = model;
@@ -568,19 +571,31 @@ namespace IncrementalCompiler {
     }
 
     public override void Visit(SyntaxNode? node) {
-      if (node == null) return;
-      var sw = Stopwatch.StartNew();
-      var operation = model.GetOperation(node);
-      if (operation == null) {
-        tsNull += sw.Elapsed;
+      var addedToStack = false;
+      if (node is TypeDeclarationSyntax tds) {
+        typeStack.Push(tds);
+        addedToStack = true;
       }
-      else {
-        var elapsed = sw.Elapsed;
-        // if (elapsed.TotalMilliseconds > 200) Console.WriteLine(elapsed + "   " + node.ToFullString().Substring(0, 200));
-        tsOther += elapsed;
+
+      try {
+        if (node == null) return;
+        var sw = Stopwatch.StartNew();
+        var operation = model.GetOperation(node);
+        if (operation == null) {
+          tsNull += sw.Elapsed;
+        }
+        else {
+          var elapsed = sw.Elapsed;
+          // if (elapsed.TotalMilliseconds > 200) Console.WriteLine(elapsed + "   " + node.ToFullString().Substring(0, 200));
+          tsOther += elapsed;
+        }
+
+        if (operation == null) base.Visit(node);
+        else results.Add((operation, typeStack.Count > 0 ? typeStack.Peek() : null));
       }
-      if (operation == null) base.Visit(node);
-      else results.Add(operation);
+      finally {
+        if (addedToStack) typeStack.Pop();
+      }
     }
   }
 

@@ -157,7 +157,7 @@ namespace IncrementalCompiler {
       log("1");
 
       helper.operations.AsParallel().ForAll(opFinder => {
-        foreach (var operation in opFinder.results) {
+        foreach (var (operation, tds) in opFinder.results) {
           var symbol = opFinder.model.GetDeclaredSymbol(operation.Syntax);
           if (symbol is IMethodSymbol ms && passThroughMethods.Contains(ms)) {
             var descendants = operation.DescendantsAndSelf().ToArray();
