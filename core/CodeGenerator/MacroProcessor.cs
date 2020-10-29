@@ -2,7 +2,6 @@
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
-using System.Diagnostics;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -386,18 +385,18 @@ namespace IncrementalCompiler {
             }
           }
 
-          // this code never reaches IPropertySymbol case
-          // var symbol = model.GetDeclaredSymbol(mainOperation.Syntax);
-          // switch (symbol) {
-          //   case IMethodSymbol ms: {
-          //     if (resolvedMacros2.TryGetValue(ms, out var act)) act(ctx);
-          //     break;
-          //   }
-          //   case IPropertySymbol ps: {
-          //     if (tds != null) tryLazyProperty(ps, tds);
-          //     break;
-          //   }
-          // }
+          var symbol = model.GetDeclaredSymbol(mainOperation.Syntax);
+          switch (symbol) {
+            case IMethodSymbol ms: {
+              if (resolvedMacros2.TryGetValue(ms, out var act)) act(ctx);
+              break;
+            }
+            // this case is never reached, we use the code below for this
+            // case IPropertySymbol ps: {
+            //   if (tds != null) tryLazyProperty(ps, tds);
+            //   break;
+            // }
+          }
         }
 
         var generatorCtx = new GeneratorCtx(root, model);
@@ -409,9 +408,10 @@ namespace IncrementalCompiler {
               case IPropertySymbol propertySymbol:
                 tryLazyProperty(propertySymbol, tds);
                 break;
-              case IMethodSymbol methodSymbol:
-                if (resolvedMacros2.TryGetValue(methodSymbol, out var act)) act(ctx);
-                break;
+              // IMethodSymbol case gets called too many times (partial classes), we use the code above for this
+              // case IMethodSymbol methodSymbol:
+              //   if (resolvedMacros2.TryGetValue(methodSymbol, out var act)) act(ctx);
+              //   break;
             }
           }
         }
