@@ -19,9 +19,7 @@ namespace IncrementalCompiler {
   public class MacroHelper {
     public readonly IAssemblySymbol macrosAssembly;
     readonly List<Diagnostic> diagnostic;
-    public readonly ImmutableArray<SyntaxTree> trees;
     public readonly ImmutableArray<RootOperationsFinder> operations;
-    public readonly CSharpCompilation compilation;
     public readonly IMethodSymbol[] allMethods;
     public readonly ImmutableDictionary<ISymbol, Action<MacroProcessor.MacroCtx, IOperation>>.Builder builderInvocations =
       ImmutableDictionary.CreateBuilder<ISymbol, Action<MacroProcessor.MacroCtx, IOperation>>();
@@ -32,8 +30,6 @@ namespace IncrementalCompiler {
       IAssemblySymbol[] referencedAssemblies, ImmutableArray<SyntaxTree> trees, CSharpCompilation compilation) {
       this.macrosAssembly = macrosAssembly;
       this.diagnostic = diagnostic;
-      this.trees = trees;
-      this.compilation = compilation;
 
       var typesToCheck = new List<INamedTypeSymbol>();
 
@@ -106,15 +102,13 @@ namespace IncrementalCompiler {
     }
   }
 
-  public static partial class MacroProcessor {
+  public static class MacroProcessor {
     public static CSharpCompilation Run(
       CSharpCompilation compilation, ImmutableArray<SyntaxTree> trees, Dictionary<string, SyntaxTree> sourceMap,
       List<Diagnostic> diagnostic, GenerationSettings settings, List<CodeGeneration.GeneratedCsFile> generatedFiles,
       Action<string>? logTime = null
     ) {
       // return compilation;
-
-      // #pragma warning disable
 
       var referencedAssemblies = compilation.Assembly.GetReferencedAssembliesAndSelf();
 
@@ -126,7 +120,7 @@ namespace IncrementalCompiler {
       var macrosAssembly = maybeMacrosAssembly;
 
       // GetTypeByMetadataName searches in assembly and its direct references only
-      var macrosClass = macrosAssembly.GetTypeByMetadataName(typeof(Macros).FullName!)!;
+      var macrosClass = macrosAssembly.GetTypeByMetadataName(typeof(Macros).FullName!);
 
       if (macrosClass == null) {
         diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
@@ -155,14 +149,14 @@ namespace IncrementalCompiler {
         macroSymbol(nameof(Macros.className)),
         (ctx, op) => {
           var enclosingSymbol = ctx.Model.GetEnclosingSymbol(op.Syntax.SpanStart);
-          ctx.ChangedNodes.Add(op.Syntax, enclosingSymbol.ContainingType.ToDisplayString().StringLiteral());
+          ctx.ChangedNodes.Add(op.Syntax, enclosingSymbol!.ContainingType.ToDisplayString().StringLiteral());
         });
 
       helper.builderInvocations.Add(
         macroSymbol(nameof(Macros.classAndMethodName)),
         (ctx, op) => {
           var enclosingSymbol = ctx.Model.GetEnclosingSymbol(op.Syntax.SpanStart);
-          ctx.ChangedNodes.Add(op.Syntax, enclosingSymbol.ToDisplayString().StringLiteral());
+          ctx.ChangedNodes.Add(op.Syntax, enclosingSymbol!.ToDisplayString().StringLiteral());
         });
 
       void replaceArguments(MacroCtx ctx, StringBuilder sb, IInvocationOperation iop) {
@@ -342,8 +336,6 @@ namespace IncrementalCompiler {
 
       // var namedTypeSymbols = CustomSymbolFinder.GetAllSymbols(compilation);
 
-      var oldCompilation = compilation;
-
       implicits.AfterCheckAttributes(logTime);
 
       logTime?.Invoke("a4");
@@ -394,15 +386,32 @@ namespace IncrementalCompiler {
             }
           }
 
-          var symbol = model.GetDeclaredSymbol(mainOperation.Syntax);
-          switch (symbol) {
-            case IMethodSymbol ms: {
-              if (resolvedMacros2.TryGetValue(ms, out var act)) act(ctx);
-              break;
-            }
-            case IPropertySymbol ps: {
-              if (tds != null) tryLazyProperty(ps, tds);
-              break;
+          // this code never reaches IPropertySymbol case
+          // var symbol = model.GetDeclaredSymbol(mainOperation.Syntax);
+          // switch (symbol) {
+          //   case IMethodSymbol ms: {
+          //     if (resolvedMacros2.TryGetValue(ms, out var act)) act(ctx);
+          //     break;
+          //   }
+          //   case IPropertySymbol ps: {
+          //     if (tds != null) tryLazyProperty(ps, tds);
+          //     break;
+          //   }
+          // }
+        }
+
+        var generatorCtx = new GeneratorCtx(root, model);
+        foreach (var tds in generatorCtx.TypesInFile) {
+          var symbol = model.GetDeclaredSymbol(tds);
+          if (symbol == null) continue;
+          foreach (var member in symbol.GetMembers()) {
+            switch (member) {
+              case IPropertySymbol propertySymbol:
+                tryLazyProperty(propertySymbol, tds);
+                break;
+              case IMethodSymbol methodSymbol:
+                if (resolvedMacros2.TryGetValue(methodSymbol, out var act)) act(ctx);
+                break;
             }
           }
         }
@@ -420,9 +429,8 @@ namespace IncrementalCompiler {
                 // sometimes we want an Implicit attribute on this property
                 // if (attributes.Length > 1)
                 // throw new Exception("Lazy Property should not have other attributes");
-                var syntax = (PropertyDeclarationSyntax) ctx.Visit(
-                  propertySymbol.DeclaringSyntaxReferences.Single().GetSyntax()
-                );
+                var originalSyntax = propertySymbol.DeclaringSyntaxReferences.Single().GetSyntax();
+                var syntax = (PropertyDeclarationSyntax) ctx.Visit(originalSyntax);
 
                 var baseName = syntax.Identifier;
                 var backingValueName = SF.Identifier("__lazy_value_" + baseName.Text);
@@ -452,7 +460,7 @@ namespace IncrementalCompiler {
                   .WithSemicolonToken(SF.Token(SyntaxKind.SemicolonToken))
                   .WithModifiers(syntax.Modifiers);
 
-                ctx.ChangedStatements.Add(syntax, new SyntaxNode?[] {
+                ctx.ChangedStatements.Add(originalSyntax, new SyntaxNode?[] {
                   variableDecl,
                   syntax.ExpressionBody == null
                     ? syntax.WithIdentifier(backingInitName)
@@ -544,9 +552,17 @@ namespace IncrementalCompiler {
       public void CompleteVisit(List<Diagnostic> diagnostic) {
         var unchanged = ChangedNodes.Keys.Concat(ChangedStatements.Keys).Except(Replacer.successfulEdits);
         foreach (var node in unchanged)
-          diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
-            "ER0003", "Error", "Macro was not replaced.", "Error", DiagnosticSeverity.Error, true
-          ), node.GetLocation()));
+          diagnostic.Add(Diagnostic.Create(
+            new DiagnosticDescriptor(
+              "ER0003",
+              "Error",
+              "Macro was not replaced. This is a bug in the compiler.",
+              "Error",
+              DiagnosticSeverity.Error,
+              true
+            ),
+            node.GetLocation()
+          ));
       }
     }
   }
@@ -561,9 +577,9 @@ namespace IncrementalCompiler {
     public readonly List<(IOperation op, TypeDeclarationSyntax? tds)> results =
       new List<(IOperation, TypeDeclarationSyntax?)>();
 
-    public TimeSpan tsNull, tsOther;
+    // public TimeSpan tsNull, tsOther;
 
-    Stack<TypeDeclarationSyntax> typeStack = new Stack<TypeDeclarationSyntax>();
+    readonly Stack<TypeDeclarationSyntax> typeStack = new Stack<TypeDeclarationSyntax>();
 
     public RootOperationsFinder(SemanticModel model, SyntaxTree tree) {
       this.model = model;
@@ -579,16 +595,19 @@ namespace IncrementalCompiler {
 
       try {
         if (node == null) return;
-        var sw = Stopwatch.StartNew();
+
+        // var sw = Stopwatch.StartNew();
+
         var operation = model.GetOperation(node);
-        if (operation == null) {
-          tsNull += sw.Elapsed;
-        }
-        else {
-          var elapsed = sw.Elapsed;
-          // if (elapsed.TotalMilliseconds > 200) Console.WriteLine(elapsed + "   " + node.ToFullString().Substring(0, 200));
-          tsOther += elapsed;
-        }
+
+        // if (operation == null) {
+        //   tsNull += sw.Elapsed;
+        // }
+        // else {
+        //   var elapsed = sw.Elapsed;
+        //   if (elapsed.TotalMilliseconds > 200) Console.WriteLine(elapsed + "   " + node.ToFullString().Substring(0, 200));
+        //   tsOther += elapsed;
+        // }
 
         if (operation == null) base.Visit(node);
         else results.Add((operation, typeStack.Count > 0 ? typeStack.Peek() : null));

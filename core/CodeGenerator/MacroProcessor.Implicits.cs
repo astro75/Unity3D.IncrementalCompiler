@@ -91,7 +91,7 @@ namespace IncrementalCompiler {
       var implicitsToFill = ImplicitsToFill(implicitParameters, arguments);
 
       var enclosingSymbol = model.GetEnclosingSymbol(iop.Syntax.SpanStart);
-      var current = enclosingSymbol;
+      var current = enclosingSymbol!;
       var isStatic = current.IsStatic;
       // skips local functions and gets to the method
       while (!(current.ContainingSymbol is ITypeSymbol)) {
