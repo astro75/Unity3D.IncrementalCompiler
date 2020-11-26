@@ -227,6 +227,8 @@ namespace IncrementalCompiler {
       var results = new ConcurrentBag<IGenerationResult>();
       var typesWithMacrosResults = new ConcurrentBag<INamedTypeSymbol>();
 
+      var attributeMacroType = compilation.GetTypeByMetadataName(typeof(AttributeMacro).FullName);
+
       trees.AsParallel().ForAll(originalTree => {
         var tree = originalTree;
 
@@ -297,10 +299,23 @@ namespace IncrementalCompiler {
                     tryAttributeLocal<PublicAccessor>(attr,
                       _ => { newClassMembers = newClassMembers.Add(GenerateAccessor(fieldSymbol, model)); });
                   // TODO: generic way to add new attributes
-                  if (attrClassName == typeof(ThreadStaticAttribute).FullName)
+                  else if (attrClassName == typeof(ThreadStaticAttribute).FullName)
                     tryAttributeLocal<ThreadStaticAttribute>(attr, _ =>
                       throw new Exception($"Can't use {nameof(ThreadStaticAttribute)} in Unity"
                       ));
+                  else {
+                    foreach (var attributeAttribute in attr.AttributeClass.GetAttributes()) {
+                      if (SymbolEqualityComparer.Default.Equals(attributeAttribute.AttributeClass, attributeMacroType)) {
+                        tryAttribute<AttributeMacro>(attr, macroAttributeInstance => {
+                          var sb = new StringBuilder();
+                          sb.Append(macroAttributeInstance.Pattern);
+                          sb.Replace("${name}", fieldSymbol.Name);
+                          sb.Replace("${_name}", PublicAccessorName(fieldSymbol.Name));
+                          newClassMembers = newClassMembers.Add(sb.ToString());
+                        }, diagnostic);
+                      }
+                    }
+                  }
                 }
 
                 break;
@@ -499,12 +514,14 @@ namespace IncrementalCompiler {
 
     static string GenerateAccessor(IFieldSymbol fieldSymbol, SemanticModel model) {
       var name = fieldSymbol.Name;
-      var newName = name.TrimStart('_');
       var position = fieldSymbol.DeclaringSyntaxReferences[0].Span.Start;
       var type = fieldSymbol.Type.ToMinimalDisplayString(model, position, format);
+      return $"public {type} {PublicAccessorName(name)} => {name};";
+    }
 
-      if (name == newName) newName += "_";
-      return $"public {type} {newName} => {name};";
+    public static string PublicAccessorName(string currentName) {
+      var newName = currentName.TrimStart('_');
+      return currentName == newName ? $"{newName}_" : newName;
     }
 
     static MemberDeclarationSyntax GenerateSingleton(
@@ -723,7 +740,7 @@ namespace IncrementalCompiler {
       return cls;
     }
 
-    static SyntaxList<MemberDeclarationSyntax> ParseClassMembers(string syntax) {
+    public static SyntaxList<MemberDeclarationSyntax> ParseClassMembers(string syntax) {
       var cls = (ClassDeclarationSyntax) CSharpSyntaxTree.ParseText($"class C {{ {syntax} }}").GetCompilationUnitRoot()
         .Members[0];
       return cls.Members;

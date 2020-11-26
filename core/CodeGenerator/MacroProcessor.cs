@@ -76,7 +76,10 @@ namespace IncrementalCompiler {
     public void tryMacro(IOperation op, IMethodSymbol method, Action act) =>
       tryMacro(op.Syntax, method, act);
 
-    public void tryMacro(SyntaxNode location, IMethodSymbol method, Action act) {
+    public void tryMacro(SyntaxNode location, IMethodSymbol method, Action act) =>
+      tryMacro(location, method.Name, act);
+
+    public void tryMacro(SyntaxNode location, string macroInstanceName, Action act) {
       try {
         act();
       }
@@ -84,7 +87,7 @@ namespace IncrementalCompiler {
         var expectedException = e is MacroProcessorError;
         var message = expectedException
           ? e.Message
-          : $"Error for macro {method.Name}: {e.Message}. ({e.Source}) at {e.StackTrace}";
+          : $"Error for macro {macroInstanceName}: {e.Message}. ({e.Source}) at {e.StackTrace}";
         addError(location, message);
       }
     }
@@ -413,7 +416,7 @@ namespace IncrementalCompiler {
           foreach (var member in symbol.GetMembers()) {
             switch (member) {
               case IPropertySymbol propertySymbol:
-                tryLazyProperty(propertySymbol, tds);
+                tryProperty(propertySymbol, tds);
                 break;
               // IMethodSymbol case gets called too many times (partial classes), we use the code above for this
               // case IMethodSymbol methodSymbol:
@@ -423,12 +426,12 @@ namespace IncrementalCompiler {
           }
         }
 
-        void tryLazyProperty(IPropertySymbol propertySymbol, TypeDeclarationSyntax tds) {
+        void tryProperty(IPropertySymbol propertySymbol, TypeDeclarationSyntax tds) {
           var attributes = propertySymbol.GetAttributes();
           foreach (var attr in attributes) {
             if (!GeneratorCtx.TreeContains(attr.ApplicationSyntaxReference, tds)) continue;
             if (attr.AttributeClass == null) continue;
-            if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, lazyPropertyType))
+            if (SymbolEqualityComparer.Default.Equals(attr.AttributeClass, lazyPropertyType)) {
               CodeGeneration.tryAttribute<LazyProperty>(attr, _ => {
                 if (propertySymbol.SetMethod != null)
                   throw new Exception("Lazy Property should not have a setter");
@@ -477,6 +480,7 @@ namespace IncrementalCompiler {
                   originalReplacement
                 });
               }, diagnostic);
+            }
           }
         }
 
