@@ -185,7 +185,14 @@ namespace IncrementalCompiler {
             }
           }
           else {
-            expr = ctx.Visit(arg.Syntax).ToString();
+            var syntax = ctx.Visit(arg.Syntax);
+            if (syntax is ArgumentSyntax argSyntax) {
+              // remove explicit argument name form result
+              // Eg. someMacroMethod(argumentName: expression)
+              // we only want expression
+              syntax = argSyntax.WithNameColon(null);
+            }
+            expr = syntax.ToString();
           }
 
           sb.Replace("${" + arg.Parameter.Name + "}", expr);
