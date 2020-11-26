@@ -412,7 +412,7 @@ namespace IncrementalCompiler {
 
           var syntax = CSharpSyntaxTree.ParseText(
             "// generated\n" +
-            $"[assembly: {typeof(TypesWithMacroAttributes).FullName}({typesString})]"
+            $"[assembly: {typeof(TypesWithMacroAttributes).FullName}(new global::System.Type[]{{{typesString}}})]"
           ).GetCompilationUnitRoot();
 
           var name = "MacroList.cs";
