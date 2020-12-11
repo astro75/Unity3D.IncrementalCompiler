@@ -296,11 +296,6 @@ namespace IncrementalCompiler {
                   if (attrClassName == typeof(PublicAccessor).FullName)
                     tryAttributeLocal<PublicAccessor>(attr,
                       _ => { newClassMembers = newClassMembers.Add(GenerateAccessor(fieldSymbol, model)); });
-                  // TODO: generic way to add new attributes
-                  if (attrClassName == typeof(ThreadStaticAttribute).FullName)
-                    tryAttributeLocal<ThreadStaticAttribute>(attr, _ =>
-                      throw new Exception($"Can't use {nameof(ThreadStaticAttribute)} in Unity"
-                      ));
                 }
 
                 break;
