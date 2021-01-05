@@ -40,9 +40,9 @@ namespace IncrementalCompiler {
 
   internal class GeneratorCtx {
     public readonly SemanticModel Model;
-    public readonly List<MemberDeclarationSyntax> NewMembers = new List<MemberDeclarationSyntax>();
+    public readonly List<MemberDeclarationSyntax> NewMembers = new();
     public readonly ImmutableArray<TypeDeclarationSyntax> TypesInFile;
-    public readonly List<INamedTypeSymbol> TypesWithMacros = new List<INamedTypeSymbol>();
+    public readonly List<INamedTypeSymbol> TypesWithMacros = new();
 
     public GeneratorCtx(CompilationUnitSyntax root, SemanticModel model) {
       Model = model;
@@ -67,7 +67,7 @@ namespace IncrementalCompiler {
   public static partial class CodeGeneration {
     static readonly Type caseType = typeof(RecordAttribute);
 
-    static readonly HashSet<SyntaxKind> kindsForExtensionClass = new HashSet<SyntaxKind>(new[] {
+    static readonly HashSet<SyntaxKind> kindsForExtensionClass = new(new[] {
       SyntaxKind.PublicKeyword, SyntaxKind.InternalKeyword, SyntaxKind.PrivateKeyword
     });
 
@@ -374,8 +374,8 @@ namespace IncrementalCompiler {
             options: parseOptions,
             encoding: Encoding.UTF8);
           results.Add(new GeneratedCsFile(
-            treePath, relativePath, tree: nt,
-            location: root.GetLocation(), transformedFile: false
+            SourcePath: treePath, RelativePath: relativePath, Tree: nt,
+            Location: root.GetLocation(), TransformedFile: false
           ));
         }
 
@@ -418,7 +418,7 @@ namespace IncrementalCompiler {
             encoding: Encoding.UTF8);
 
           results.Add(new GeneratedCsFile(
-            name, name, tree: nt, location: Location.None, transformedFile: false
+            name, name, Tree: nt, Location: Location.None, TransformedFile: false
           ));
         }
       }
@@ -769,52 +769,21 @@ namespace IncrementalCompiler {
 
     interface IGenerationResult { }
 
-    class ModifiedFile : IGenerationResult {
-      public readonly SyntaxTree From;
-      public readonly CompilationUnitSyntax To;
+    record ModifiedFile(SyntaxTree From, CompilationUnitSyntax To) : IGenerationResult;
 
-      public ModifiedFile(SyntaxTree from, CompilationUnitSyntax to) {
-        From = from;
-        To = to;
-      }
+    public record GeneratedFile(string SourcePath, Location Location) : IGenerationResult;
+
+    // string sourcePath, string relativePath, Location location, SyntaxTree tree, bool transformedFile
+    public record GeneratedCsFile(
+      string SourcePath, string RelativePath, Location Location, SyntaxTree Tree, bool TransformedFile
+    ) : GeneratedFile(SourcePath, Location) {
+      public string FullPath => Tree.FilePath;
+      public string Contents => Tree.GetText().ToString();
     }
 
-    public abstract class GeneratedFile : IGenerationResult {
-      public readonly Location Location;
-      public readonly string SourcePath;
-
-      protected GeneratedFile(string sourcePath, Location location) {
-        SourcePath = sourcePath;
-        Location = location;
-      }
-    }
-
-
-    public class GeneratedCsFile : GeneratedFile {
-      public readonly string FullPath, Contents, RelativePath;
-      public readonly bool TransformedFile;
-      public readonly SyntaxTree Tree;
-
-      public GeneratedCsFile(string sourcePath, string relativePath, Location location, SyntaxTree tree,
-        bool transformedFile)
-        : base(sourcePath, location) {
-        RelativePath = relativePath;
-        Tree = tree;
-        TransformedFile = transformedFile;
-        FullPath = tree.FilePath;
-        Contents = tree.GetText().ToString();
-      }
-    }
-
-    public class CaseClass : IEnumerable<TypeDeclarationSyntax> {
-      readonly TypeDeclarationSyntax caseClass;
-      readonly TypeDeclarationSyntax? companion;
-
-      public CaseClass(TypeDeclarationSyntax caseClass, TypeDeclarationSyntax? companion) {
-        this.caseClass = caseClass;
-        this.companion = companion;
-      }
-
+    public record CaseClass(
+      TypeDeclarationSyntax caseClass, TypeDeclarationSyntax? companion
+    ) : IEnumerable<TypeDeclarationSyntax> {
       public IEnumerator<TypeDeclarationSyntax> GetEnumerator() {
         yield return caseClass;
         if (companion != null) yield return companion;

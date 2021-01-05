@@ -13,16 +13,10 @@ using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler {
   public static partial class CodeGeneration {
-    class GeneratedJavaFile : GeneratedFile {
-      public readonly JavaFile JavaFile;
-
-      public GeneratedJavaFile(string sourcePath, Location location, JavaFile javaFile) : base(sourcePath, location) {
-        JavaFile = javaFile;
-      }
-    }
+    record GeneratedJavaFile(string SourcePath, Location Location, JavaFile JavaFile) : GeneratedFile(SourcePath, Location);
 
     public partial class GeneratedFilesMapping {
-      public Dictionary<string, List<JavaFile>> javaFilesDict = new Dictionary<string, List<JavaFile>>();
+      public Dictionary<string, List<JavaFile>> javaFilesDict = new();
 
       int javaVersion = 1, lastUsedJavaVersion;
       SyntaxTree? prevousTree;

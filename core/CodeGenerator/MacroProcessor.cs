@@ -528,18 +528,15 @@ namespace IncrementalCompiler {
     }
 
     public class MacroCtx {
-      public readonly Dictionary<SyntaxNode, SyntaxNode> AddedStatements =
-        new Dictionary<SyntaxNode, SyntaxNode>();
+      public readonly Dictionary<SyntaxNode, SyntaxNode> AddedStatements = new();
 
-      public readonly Dictionary<SyntaxNode, SyntaxNode> ChangedNodes =
-        new Dictionary<SyntaxNode, SyntaxNode>();
+      public readonly Dictionary<SyntaxNode, SyntaxNode> ChangedNodes = new();
 
-      public readonly Dictionary<SyntaxNode, SyntaxNode?[]> ChangedStatements =
-        new Dictionary<SyntaxNode, SyntaxNode?[]>();
+      public readonly Dictionary<SyntaxNode, SyntaxNode?[]> ChangedStatements = new();
 
       public readonly SemanticModel Model;
       readonly MacroReplacer Replacer;
-      readonly StringBuilder stringBuilder = new StringBuilder();
+      readonly StringBuilder stringBuilder = new();
 
       public MacroCtx(SemanticModel model) {
         Model = model;
@@ -581,12 +578,11 @@ namespace IncrementalCompiler {
   public class RootOperationsFinder : CSharpSyntaxWalker {
     public readonly SemanticModel model;
     public readonly SyntaxTree tree;
-    public readonly List<(IOperation op, TypeDeclarationSyntax? tds)> results =
-      new List<(IOperation, TypeDeclarationSyntax?)>();
+    public readonly List<(IOperation op, TypeDeclarationSyntax? tds)> results = new();
 
     // public TimeSpan tsNull, tsOther;
 
-    readonly Stack<TypeDeclarationSyntax> typeStack = new Stack<TypeDeclarationSyntax>();
+    readonly Stack<TypeDeclarationSyntax> typeStack = new();
 
     public RootOperationsFinder(SemanticModel model, SyntaxTree tree) {
       this.model = model;
@@ -645,7 +641,7 @@ namespace IncrementalCompiler {
     }
 
     class FindAllSymbolsVisitor : SymbolVisitor {
-      public List<INamedTypeSymbol> AllTypeSymbols { get; } = new List<INamedTypeSymbol>();
+      public List<INamedTypeSymbol> AllTypeSymbols { get; } = new();
 
       public override void VisitNamespace(INamespaceSymbol symbol) {
         Parallel.ForEach(symbol.GetMembers(), s => s.Accept(this));

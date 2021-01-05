@@ -7,7 +7,7 @@
     <Version>1.2.9</Version>
     <ProjectGuid>{44b41b02-cce7-40be-8b98-164aeef1d4b1}</ProjectGuid>
     <AssemblyTitle>Unity3D.IncrementalCompiler</AssemblyTitle>
-    <LangVersion>8</LangVersion>
+    <LangVersion>9</LangVersion>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <TargetFramework>net472</TargetFramework>

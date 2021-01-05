@@ -14,9 +14,8 @@ namespace IncrementalCompiler {
   public class MacroProcessorImplicits {
     readonly MacroHelper helper;
     readonly INamedTypeSymbol implicitType, implicitPassThroughType;
-    readonly HashSet<IMethodSymbol> passThroughMethods = new HashSet<IMethodSymbol>();
-    readonly Dictionary<IMethodSymbol, ImmutableHashSet<IParameterSymbol>> implicitMethods =
-      new Dictionary<IMethodSymbol, ImmutableHashSet<IParameterSymbol>>();
+    readonly HashSet<IMethodSymbol> passThroughMethods = new();
+    readonly Dictionary<IMethodSymbol, ImmutableHashSet<IParameterSymbol>> implicitMethods = new();
 
     public MacroProcessorImplicits(MacroHelper helper) {
       this.helper = helper;
@@ -384,7 +383,7 @@ namespace IncrementalCompiler {
           };
       }
 
-      public ImplicitSymbolRef toRef => new ImplicitSymbolRef(name, type, name);
+      public ImplicitSymbolRef toRef => new(name, type, name);
     }
 
     readonly struct ImplicitSymbolRef {
