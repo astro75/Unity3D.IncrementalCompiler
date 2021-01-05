@@ -145,10 +145,7 @@ namespace IncrementalCompiler {
       var diagnostic = new List<Diagnostic>();
 
       void tryAttributeLocal<A>(AttributeData attr, Action<A> a) where A : Attribute {
-        // why do I need this check ???
-        if (diagnostic != null) {
-          tryAttribute(attr, a, diagnostic);
-        }
+        tryAttribute(attr, a, diagnostic);
       }
 
       var typeAttributes = new Dictionary<
@@ -796,7 +793,7 @@ namespace IncrementalCompiler {
       }
     }
 
-    struct FieldOrProp {
+    readonly struct FieldOrProp {
       public readonly string type;
       public readonly ITypeSymbol typeInfo;
       public readonly string identifier;
