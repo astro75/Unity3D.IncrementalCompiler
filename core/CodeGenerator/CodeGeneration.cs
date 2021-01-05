@@ -33,7 +33,7 @@ namespace IncrementalCompiler {
       baseDirectoryUri = new Uri(Path.GetFullPath(baseDirectory));
     }
 
-    public string getRelativePath(string path) {
+    public string GetRelativePath(string path) {
       return baseDirectoryUri.MakeRelativeUri(new Uri(Path.GetFullPath(path))).ToString();
     }
   }
@@ -126,7 +126,7 @@ namespace IncrementalCompiler {
           "Error",
           DiagnosticSeverity.Error,
           true
-        ), attrLocation(attr)));
+        ), AttrLocation(attr)));
       }
     }
 
@@ -191,7 +191,9 @@ namespace IncrementalCompiler {
         addMacroAttributeMethod<SimpleMethodMacro>();
         addMacroAttributeMethod<StatementMethodMacro>();
         addMacroAttributeMethod<VarMethodMacro>();
+#pragma warning disable 618
         addMacroAttributeMethod<Inline>();
+#pragma warning restore 618
         addMacroAttributeMethod<ImplicitPassThrough>();
 
         addMacroAttributeParameter<Implicit>();
@@ -362,11 +364,11 @@ namespace IncrementalCompiler {
         }
 
         if (ctx.NewMembers.Count > 0) {
-          var treePath = settings.getRelativePath(tree.FilePath);
+          var treePath = settings.GetRelativePath(tree.FilePath);
           var relativePath = treePath.EnsureDoesNotEndWith(".cs") + ".partials.cs";
           var nt = CSharpSyntaxTree.Create(
             SF.CompilationUnit()
-              .WithUsings(cleanUsings(root.Usings))
+              .WithUsings(CleanUsings(root.Usings))
               .WithLeadingTrivia(SyntaxTriviaList.Create(SyntaxFactory.Comment("// ReSharper disable all")))
               .WithMembers(SF.List(ctx.NewMembers))
               .NormalizeWhitespace(),
@@ -430,7 +432,7 @@ namespace IncrementalCompiler {
 
       foreach (var file in csFiles) {
         sourceMap[file.FullPath] = file.Tree;
-        filesMapping.add(file.SourcePath, file.FullPath);
+        filesMapping.Add(file.SourcePath, file.FullPath);
 
         /*var generatedPath = file.FilePath;
         Directory.CreateDirectory(Path.GetDirectoryName(generatedPath));
@@ -470,7 +472,7 @@ namespace IncrementalCompiler {
       return maybeValue != null ? new[] {maybeValue} : Enumerable.Empty<A>();
     }
 
-    static Location attrLocation(AttributeData attr) {
+    static Location AttrLocation(AttributeData attr) {
       return attr.ApplicationSyntaxReference!.GetSyntax().GetLocation();
     }
 
@@ -594,7 +596,7 @@ namespace IncrementalCompiler {
       return CreateStatic(className, tds, ParseClassMembers(VoidMatch() + Match()));
     }
 
-    static string joinCommaSeparated<A>(this IEnumerable<A> collection, Func<A, string> mapper) {
+    static string JoinCommaSeparated<A>(this IEnumerable<A> collection, Func<A, string> mapper) {
       return collection
         .Select(mapper)
         .Tap(_ => Join(", ", _));
@@ -604,8 +606,8 @@ namespace IncrementalCompiler {
       TypeDeclarationSyntax cds, ICollection<FieldOrProp> props
     ) {
       var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
-      var funcParamsStr = joinCommaSeparated(props, p => p.type + " " + p.identifier);
-      var funcArgs = joinCommaSeparated(props, p => p.identifier);
+      var funcParamsStr = JoinCommaSeparated(props, p => p.type + " " + p.identifier);
+      var funcArgs = JoinCommaSeparated(props, p => p.identifier);
 
       return ParseClassMembers(
         $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +
@@ -679,7 +681,7 @@ namespace IncrementalCompiler {
           case NamespaceDeclarationSyntax a:
             generatedType =
               SF.NamespaceDeclaration(a.Name)
-                .WithUsings(cleanUsings(a.Usings))
+                .WithUsings(CleanUsings(a.Usings))
                 .WithMembers(SF.SingletonList(generatedType));
             break;
           case ClassDeclarationSyntax a:
@@ -707,7 +709,7 @@ namespace IncrementalCompiler {
       return generatedType;
     }
 
-    static SyntaxList<UsingDirectiveSyntax> cleanUsings(SyntaxList<UsingDirectiveSyntax> usings) {
+    static SyntaxList<UsingDirectiveSyntax> CleanUsings(SyntaxList<UsingDirectiveSyntax> usings) {
       return SF.List(usings.Select(u =>
         u.WithUsingKeyword(u.UsingKeyword.WithoutTrivia())
       ));
@@ -735,25 +737,25 @@ namespace IncrementalCompiler {
     public partial class GeneratedFilesMapping {
       public readonly Dictionary<string, List<string>> filesDict = new Dictionary<string, List<string>>();
 
-      static void addValue<A>(Dictionary<string, List<A>> dict, string key, A value) {
+      static void AddValue<A>(Dictionary<string, List<A>> dict, string key, A value) {
         if (!dict.ContainsKey(key)) dict[key] = new List<A>();
         dict[key].Add(value);
       }
 
-      static IEnumerable<A> enumerate<A>(Dictionary<string, List<A>> dict) {
+      static IEnumerable<A> Enumerate<A>(Dictionary<string, List<A>> dict) {
         return dict.Values.SelectMany(_ => _);
       }
 
-      public void add(string key, string value) {
-        addValue(filesDict, key, value);
+      public void Add(string key, string value) {
+        AddValue(filesDict, key, value);
       }
 
-      static string asVerbatimString(string str) {
+      static string AsVerbatimString(string str) {
         return $"@\"{str.Replace("\"", "\"\"")}\"";
       }
 
 
-      public void removeFiles(IEnumerable<string> filesToRemove) {
+      public void RemoveFiles(IEnumerable<string> filesToRemove) {
         foreach (var filePath in filesToRemove) {
           if (filesDict.TryGetValue(filePath, out var generatedFiles)) {
             foreach (var generatedFile in generatedFiles)

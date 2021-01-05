@@ -308,7 +308,7 @@ namespace IncrementalCompiler {
                   t.maybeMethod is IMethodSymbol ms && passthroughMissingImplicits.TryGetValue(ms, out var val2)
                     ? val2
                     : Array.Empty<ImplicitParameter>();
-                var allFound = t.found.Concat(passThrough.Select(_ => _.toRef)).ToArray();
+                var allFound = t.found.Concat(passThrough.Select(_ => _.ToRef)).ToArray();
                 var resolvedImplicits = t.toFill.Concat(passThroughToFill).Select(parameter => {
                   var matchingImplicits =
                     allFound.Where(s => SymbolEqualityComparer.Default.Equals(s.type, parameter.type)).ToArray();
@@ -383,7 +383,7 @@ namespace IncrementalCompiler {
           };
       }
 
-      public ImplicitSymbolRef toRef => new(name, type, name);
+      public ImplicitSymbolRef ToRef => new(name, type, name);
     }
 
     readonly struct ImplicitSymbolRef {

@@ -137,7 +137,9 @@ namespace IncrementalCompiler {
       var simpleMethodMacroType = helper.getTypeSymbol<SimpleMethodMacro>();
       var statementMethodMacroType = helper.getTypeSymbol<StatementMethodMacro>();
       var varMethodMacroType = helper.getTypeSymbol<VarMethodMacro>();
+#pragma warning disable 618
       var inlineType = helper.getTypeSymbol<Inline>();
+#pragma warning restore 618
       var lazyPropertyType = helper.getTypeSymbol<LazyProperty>();
 
       logTime?.Invoke("a1");
@@ -240,7 +242,7 @@ namespace IncrementalCompiler {
                       replaceArguments(ctx, sb, iop);
 
                       var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
-                      ctx.ChangedStatements.Add(statementOperation.Syntax, parsedBlock.Statements.ToArray());
+                      ctx.ChangedStatements.Add(statementOperation.Syntax, parsedBlock.Statements.ToArray<SyntaxNode>());
                     }
                     else {
                       throw new Exception($"Expected {nameof(IExpressionStatementOperation)}, got {parent?.GetType()}");
@@ -274,7 +276,7 @@ namespace IncrementalCompiler {
                       sb.Replace("${varType}", varDecl.Symbol.Type.ToDisplayString());
 
                       var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
-                      ctx.ChangedStatements.Add(vdgop.Syntax, parsedBlock.Statements.ToArray());
+                      ctx.ChangedStatements.Add(vdgop.Syntax, parsedBlock.Statements.ToArray<SyntaxNode>());
                     }
                     else {
                       throw new Exception(
@@ -285,7 +287,9 @@ namespace IncrementalCompiler {
             }, diagnostic);
 
         if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, inlineType))
+#pragma warning disable 618
           CodeGeneration.tryAttribute<Inline>(
+#pragma warning restore 618
             attribute, _ => helper.builderInvocations.Add(method, (ctx, op) => {
               if (op is IInvocationOperation iop) {
                 var parent = op.Parent;
@@ -509,7 +513,7 @@ namespace IncrementalCompiler {
       List<CodeGeneration.GeneratedCsFile> generatedFiles
     ) {
       foreach (var (tree, syntax) in treeEdits) {
-        var originalFilePath = settings.getRelativePath(tree.FilePath);
+        var originalFilePath = settings.GetRelativePath(tree.FilePath);
         var relativePath = originalFilePath.EnsureDoesNotEndWith(".cs") + ".transformed.cs";
         var editedFilePath = Path.Combine(settings.macrosFolder, relativePath);
 
@@ -626,7 +630,7 @@ namespace IncrementalCompiler {
 
     public override void Visit(IOperation operation) {
       for (var i = 0; i < ident; i++) Console.Write("  ");
-      Console.WriteLine(operation?.Kind.ToString());
+      Console.WriteLine(operation.Kind.ToString());
       ident++;
       base.Visit(operation);
       ident--;

@@ -13,6 +13,9 @@ using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler {
   public static partial class CodeGeneration {
+    // This file contains code that generates typesafe Java bindings for C# code in Unity.
+    // Currently not used by anyone and is not maintained.
+
     record GeneratedJavaFile(string SourcePath, Location Location, JavaFile JavaFile) : GeneratedFile(SourcePath, Location);
 
     public partial class GeneratedFilesMapping {
@@ -22,10 +25,10 @@ namespace IncrementalCompiler {
       SyntaxTree? prevousTree;
 
       public bool tryAddJavaFile(string key, JavaFile value) {
-        if (enumerate(javaFilesDict).Any(jf => jf.Module == value.Module && jf.Path == value.Path)) return false;
+        if (Enumerate(javaFilesDict).Any(jf => jf.Module == value.Module && jf.Path == value.Path)) return false;
 
         javaVersion++;
-        addValue(javaFilesDict, key, value);
+        AddValue(javaFilesDict, key, value);
         return true;
       }
 
@@ -57,8 +60,8 @@ namespace IncrementalCompiler {
 
       SyntaxTree generateJavaTree(CSharpParseOptions options, string assemblyName, string generatedFilesDir) {
         var className = assemblyName.Replace("-", "").Replace(".", "");
-        var data = enumerate(javaFilesDict).Select(jf =>
-          $"new JavaFile(module: \"{jf.Module}\", path: {asVerbatimString(jf.Path)}, contents: {asVerbatimString(jf.Contents)})"
+        var data = Enumerate(javaFilesDict).Select(jf =>
+          $"new JavaFile(module: \"{jf.Module}\", path: {AsVerbatimString(jf.Path)}, contents: {AsVerbatimString(jf.Contents)})"
         );
         var ns = "com.tinylabproductions.generated.java";
         var tree = CSharpSyntaxTree.ParseText(
@@ -94,7 +97,7 @@ namespace IncrementalCompiler {
     class JavaClassFile {
       readonly IMethodSymbol[] allMethods;
       public readonly Location Location;
-      readonly List<string> Methods = new List<string>();
+      readonly List<string> Methods = new();
       public readonly string Module, Imports, ClassBody;
       readonly INamedTypeSymbol Symbol;
 

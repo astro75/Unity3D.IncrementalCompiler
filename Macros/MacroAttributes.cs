@@ -130,6 +130,7 @@ namespace GenerationAttributes
     }
 
     [AttributeUsage(AttributeTargets.Method)]
+    [Obsolete("Not implemented yet!")]
     public class Inline : Attribute
     {
     }

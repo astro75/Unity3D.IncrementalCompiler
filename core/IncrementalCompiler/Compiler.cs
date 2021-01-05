@@ -466,7 +466,7 @@ namespace IncrementalCompiler
 
             cache._compilation = cache._compilation.RemoveSyntaxTrees(removedTrees.Concat(generatedFilesRemove));
 
-            cache._filesMapping.removeFiles(generatedRemove);
+            cache._filesMapping.RemoveFiles(generatedRemove);
 
             var allAddedTrees = newTrees.Concat(changes).Select(t => t.tree).ToImmutableArray();
 
