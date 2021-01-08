@@ -63,6 +63,6 @@ namespace GenerationAttributes
         /// Eg.: We put a [Record] attribute on some class in a project X that is being compiled with this compiler.
         /// Then C# compiler would strip that attribute from the compiled project X dll.
         /// </summary>
-        public const string UNUSED_NAME = "$$$$$____CodeGeneration";
+        public const string UNUSED_NAME = "____CodeGeneration____";
     }
 }
