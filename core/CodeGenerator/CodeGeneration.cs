@@ -569,7 +569,8 @@ namespace IncrementalCompiler {
           firstParam.Concat(childNames.Select(t => $"System.Action<{t.fullName}> {t.varName}")));
         var body = Join("\n", childNames.Select(t =>
           $"var val_{t.varName} = obj as {t.fullName};" +
-          $"if (val_{t.varName} != null) {{ {t.varName}(val_{t.varName}); return; }}"));
+          $"if (val_{t.varName} != null) {{ {t.varName}(val_{t.varName}); return; }}"
+        )) + $"throw new NullReferenceException(\"Expected to have type of {baseTypeSymbol}, but received null instead\");";
 
         return $"public static void voidMatch({parameters}) {{{body}}}";
       }
@@ -603,12 +604,15 @@ namespace IncrementalCompiler {
       TypeDeclarationSyntax cds, ICollection<FieldOrProp> props
     ) {
       var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
+      var genericArgsWhereClauseStr = cds.ConstraintClauses.Count > 0
+        ? cds.ConstraintClauses.ToFullString()
+        : "";
       var funcParamsStr = JoinCommaSeparated(props, p => p.type + " " + p.identifier);
       var funcArgs = JoinCommaSeparated(props, p => p.identifier);
 
       return ParseClassMembers(
         $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +
-        $"({funcParamsStr}) => new {cds.Identifier.ValueText}{genericArgsStr}({funcArgs});"
+        $"({funcParamsStr}) {genericArgsWhereClauseStr} => new {cds.Identifier.ValueText}{genericArgsStr}({funcArgs});"
       );
     }
 
