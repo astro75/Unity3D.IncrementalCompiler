@@ -576,7 +576,7 @@ namespace IncrementalCompiler {
         var body = Join("\n", childNames.Select(t =>
           $"var val_{t.varName} = obj as {t.fullName};" +
           $"if (val_{t.varName} != null) {{ {t.varName}(val_{t.varName}); return; }}"
-        )) + $"throw new NullReferenceException(\"Expected to have type of {baseTypeSymbol}, but received null instead\");";
+        )) + $"throw new System.NullReferenceException(\"Expected to have type of {baseTypeSymbol}, but received null instead\");";
 
         return $"public static void voidMatch({parameters}) {{{body}}}";
       }
@@ -595,9 +595,14 @@ namespace IncrementalCompiler {
       }
 
       var className = IsNullOrWhiteSpace(attribute.ClassName)
-        ? tds.Identifier + "Matcher"
+        ? $"{flattenClassName(baseTypeSymbol)}_Matcher"
         : attribute.ClassName;
       return CreateStatic(className, tds, ParseClassMembers(VoidMatch() + Match()));
+
+      string flattenClassName(INamedTypeSymbol s) {
+        if (s.ContainingType == null) return s.Name;
+        return $"{flattenClassName(s.ContainingType)}_{s.Name}";
+      }
     }
 
     static string JoinCommaSeparated<A>(this IEnumerable<A> collection, Func<A, string> mapper) {
