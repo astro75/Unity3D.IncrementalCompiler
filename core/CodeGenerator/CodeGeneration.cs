@@ -604,12 +604,15 @@ namespace IncrementalCompiler {
       TypeDeclarationSyntax cds, ICollection<FieldOrProp> props
     ) {
       var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
+      var genericArgsWhereClauseStr = cds.ConstraintClauses.Count > 0
+        ? cds.ConstraintClauses.ToFullString()
+        : "";
       var funcParamsStr = JoinCommaSeparated(props, p => p.type + " " + p.identifier);
       var funcArgs = JoinCommaSeparated(props, p => p.identifier);
 
       return ParseClassMembers(
         $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +
-        $"({funcParamsStr}) => new {cds.Identifier.ValueText}{genericArgsStr}({funcArgs});"
+        $"({funcParamsStr}) {genericArgsWhereClauseStr} => new {cds.Identifier.ValueText}{genericArgsStr}({funcArgs});"
       );
     }
 
