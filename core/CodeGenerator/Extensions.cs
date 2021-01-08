@@ -12,8 +12,6 @@ namespace IncrementalCompiler {
     public static SyntaxList<AttributeListSyntax> EmptyAttributeList = SF.List<AttributeListSyntax>();
     public static SyntaxTriviaList EmptyTriviaList = SF.TriviaList();
 
-    public static string mkString(this IEnumerable<string> strings, string sep = ",") => string.Join(sep, strings);
-
     public static bool Has(this BasePropertyDeclarationSyntax decl, SyntaxKind kind) => decl.Modifiers.Has(kind);
 
     public static bool Has(this BaseMethodDeclarationSyntax decl, SyntaxKind kind) => decl.Modifiers.Has(kind);

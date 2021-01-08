@@ -604,9 +604,7 @@ namespace IncrementalCompiler {
     ) {
       var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
       var genericArgsWhereClauseStr = cds.ConstraintClauses.Count > 0
-        ? cds.ConstraintClauses.Select(c =>
-            $" where {c.Name.Identifier.ValueText} : {c.Constraints.Select(co => co.ToFullString()).mkString(", ")} "
-          ).mkString(" ")
+        ? cds.ConstraintClauses.ToFullString()
         : "";
       var funcParamsStr = JoinCommaSeparated(props, p => p.type + " " + p.identifier);
       var funcArgs = JoinCommaSeparated(props, p => p.identifier);
