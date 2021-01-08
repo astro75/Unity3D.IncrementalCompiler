@@ -166,10 +166,11 @@ namespace IncrementalCompiler {
               case SpecialType.System_UInt64: return $"{name} == {otherName}";
               case SpecialType.System_String: return $"string.Equals({name}, {otherName})";
               default:
-                return $"{name}.Equals({otherName})";
+                return createEquals(isStruct: type.TypeKind == TypeKind.Struct, name, otherName);
             }
           });
-          var equalsExpr = isStruct ? "left.Equals(right)" : "Equals(left, right)";
+
+          var equalsExpr = createEquals(isStruct, "left", "right");
           return ParseClassMembers(
             $"public bool Equals({typeName} other) {{" +
             (!isStruct
@@ -186,6 +187,10 @@ namespace IncrementalCompiler {
             "}" +
             $"public static bool operator ==({typeName} left, {typeName} right) => {equalsExpr};" +
             $"public static bool operator !=({typeName} left, {typeName} right) => !{equalsExpr};");
+
+
+          static string createEquals(bool isStruct, string firstName, string secondName) =>
+            isStruct ? $"{firstName}.Equals({secondName})" : $"System.Object.Equals({firstName}, {secondName})";
         }
 
         return ParseClassMembers(
