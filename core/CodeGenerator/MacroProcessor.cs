@@ -174,14 +174,14 @@ namespace IncrementalCompiler {
                   if (literalOp.ConstantValue.HasValue)
                     return literalOp.ConstantValue.Value?.ToString() ?? "null";
                   else throw new Exception("Literal constant has no value");
-                case IConversionOperation conversionOp:
+                case IConversionOperation conversionOp when conversionOp.Type != null:
                   // enums
                   return $"(({conversionOp.Type.ToDisplayString()}) {defaultValueToString(conversionOp.Operand)})";
-                case IDefaultValueOperation defaultValueOp:
+                case IDefaultValueOperation defaultValueOp when defaultValueOp.Type != null:
                   return $"default({defaultValueOp.Type.ToDisplayString()})";
                 default:
                   throw new Exception(
-                    $"Expected '{arg.Parameter.Name}' to be of type " +
+                    $"Expected '{arg.Parameter?.Name}' to be of type " +
                     $"{nameof(ILiteralOperation)}, but got {arg.Value.GetType()}");
               }
             }
@@ -197,7 +197,7 @@ namespace IncrementalCompiler {
             expr = syntax.ToString();
           }
 
-          sb.Replace("${" + arg.Parameter.Name + "}", expr);
+          if (arg.Parameter != null) sb.Replace("${" + arg.Parameter.Name + "}", expr);
           sb.Replace("${expr" + i + "}", expr);
         }
 
@@ -388,7 +388,7 @@ namespace IncrementalCompiler {
                 if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
                 break;
               }
-              case IObjectCreationOperation op: {
+              case IObjectCreationOperation op when op.Constructor != null: {
                 var method = op.Constructor.OriginalDefinition;
                 if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
                 break;
@@ -628,9 +628,9 @@ namespace IncrementalCompiler {
   public class Walker : OperationWalker {
     int ident;
 
-    public override void Visit(IOperation operation) {
+    public override void Visit(IOperation? operation) {
       for (var i = 0; i < ident; i++) Console.Write("  ");
-      Console.WriteLine(operation.Kind.ToString());
+      Console.WriteLine(operation?.Kind.ToString());
       ident++;
       base.Visit(operation);
       ident--;

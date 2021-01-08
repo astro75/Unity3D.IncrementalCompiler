@@ -76,8 +76,8 @@ namespace IncrementalCompiler {
       ImmutableHashSet<IParameterSymbol> implicitParameters, ImmutableArray<IArgumentOperation> arguments
     ) {
       return arguments
-        .Where(a => a.IsImplicit && implicitParameters.Contains(a.Parameter.OriginalDefinition))
-        .Select(a => new ImplicitParameter(a.Parameter))
+        .Where(a => a.IsImplicit && a.Parameter != null && implicitParameters.Contains(a.Parameter.OriginalDefinition))
+        .Select(a => new ImplicitParameter(a.Parameter!))
         .ToArray();
     }
 
@@ -163,7 +163,9 @@ namespace IncrementalCompiler {
             var directImplicits = new HashSet<ITypeSymbol>();
 
             foreach (var op in descendants.OfType<IInvocationOperation>()) tryInvocation(op.TargetMethod, op.Arguments);
-            foreach (var op in descendants.OfType<IObjectCreationOperation>()) tryInvocation(op.Constructor, op.Arguments);
+            foreach (var op in descendants.OfType<IObjectCreationOperation>()) {
+              if (op.Constructor != null) tryInvocation(op.Constructor, op.Arguments);
+            }
 
             void tryInvocation(IMethodSymbol targetMethod, ImmutableArray<IArgumentOperation> arguments) {
               var method = targetMethod.OriginalDefinition;
