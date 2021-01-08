@@ -569,7 +569,8 @@ namespace IncrementalCompiler {
           firstParam.Concat(childNames.Select(t => $"System.Action<{t.fullName}> {t.varName}")));
         var body = Join("\n", childNames.Select(t =>
           $"var val_{t.varName} = obj as {t.fullName};" +
-          $"if (val_{t.varName} != null) {{ {t.varName}(val_{t.varName}); return; }}"));
+          $"if (val_{t.varName} != null) {{ {t.varName}(val_{t.varName}); return; }}"
+        )) + $"throw new NullReferenceException(\"Expected to have type of {baseTypeSymbol}, but received null instead\");";
 
         return $"public static void voidMatch({parameters}) {{{body}}}";
       }
