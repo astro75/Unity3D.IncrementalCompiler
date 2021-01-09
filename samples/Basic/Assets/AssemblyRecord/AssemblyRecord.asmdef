@@ -1,15 +1,12 @@
 {
-    "name": "Tests",
-    "references": [
-        "GUID:6fb1734e32b13bc4ab86526df32b62d6"
-    ],
+    "name": "AssemblyRecord",
+    "references": [],
     "includePlatforms": [],
     "excludePlatforms": [],
     "allowUnsafeCode": false,
     "overrideReferences": true,
     "precompiledReferences": [
-        "GenerationAttributes.dll",
-        "Macros.dll"
+        "GenerationAttributes.dll"
     ],
     "autoReferenced": true,
     "defineConstraints": [],

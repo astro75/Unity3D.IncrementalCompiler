@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Collections.Immutable;
+using System.Diagnostics.CodeAnalysis;
 using System.IO;
 using System.Linq;
 using System.Text;
@@ -65,8 +66,6 @@ namespace IncrementalCompiler {
   }
 
   public static partial class CodeGeneration {
-    static readonly Type caseType = typeof(RecordAttribute);
-
     static readonly HashSet<SyntaxKind> kindsForExtensionClass = new(new[] {
       SyntaxKind.PublicKeyword, SyntaxKind.InternalKeyword, SyntaxKind.PrivateKeyword
     });
@@ -112,11 +111,17 @@ namespace IncrementalCompiler {
       foreach (var subDir in Directory.GetDirectories(targetDir)) DeleteFilesRecursively(subDir);
     }
 
-    public static void tryAttribute<A>(AttributeData attr, Action<A> a, List<Diagnostic> diagnostic)
-      where A : Attribute {
+    public static void tryAttribute<A>(
+      AttributeData attr, Action<A> action, List<Diagnostic> diagnostic
+    ) where A : Attribute {
+      var maybeA = tryAttribute<A>(attr, diagnostic);
+      if (maybeA != null) action(maybeA);
+    }
+
+    public static A? tryAttribute<A>(AttributeData attr, List<Diagnostic> diagnostic) where A : Attribute {
       try {
         var instance = CreateAttributeByReflection<A>(attr);
-        a(instance);
+        return instance;
       }
       catch (Exception e) {
         diagnostic.Add(Diagnostic.Create(new DiagnosticDescriptor(
@@ -127,6 +132,7 @@ namespace IncrementalCompiler {
           DiagnosticSeverity.Error,
           true
         ), AttrLocation(attr)));
+        return null;
       }
     }
 
@@ -164,10 +170,16 @@ namespace IncrementalCompiler {
       >();
 
       {
+        var recordSkipAttribute = compilation.GetTypeByMetadataName(typeof(RecordSkipAttribute).FullName);
+        if (recordSkipAttribute == null) throw new Exception(
+          $"Can't find compiler data for {nameof(RecordSkipAttribute)} while processing {compilation}, " +
+          "this is a bug in the compiler!"
+        );
         addAttribute<RecordAttribute>((instance, ctx, tds, symbol) => {
           ctx.NewMembers.AddRange(
-            GenerateCaseClass(instance, ctx.Model, tds, symbol)
-              .Select(generatedClass => AddAncestors(tds, generatedClass, false))
+            GenerateCaseClass(
+              instance, ctx.Model, tds, symbolInfo: symbol, diagnostic
+            ).Select(generatedClass => AddAncestors(tds, generatedClass, onlyNamespace: false))
           );
         });
         
@@ -178,10 +190,10 @@ namespace IncrementalCompiler {
         });
 
         addAttribute<SingletonAttribute>((instance, ctx, tds, symbol) => {
-          if (tds is ClassDeclarationSyntax cds)
-            ctx.NewMembers.Add(
-              AddAncestors(tds, GenerateSingleton(cds), false)
-            );
+          if (tds is ClassDeclarationSyntax cds) {
+            var syntax = GenerateSingleton(instance.InstanceMethodName, cds);
+            ctx.NewMembers.Add(AddAncestors(tds, syntax, onlyNamespace: false));
+          }
           else
             throw new Exception("Can only be used on a class");
         });
@@ -508,11 +520,12 @@ namespace IncrementalCompiler {
     }
 
     static MemberDeclarationSyntax GenerateSingleton(
-      ClassDeclarationSyntax tds
+      string instanceMethodName, ClassDeclarationSyntax tds
     ) {
       var members = ParseClassMembers(
         $"private {tds.Identifier}(){{}}" +
-        $"public static readonly {tds.Identifier} instance = new {tds.Identifier}();");
+        $"public static readonly {tds.Identifier} {instanceMethodName} = new {tds.Identifier}();"
+      );
       var partialClass = CreatePartial(tds, members, Extensions.EmptyBaseList);
       return partialClass;
     }
@@ -814,26 +827,23 @@ namespace IncrementalCompiler {
     readonly struct FieldOrProp {
       public readonly string type;
       public readonly ITypeSymbol typeInfo;
-      public readonly string identifier;
-      public readonly string identifierFirstLetterUpper;
-      public readonly bool initialized;
-      public readonly bool traversable;
+      public readonly string identifier, identifierFirstLetterUpper;
+      public readonly bool initialized, traversable;
+      public readonly RecordSkipAttribute? recordSkipAttribute;
 
       static readonly string stringName = "string";
       static readonly string iEnumName = typeof(IEnumerable<>).FullName!;
 
       public FieldOrProp(
-        ITypeSymbol typeInfo, string identifier, bool initialized, SemanticModel model
+        ITypeSymbol typeInfo, string identifier, bool initialized, SemanticModel model, 
+        RecordSkipAttribute? recordSkipAttribute
       ) {
         type = typeInfo.ToDisplayString();
         this.typeInfo = typeInfo;
         this.identifier = identifier;
         identifierFirstLetterUpper = identifier.FirstLetterToUpper();
         this.initialized = initialized;
-
-        bool interfaceInIEnumerable(INamedTypeSymbol info) {
-          return info.ContainingNamespace + "." + info.Name + "`" + info.Arity == iEnumName;
-        }
+        this.recordSkipAttribute = recordSkipAttribute;
 
         var typeName = typeInfo.ToDisplayString();
 
@@ -842,7 +852,15 @@ namespace IncrementalCompiler {
 
         traversable =
           typeName != stringName && (typeIsIEnumerableItself || typeImplementsIEnumerable);
+
+        static bool interfaceInIEnumerable(INamedTypeSymbol info) => 
+          info.ContainingNamespace + "." + info.Name + "`" + info.Arity == iEnumName;
       }
+
+      public bool includeInConstructor => !recordSkipAttribute?.SkipInConstructor ?? true;
+      public bool includeInEquals => !recordSkipAttribute?.SkipInEquals ?? true;
+      public bool includeInHashCode => !recordSkipAttribute?.SkipInHashCode ?? true;
+      public bool includeInToString => !recordSkipAttribute?.SkipInToString ?? true;
     }
   }
 }

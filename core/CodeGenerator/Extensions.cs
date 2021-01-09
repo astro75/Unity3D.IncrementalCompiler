@@ -95,6 +95,20 @@ namespace IncrementalCompiler {
       foreach (var e in enumerable) act(e);
     }
 
+    public static IEnumerable<B> Collect<A, B>(this IEnumerable<A> enumerable, Func<A, B?> collector) where B : class {
+      foreach (var a in enumerable) {
+        var maybeB = collector(a);
+        if (maybeB != null) yield return maybeB;
+      }
+    }
+
+    public static IEnumerable<B> Collect<A, B>(this IEnumerable<A> enumerable, Func<A, B?> collector) where B : struct {
+      foreach (var a in enumerable) {
+        var maybeB = collector(a);
+        if (maybeB.HasValue) yield return maybeB.Value;
+      }
+    }
+
     public static bool IsEnum(this ITypeSymbol t, out SpecialType underlyingType) {
       if (t is INamedTypeSymbol nt && nt.EnumUnderlyingType != null)
       {

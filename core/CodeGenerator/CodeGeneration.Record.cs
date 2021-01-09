@@ -11,12 +11,22 @@ using SF = Microsoft.CodeAnalysis.CSharp.SyntaxFactory;
 
 namespace IncrementalCompiler {
   public static partial class CodeGeneration {
+    static readonly string recordSkipAttributeName = typeof(RecordSkipAttribute).FullName;
+    
     static CaseClass GenerateCaseClass(
-      RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds, INamedTypeSymbol symbolInfo
+      RecordAttribute attr, SemanticModel model, TypeDeclarationSyntax cds,
+      INamedTypeSymbol symbolInfo, List<Diagnostic> diagnostics
     ) {
       var members = symbolInfo.GetMembers();
 
-      var fieldsAndProps = members.SelectMany(member => {
+      RecordSkipAttribute? lookupRecordSkipAttribute(ISymbol symbol) => 
+        symbol.GetAttributes().Collect(a =>
+          a.AttributeClass?.Name == recordSkipAttributeName
+            ? tryAttribute<RecordSkipAttribute>(a, diagnostics)
+            : null
+        ).FirstOrDefault();
+      
+      var fieldsAndProps = members.Collect(member => {
         switch (member) {
           case IFieldSymbol fieldSymbol: {
             if (fieldSymbol.IsConst || fieldSymbol.IsStatic) break;
@@ -24,11 +34,10 @@ namespace IncrementalCompiler {
             if (fieldSymbol.DeclaringSyntaxReferences.Length == 0) break;
             var untypedSyntax = fieldSymbol.DeclaringSyntaxReferences.Single().GetSyntax();
             var syntax = (VariableDeclaratorSyntax) untypedSyntax;
-            return new[] {
-              new FieldOrProp(
-                fieldSymbol.Type, fieldSymbol.Name, syntax.Initializer != null, model
-              )
-            };
+            return new FieldOrProp(
+              fieldSymbol.Type, fieldSymbol.Name, syntax.Initializer != null, model, 
+              lookupRecordSkipAttribute(fieldSymbol)
+            );
           }
           case IPropertySymbol propertySymbol: {
             if (propertySymbol.IsStatic) break;
@@ -40,27 +49,27 @@ namespace IncrementalCompiler {
             ) ?? false;
             if (hasGetterOrSetter) break;
             if (syntax.ExpressionBody != null) break;
-            return new[] {
-              new FieldOrProp(
-                propertySymbol.Type, propertySymbol.Name, syntax.Initializer != null, model
-              )
-            };
+            return new FieldOrProp(
+              propertySymbol.Type, propertySymbol.Name, syntax.Initializer != null, model, 
+              lookupRecordSkipAttribute(propertySymbol)
+            );
           }
         }
-
-        return Enumerable.Empty<FieldOrProp>();
+        return (FieldOrProp?) null;
       }).ToArray();
 
       var hasAnyFields = fieldsAndProps.Any();
 
       var initializedFieldsAndProps = fieldsAndProps.Where(_ => !_.initialized).ToImmutableArray();
+      var constructorFieldsAndProps = initializedFieldsAndProps.Where(_ => _.includeInConstructor).ToImmutableArray();
 
       var constructor = createIf(
         attr.GenerateConstructor.HasFlag(ConstructorFlags.Constructor) && hasAnyFields,
         () => {
-          var parameters = initializedFieldsAndProps.JoinCommaSeparated(f => f.type + " " + f.identifier);
-          var body = initializedFieldsAndProps.Any()
-            ? initializedFieldsAndProps
+          var parameters = constructorFieldsAndProps.JoinCommaSeparated(f => f.type + " " + f.identifier);
+          var body = 
+            constructorFieldsAndProps.Any() ? 
+              constructorFieldsAndProps
               .Select(f => $"this.{f.identifier} = {f.identifier};")
               .Tap(s => Join("\n", s) + "\n")
             : "";
@@ -69,20 +78,18 @@ namespace IncrementalCompiler {
         }
       );
 
-      IReadOnlyList<MemberDeclarationSyntax> createIf(bool condition, Func<SyntaxList<MemberDeclarationSyntax>> a) {
-        return condition ? (IReadOnlyList<MemberDeclarationSyntax>) a() : Array.Empty<MemberDeclarationSyntax>();
-      }
+      static IReadOnlyList<MemberDeclarationSyntax> createIf(
+        bool condition, Func<SyntaxList<MemberDeclarationSyntax>> a
+      ) => condition ? (IReadOnlyList<MemberDeclarationSyntax>) a() : Array.Empty<MemberDeclarationSyntax>();
 
       var toString = createIf(
         attr.GenerateToString,
         () => {
-          var returnString = fieldsAndProps
-            .JoinCommaSeparated(f => f.traversable
-              ? f.identifier +
-                ": [\" + Helpers.enumerableToString(" + f.identifier + ") + \"]"
-              : f.identifier +
-                ": \" + " + f.identifier + " + \""
-            );
+          var generateFrom = initializedFieldsAndProps.Where(f => f.includeInToString);
+          var returnString = generateFrom.JoinCommaSeparated(f => f.traversable
+            ? $"{f.identifier}: [\" + Helpers.enumerableToString({f.identifier}) + \"]"
+            : $"{f.identifier}: \" + {f.identifier} + \""
+          );
 
           return ParseClassMembers(
             $"public override string ToString() => \"{cds.Identifier.ValueText}({returnString})\";"
@@ -90,8 +97,9 @@ namespace IncrementalCompiler {
         });
 
       var getHashCode = createIf(attr.GenerateGetHashCode, () => {
-        if (hasAnyFields) {
-          var hashLines = Join("\n", fieldsAndProps.Select(f => {
+        var generateFrom = initializedFieldsAndProps.Where(f => f.includeInHashCode).ToArray();
+        if (generateFrom.Length != 0) {
+          var hashLines = Join("\n", generateFrom.Select(f => {
             var type = f.typeInfo;
             var isValueType = type.IsValueType;
             var name = f.identifier;
@@ -147,8 +155,9 @@ namespace IncrementalCompiler {
 
       var equals = createIf(attr.GenerateComparer, () => {
         var isStruct = cds.Kind() == SyntaxKind.StructDeclaration;
-        if (hasAnyFields) {
-          var comparisons = fieldsAndProps.Select(f => {
+        var generateFrom = fieldsAndProps.Where(f => f.includeInEquals).ToArray();
+        if (generateFrom.Length != 0) {
+          var comparisons = generateFrom.Select(f => {
             var type = f.typeInfo;
             var name = f.identifier;
             var otherName = "other." + name;
@@ -203,11 +212,11 @@ namespace IncrementalCompiler {
 
       var withers = createIf(
         attr.GenerateConstructor.HasFlag(ConstructorFlags.Withers) && constructor.Count > 0 &&
-        initializedFieldsAndProps.Length >= 1 && !symbolInfo.IsAbstract,
+        constructorFieldsAndProps.Length >= 1 && !symbolInfo.IsAbstract,
         () => {
-          // pubilc Type withVal1(int val1) => new Type(val2, val2);
-          var args = initializedFieldsAndProps.JoinCommaSeparated(f => f.identifier);
-          return ParseClassMembers(Join("\n", initializedFieldsAndProps.Select(f =>
+          // public Type withVal1(int val1) => new Type(val2, val2);
+          var args = constructorFieldsAndProps.JoinCommaSeparated(f => f.identifier);
+          return ParseClassMembers(Join("\n", constructorFieldsAndProps.Select(f =>
             $"public {typeName} with{f.identifierFirstLetterUpper} ({f.type + " " + f.identifier}) => " +
             $"new {typeName}({args});"
           )));
@@ -219,20 +228,20 @@ namespace IncrementalCompiler {
           // class Type<A> where A : class { A supported; }
           return tp.HasReferenceTypeConstraint;
         // class Type { int? unsupported; }
-        return !f.typeInfo.IsNullable();
+        return !f.typeInfo.IsNullable() && f.includeInConstructor;
       }).ToImmutableArray();
 
       var copy = createIf(
         attr.GenerateConstructor.HasFlag(ConstructorFlags.Copy) && constructor.Count > 0 &&
         fieldsForCopy.Length >= 1 && !symbolInfo.IsAbstract,
         () => {
-          // pubilc Type copy(int? val1 = null, int? val2 = null) => new Type(val2 ?? this.val1, val2 ?? this.val2);
+          // public Type copy(int? val1 = null, int? val2 = null) => new Type(val2 ?? this.val1, val2 ?? this.val2);
           var args1 = fieldsForCopy.JoinCommaSeparated(f =>
             f.typeInfo.IsValueType
               ? $"{f.type}? {f.identifier} = null"
               : $"{f.type} {f.identifier} = null"
           );
-          var args2 = initializedFieldsAndProps.JoinCommaSeparated(f =>
+          var args2 = constructorFieldsAndProps.JoinCommaSeparated(f =>
             fieldsForCopy.Contains(f)
               ? $"{f.identifier}?? this.{f.identifier}"
               : $"this.{f.identifier}"
@@ -258,16 +267,16 @@ namespace IncrementalCompiler {
       {
         if (attr.GenerateConstructor.HasFlag(ConstructorFlags.Apply)) {
           if (cds.TypeParameterList == null)
-            newMembers = newMembers.Concat(GenerateStaticApply(cds, initializedFieldsAndProps));
+            newMembers = newMembers.Concat(GenerateStaticApply(cds, constructorFieldsAndProps));
           else
-            companion = GenerateCaseClassCompanion(cds, initializedFieldsAndProps);
+            companion = GenerateCaseClassCompanion(cds, constructorFieldsAndProps);
         }
       }
 
       #endregion
 
-      var caseclass = CreatePartial(cds, newMembers, baseList);
-      return new CaseClass(caseclass, companion);
+      var caseClass = CreatePartial(cds, newMembers, baseList);
+      return new CaseClass(caseClass, companion);
     }
 
     static TypeDeclarationSyntax GenerateCaseClassCompanion(

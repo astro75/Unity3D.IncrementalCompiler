@@ -239,6 +239,11 @@ namespace Assets.Scripts {
     [Record]
     public partial struct EmptyStruct { }
 
+    [Record] public partial class ClassWithSkippedFields {
+        public readonly int a, b;
+        [RecordSkip] public int sum;
+    }
+
     [Singleton]
     public partial class Singleton { }
 }
