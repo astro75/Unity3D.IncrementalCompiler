@@ -4,53 +4,57 @@
         <name>GenerationAttributes</name>
     </assembly>
     <members>
-        <member name="T:GenerationAttributes.JavaListenerInterfaceAttribute">
+        <member name="T:GenerationAttributes.ConstructorFlags">
             <summary>
-            When added on a C# interface [CS_interface]:
-            1. Generates identical interface in java with all the methods.
-            2. Generates a class named [CS_interface]Proxy that implements the generated java interface.
-            Generated class extends tlplib.JavaListenerProxy
+            <code><![CDATA[
+               None = 0,
+               Constructor = 1,
+               Apply =   Constructor | 1 << 1,
+               Copy =    Constructor | 1 << 2,
+               Withers = Constructor | 1 << 3,
+               Default = Constructor | Copy | Withers,
+               All =     Constructor | Apply | Copy | Withers
+            ]]></code>
             </summary>
         </member>
-        <member name="F:GenerationAttributes.JavaListenerInterfaceAttribute.Module">
-            <summary>Android module the code will be generated in</summary>
-        </member>
-        <member name="T:GenerationAttributes.JavaMethodAttribute">
+        <member name="F:GenerationAttributes.Consts.UNUSED_NAME">
             <summary>
-            Can only be used inside class with JavaClass attribute.
-            Generates a method inside that java class.
-            Method should not have an implementation. Compiler generates C# method body at compile-time.
-            When you call this method in C#, it gets redirected to Java automatically.
+            Dummy name that we should never encounter in compiler defines list.
+            Purpose: we want to remove instances of some attributes from compiled code.
+            Eg.: We put a [Record] attribute on some class in a project X that is being compiled with this compiler.
+            Then C# compiler would strip that attribute from the compiled project X dll.
             </summary>
         </member>
-        <member name="F:GenerationAttributes.JavaMethodAttribute.MethodBody">
-            <summary>Method body in generated Java code.</summary>
-        </member>
-        <member name="T:GenerationAttributes.JavaClassAttribute">
-            <summary>
-            Generates a java class with provided imports and body.
-            When you instantiate this object, then a mirror object is also instantiated in Java.
-            You should use <see cref="T:GenerationAttributes.JavaMethodAttribute"/> on methods inside this class.
-            </summary>
-        </member>
-        <member name="F:GenerationAttributes.JavaClassAttribute.Module">
-            <summary>Android module the code will be generated in</summary>
-        </member>
-        <member name="F:GenerationAttributes.JavaClassAttribute.Imports">
-            <summary>Java code that will be put at top of the generated file</summary>
-        </member>
-        <member name="F:GenerationAttributes.JavaClassAttribute.ClassBody">
-            <summary>Java code that will be put in the generated class</summary>
-        </member>
-        <member name="T:GenerationAttributes.JavaBindingAttribute">
-            <summary>
-            Use this on classes that extend Binding, AndroidJavaObject and AndroidJavaProxy.
-            This attribute is used by <see cref="T:GenerationAttributes.JavaMethodAttribute"/> to determine what object type this is in Java
-            when generating code.
-            </summary>
-        </member>
-        <member name="F:GenerationAttributes.JavaBindingAttribute.JavaClass">
-            <summary>Full java class name of associated java object</summary>
+        <member name="T:GenerationAttributes.LambdaInterfaceAttribute">
+             <summary>
+             Generates a Lambda implementation of the marked interface.
+             </summary>
+            
+             <remarks>
+             <para>A Lambda implementation is a class where each function in the interface is converted to a delegate.</para>
+            
+             <para>Thus an interface like this:</para>
+             <code><![CDATA[
+             public interface IExampleInterface {
+               int add(int a, int b);
+               int negate(int a);
+             }
+             ]]></code>
+            
+             <para>Would be converted to:</para>
+             <code><![CDATA[
+             public record LambdaIExampleInterface(
+               LambdaIExampleInterface._add add_,
+               LambdaIExampleInterface._negate negate_
+             ) : IExampleInterface {
+               public delegate int _add(int a, int b);
+               public int add(int a, int b) => add_(a, b);
+             
+               public delegate int _negate(int a);
+               public int negate(int a) => negate_(a);
+             }
+             ]]></code>
+             </remarks>
         </member>
     </members>
 </doc>

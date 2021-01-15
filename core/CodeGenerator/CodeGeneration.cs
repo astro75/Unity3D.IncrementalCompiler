@@ -170,6 +170,12 @@ namespace IncrementalCompiler {
               .Select(generatedClass => AddAncestors(tds, generatedClass, false))
           );
         });
+        
+        addAttribute<LambdaInterfaceAttribute>((instance, ctx, tds, symbol) => {
+          ctx.NewMembers.AddRange(
+            GenerateLambdaInterface(tds).Select(generated => AddAncestors(tds, generated, onlyNamespace: false))
+          );
+        });
 
         addAttribute<SingletonAttribute>((instance, ctx, tds, symbol) => {
           if (tds is ClassDeclarationSyntax cds)
@@ -725,6 +731,9 @@ namespace IncrementalCompiler {
       var cls = (ClassDeclarationSyntax) CSharpSyntaxTree.ParseText(syntax).GetCompilationUnitRoot().Members[0];
       return cls;
     }
+
+    static RecordDeclarationSyntax ParseRecord(string syntax) => 
+      (RecordDeclarationSyntax) CSharpSyntaxTree.ParseText(syntax).GetCompilationUnitRoot().Members[0];
 
     static SyntaxList<MemberDeclarationSyntax> ParseClassMembers(string syntax) {
       var cls = (ClassDeclarationSyntax) CSharpSyntaxTree.ParseText($"class C {{ {syntax} }}").GetCompilationUnitRoot()
