@@ -170,7 +170,7 @@ namespace IncrementalCompiler {
               .Select(generatedClass => AddAncestors(tds, generatedClass, false))
           );
         });
-        
+
         addAttribute<LambdaInterfaceAttribute>((instance, ctx, tds, symbol) => {
           ctx.NewMembers.AddRange(
             GenerateLambdaInterface(tds).Select(generated => AddAncestors(tds, generated, onlyNamespace: false))
@@ -732,7 +732,7 @@ namespace IncrementalCompiler {
       return cls;
     }
 
-    static RecordDeclarationSyntax ParseRecord(string syntax) => 
+    static RecordDeclarationSyntax ParseRecord(string syntax) =>
       (RecordDeclarationSyntax) CSharpSyntaxTree.ParseText(syntax).GetCompilationUnitRoot().Members[0];
 
     static SyntaxList<MemberDeclarationSyntax> ParseClassMembers(string syntax) {
@@ -812,6 +812,8 @@ namespace IncrementalCompiler {
     }
 
     readonly struct FieldOrProp {
+      static readonly HashSet<string> keywords = new();
+
       public readonly string type;
       public readonly ITypeSymbol typeInfo;
       public readonly string identifier;
@@ -822,12 +824,24 @@ namespace IncrementalCompiler {
       static readonly string stringName = "string";
       static readonly string iEnumName = typeof(IEnumerable<>).FullName!;
 
+      static FieldOrProp() {
+        var values = (SyntaxKind[]) Enum.GetValues(typeof(SyntaxKind));
+        foreach (var sk in values) {
+          var str = sk.ToString();
+          const string KEYWORD = "Keyword";
+          if (str.EndsWith(KEYWORD, StringComparison.Ordinal)) {
+            var beginning = str.Substring(0, str.Length - KEYWORD.Length);
+            keywords.Add(beginning.ToLowerInvariant());
+          }
+        }
+      }
+
       public FieldOrProp(
         ITypeSymbol typeInfo, string identifier, bool initialized, SemanticModel model
       ) {
         type = typeInfo.ToDisplayString();
         this.typeInfo = typeInfo;
-        this.identifier = identifier;
+        this.identifier = keywords.Contains(identifier) ? $"@{identifier}" : identifier;
         identifierFirstLetterUpper = identifier.FirstLetterToUpper();
         this.initialized = initialized;
 
