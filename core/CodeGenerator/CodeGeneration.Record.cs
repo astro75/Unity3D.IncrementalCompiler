@@ -58,14 +58,14 @@ namespace IncrementalCompiler {
       var constructor = createIf(
         attr.GenerateConstructor.HasFlag(ConstructorFlags.Constructor) && hasAnyFields,
         () => {
-          var params_ = initializedFieldsAndProps.joinCommaSeparated(f => f.type + " " + f.identifier);
+          var parameters = initializedFieldsAndProps.JoinCommaSeparated(f => f.type + " " + f.identifier);
           var body = initializedFieldsAndProps.Any()
             ? initializedFieldsAndProps
               .Select(f => $"this.{f.identifier} = {f.identifier};")
               .Tap(s => Join("\n", s) + "\n")
             : "";
 
-          return ParseClassMembers($"public {cds.Identifier}({params_}){{{body}}}");
+          return ParseClassMembers($"public {cds.Identifier}({parameters}){{{body}}}");
         }
       );
 
@@ -77,7 +77,7 @@ namespace IncrementalCompiler {
         attr.GenerateToString,
         () => {
           var returnString = fieldsAndProps
-            .joinCommaSeparated(f => f.traversable
+            .JoinCommaSeparated(f => f.traversable
               ? f.identifier +
                 ": [\" + Helpers.enumerableToString(" + f.identifier + ") + \"]"
               : f.identifier +
@@ -166,10 +166,11 @@ namespace IncrementalCompiler {
               case SpecialType.System_UInt64: return $"{name} == {otherName}";
               case SpecialType.System_String: return $"string.Equals({name}, {otherName})";
               default:
-                return $"{name}.Equals({otherName})";
+                return createEquals(isStruct: type.TypeKind == TypeKind.Struct, name, otherName);
             }
           });
-          var equalsExpr = isStruct ? "left.Equals(right)" : "Equals(left, right)";
+
+          var equalsExpr = createEquals(isStruct, "left", "right");
           return ParseClassMembers(
             $"public bool Equals({typeName} other) {{" +
             (!isStruct
@@ -186,6 +187,10 @@ namespace IncrementalCompiler {
             "}" +
             $"public static bool operator ==({typeName} left, {typeName} right) => {equalsExpr};" +
             $"public static bool operator !=({typeName} left, {typeName} right) => !{equalsExpr};");
+
+
+          static string createEquals(bool isStruct, string firstName, string secondName) =>
+            isStruct ? $"{firstName}.Equals({secondName})" : $"System.Object.Equals({firstName}, {secondName})";
         }
 
         return ParseClassMembers(
@@ -201,7 +206,7 @@ namespace IncrementalCompiler {
         initializedFieldsAndProps.Length >= 1 && !symbolInfo.IsAbstract,
         () => {
           // pubilc Type withVal1(int val1) => new Type(val2, val2);
-          var args = initializedFieldsAndProps.joinCommaSeparated(f => f.identifier);
+          var args = initializedFieldsAndProps.JoinCommaSeparated(f => f.identifier);
           return ParseClassMembers(Join("\n", initializedFieldsAndProps.Select(f =>
             $"public {typeName} with{f.identifierFirstLetterUpper} ({f.type + " " + f.identifier}) => " +
             $"new {typeName}({args});"
@@ -222,12 +227,12 @@ namespace IncrementalCompiler {
         fieldsForCopy.Length >= 1 && !symbolInfo.IsAbstract,
         () => {
           // pubilc Type copy(int? val1 = null, int? val2 = null) => new Type(val2 ?? this.val1, val2 ?? this.val2);
-          var args1 = fieldsForCopy.joinCommaSeparated(f =>
+          var args1 = fieldsForCopy.JoinCommaSeparated(f =>
             f.typeInfo.IsValueType
               ? $"{f.type}? {f.identifier} = null"
               : $"{f.type} {f.identifier} = null"
           );
-          var args2 = initializedFieldsAndProps.joinCommaSeparated(f =>
+          var args2 = initializedFieldsAndProps.JoinCommaSeparated(f =>
             fieldsForCopy.Contains(f)
               ? $"{f.identifier}?? this.{f.identifier}"
               : $"this.{f.identifier}"

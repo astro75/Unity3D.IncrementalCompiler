@@ -2,7 +2,7 @@
   <PropertyGroup>
     <ProjectGuid>{91566123-691C-4D87-9285-C3063C739A8D}</ProjectGuid>
     <AssemblyTitle>CompilationExtensionCodeGenerator</AssemblyTitle>
-    <LangVersion>8</LangVersion>
+    <LangVersion>9</LangVersion>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <TargetFrameworks>net472;netcoreapp3.1</TargetFrameworks>

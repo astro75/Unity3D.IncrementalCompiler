@@ -37,7 +37,7 @@ public class CSharpProjectPostprocessor : AssetPostprocessor
 
         {
             // SetUpCorrectLangVersion
-            const string csharpVersion = "8";
+            const string csharpVersion = "9";
             xdoc.Descendants(ns + "LangVersion").Remove();
             var propertyGroupElement = xdoc.Descendants(ns + "PropertyGroup").First();
             propertyGroupElement.Add(new XElement(ns + "LangVersion", csharpVersion));

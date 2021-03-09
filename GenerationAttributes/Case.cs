@@ -60,6 +60,12 @@ namespace GenerationAttributes {
   public class SingletonAttribute : Attribute { }
 
   internal static class Consts {
-    public const string UNUSED_NAME = "CodeGeneration";
+        /// <summary>
+        /// Dummy name that we should never encounter in compiler defines list.
+        /// Purpose: we want to remove instances of some attributes from compiled code.
+        /// Eg.: We put a [Record] attribute on some class in a project X that is being compiled with this compiler.
+        /// Then C# compiler would strip that attribute from the compiled project X dll.
+        /// </summary>
+        public const string UNUSED_NAME = "____CodeGeneration____";
   }
 }

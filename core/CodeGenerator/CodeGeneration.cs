@@ -33,16 +33,16 @@ namespace IncrementalCompiler {
       baseDirectoryUri = new Uri(Path.GetFullPath(baseDirectory));
     }
 
-    public string getRelativePath(string path) {
+    public string GetRelativePath(string path) {
       return baseDirectoryUri.MakeRelativeUri(new Uri(Path.GetFullPath(path))).ToString();
     }
   }
 
   internal class GeneratorCtx {
     public readonly SemanticModel Model;
-    public readonly List<MemberDeclarationSyntax> NewMembers = new List<MemberDeclarationSyntax>();
+    public readonly List<MemberDeclarationSyntax> NewMembers = new();
     public readonly ImmutableArray<TypeDeclarationSyntax> TypesInFile;
-    public readonly List<INamedTypeSymbol> TypesWithMacros = new List<INamedTypeSymbol>();
+    public readonly List<INamedTypeSymbol> TypesWithMacros = new();
 
     public GeneratorCtx(CompilationUnitSyntax root, SemanticModel model) {
       Model = model;
@@ -67,7 +67,7 @@ namespace IncrementalCompiler {
   public static partial class CodeGeneration {
     static readonly Type caseType = typeof(RecordAttribute);
 
-    static readonly HashSet<SyntaxKind> kindsForExtensionClass = new HashSet<SyntaxKind>(new[] {
+    static readonly HashSet<SyntaxKind> kindsForExtensionClass = new(new[] {
       SyntaxKind.PublicKeyword, SyntaxKind.InternalKeyword, SyntaxKind.PrivateKeyword
     });
 
@@ -126,7 +126,7 @@ namespace IncrementalCompiler {
           "Error",
           DiagnosticSeverity.Error,
           true
-        ), attrLocation(attr)));
+        ), AttrLocation(attr)));
       }
     }
 
@@ -145,10 +145,7 @@ namespace IncrementalCompiler {
       var diagnostic = new List<Diagnostic>();
 
       void tryAttributeLocal<A>(AttributeData attr, Action<A> a) where A : Attribute {
-        // why do I need this check ???
-        if (diagnostic != null) {
-          tryAttribute(attr, a, diagnostic);
-        }
+        tryAttribute(attr, a, diagnostic);
       }
 
       var typeAttributes = new Dictionary<
@@ -174,6 +171,12 @@ namespace IncrementalCompiler {
           );
         });
 
+        addAttribute<LambdaInterfaceAttribute>((instance, ctx, tds, symbol) => {
+          ctx.NewMembers.AddRange(
+            GenerateLambdaInterface(tds).Select(generated => AddAncestors(tds, generated, onlyNamespace: false))
+          );
+        });
+
         addAttribute<SingletonAttribute>((instance, ctx, tds, symbol) => {
           if (tds is ClassDeclarationSyntax cds)
             ctx.NewMembers.Add(
@@ -191,7 +194,9 @@ namespace IncrementalCompiler {
         addMacroAttributeMethod<SimpleMethodMacro>();
         addMacroAttributeMethod<StatementMethodMacro>();
         addMacroAttributeMethod<VarMethodMacro>();
+#pragma warning disable 618
         addMacroAttributeMethod<Inline>();
+#pragma warning restore 618
         addMacroAttributeMethod<ImplicitPassThrough>();
 
         addMacroAttributeParameter<Implicit>();
@@ -298,11 +303,6 @@ namespace IncrementalCompiler {
                   if (attrClassName == typeof(PublicAccessor).FullName)
                     tryAttributeLocal<PublicAccessor>(attr,
                       _ => { newClassMembers = newClassMembers.Add(GenerateAccessor(fieldSymbol, model)); });
-                  // TODO: generic way to add new attributes
-                  else if (attrClassName == typeof(ThreadStaticAttribute).FullName)
-                    tryAttributeLocal<ThreadStaticAttribute>(attr, _ =>
-                      throw new Exception($"Can't use {nameof(ThreadStaticAttribute)} in Unity"
-                      ));
                   else {
                     foreach (var attributeAttribute in attr.AttributeClass.GetAttributes()) {
                       if (SymbolEqualityComparer.Default.Equals(attributeAttribute.AttributeClass, attributeMacroType)) {
@@ -382,11 +382,11 @@ namespace IncrementalCompiler {
         }
 
         if (ctx.NewMembers.Count > 0) {
-          var treePath = settings.getRelativePath(tree.FilePath);
+          var treePath = settings.GetRelativePath(tree.FilePath);
           var relativePath = treePath.EnsureDoesNotEndWith(".cs") + ".partials.cs";
           var nt = CSharpSyntaxTree.Create(
             SF.CompilationUnit()
-              .WithUsings(cleanUsings(root.Usings))
+              .WithUsings(CleanUsings(root.Usings))
               .WithLeadingTrivia(SyntaxTriviaList.Create(SyntaxFactory.Comment("// ReSharper disable all")))
               .WithMembers(SF.List(ctx.NewMembers))
               .NormalizeWhitespace(),
@@ -394,8 +394,8 @@ namespace IncrementalCompiler {
             options: parseOptions,
             encoding: Encoding.UTF8);
           results.Add(new GeneratedCsFile(
-            treePath, relativePath, tree: nt,
-            location: root.GetLocation(), transformedFile: false
+            SourcePath: treePath, RelativePath: relativePath, Tree: nt,
+            Location: root.GetLocation(), TransformedFile: false
           ));
         }
 
@@ -427,7 +427,7 @@ namespace IncrementalCompiler {
 
           var syntax = CSharpSyntaxTree.ParseText(
             "// generated\n" +
-            $"[assembly: {typeof(TypesWithMacroAttributes).FullName}({typesString})]"
+            $"[assembly: {typeof(TypesWithMacroAttributes).FullName}(new global::System.Type[]{{{typesString}}})]"
           ).GetCompilationUnitRoot();
 
           var name = "MacroList.cs";
@@ -438,7 +438,7 @@ namespace IncrementalCompiler {
             encoding: Encoding.UTF8);
 
           results.Add(new GeneratedCsFile(
-            name, name, tree: nt, location: Location.None, transformedFile: false
+            name, name, Tree: nt, Location: Location.None, TransformedFile: false
           ));
         }
       }
@@ -450,7 +450,7 @@ namespace IncrementalCompiler {
 
       foreach (var file in csFiles) {
         sourceMap[file.FullPath] = file.Tree;
-        filesMapping.add(file.SourcePath, file.FullPath);
+        filesMapping.Add(file.SourcePath, file.FullPath);
 
         /*var generatedPath = file.FilePath;
         Directory.CreateDirectory(Path.GetDirectoryName(generatedPath));
@@ -490,7 +490,7 @@ namespace IncrementalCompiler {
       return maybeValue != null ? new[] {maybeValue} : Enumerable.Empty<A>();
     }
 
-    static Location attrLocation(AttributeData attr) {
+    static Location AttrLocation(AttributeData attr) {
       return attr.ApplicationSyntaxReference!.GetSyntax().GetLocation();
     }
 
@@ -592,7 +592,8 @@ namespace IncrementalCompiler {
           firstParam.Concat(childNames.Select(t => $"System.Action<{t.fullName}> {t.varName}")));
         var body = Join("\n", childNames.Select(t =>
           $"var val_{t.varName} = obj as {t.fullName};" +
-          $"if (val_{t.varName} != null) {{ {t.varName}(val_{t.varName}); return; }}"));
+          $"if (val_{t.varName} != null) {{ {t.varName}(val_{t.varName}); return; }}"
+        )) + $"throw new System.NullReferenceException(\"Expected to have type of {baseTypeSymbol}, but received null instead\");";
 
         return $"public static void voidMatch({parameters}) {{{body}}}";
       }
@@ -611,12 +612,17 @@ namespace IncrementalCompiler {
       }
 
       var className = IsNullOrWhiteSpace(attribute.ClassName)
-        ? tds.Identifier + "Matcher"
+        ? $"{flattenClassName(baseTypeSymbol)}_Matcher"
         : attribute.ClassName;
       return CreateStatic(className, tds, ParseClassMembers(VoidMatch() + Match()));
+
+      string flattenClassName(INamedTypeSymbol s) {
+        if (s.ContainingType == null) return s.Name;
+        return $"{flattenClassName(s.ContainingType)}_{s.Name}";
+      }
     }
 
-    static string joinCommaSeparated<A>(this IEnumerable<A> collection, Func<A, string> mapper) {
+    static string JoinCommaSeparated<A>(this IEnumerable<A> collection, Func<A, string> mapper) {
       return collection
         .Select(mapper)
         .Tap(_ => Join(", ", _));
@@ -626,12 +632,15 @@ namespace IncrementalCompiler {
       TypeDeclarationSyntax cds, ICollection<FieldOrProp> props
     ) {
       var genericArgsStr = cds.TypeParameterList?.ToFullString().TrimEnd() ?? "";
-      var funcParamsStr = joinCommaSeparated(props, p => p.type + " " + p.identifier);
-      var funcArgs = joinCommaSeparated(props, p => p.identifier);
+      var genericArgsWhereClauseStr = cds.ConstraintClauses.Count > 0
+        ? cds.ConstraintClauses.ToFullString()
+        : "";
+      var funcParamsStr = JoinCommaSeparated(props, p => p.type + " " + p.identifier);
+      var funcArgs = JoinCommaSeparated(props, p => p.identifier);
 
       return ParseClassMembers(
         $"public static {cds.Identifier.ValueText}{genericArgsStr} a{genericArgsStr}" +
-        $"({funcParamsStr}) => new {cds.Identifier.ValueText}{genericArgsStr}({funcArgs});"
+        $"({funcParamsStr}) {genericArgsWhereClauseStr} => new {cds.Identifier.ValueText}{genericArgsStr}({funcArgs});"
       );
     }
 
@@ -701,7 +710,7 @@ namespace IncrementalCompiler {
           case NamespaceDeclarationSyntax a:
             generatedType =
               SF.NamespaceDeclaration(a.Name)
-                .WithUsings(cleanUsings(a.Usings))
+                .WithUsings(CleanUsings(a.Usings))
                 .WithMembers(SF.SingletonList(generatedType));
             break;
           case ClassDeclarationSyntax a:
@@ -729,7 +738,7 @@ namespace IncrementalCompiler {
       return generatedType;
     }
 
-    static SyntaxList<UsingDirectiveSyntax> cleanUsings(SyntaxList<UsingDirectiveSyntax> usings) {
+    static SyntaxList<UsingDirectiveSyntax> CleanUsings(SyntaxList<UsingDirectiveSyntax> usings) {
       return SF.List(usings.Select(u =>
         u.WithUsingKeyword(u.UsingKeyword.WithoutTrivia())
       ));
@@ -739,6 +748,9 @@ namespace IncrementalCompiler {
       var cls = (ClassDeclarationSyntax) CSharpSyntaxTree.ParseText(syntax).GetCompilationUnitRoot().Members[0];
       return cls;
     }
+
+    static RecordDeclarationSyntax ParseRecord(string syntax) =>
+      (RecordDeclarationSyntax) CSharpSyntaxTree.ParseText(syntax).GetCompilationUnitRoot().Members[0];
 
     public static SyntaxList<MemberDeclarationSyntax> ParseClassMembers(string syntax) {
       var cls = (ClassDeclarationSyntax) CSharpSyntaxTree.ParseText($"class C {{ {syntax} }}").GetCompilationUnitRoot()
@@ -757,25 +769,25 @@ namespace IncrementalCompiler {
     public partial class GeneratedFilesMapping {
       public readonly Dictionary<string, List<string>> filesDict = new Dictionary<string, List<string>>();
 
-      static void addValue<A>(Dictionary<string, List<A>> dict, string key, A value) {
+      static void AddValue<A>(Dictionary<string, List<A>> dict, string key, A value) {
         if (!dict.ContainsKey(key)) dict[key] = new List<A>();
         dict[key].Add(value);
       }
 
-      static IEnumerable<A> enumerate<A>(Dictionary<string, List<A>> dict) {
+      static IEnumerable<A> Enumerate<A>(Dictionary<string, List<A>> dict) {
         return dict.Values.SelectMany(_ => _);
       }
 
-      public void add(string key, string value) {
-        addValue(filesDict, key, value);
+      public void Add(string key, string value) {
+        AddValue(filesDict, key, value);
       }
 
-      static string asVerbatimString(string str) {
+      static string AsVerbatimString(string str) {
         return $"@\"{str.Replace("\"", "\"\"")}\"";
       }
 
 
-      public void removeFiles(IEnumerable<string> filesToRemove) {
+      public void RemoveFiles(IEnumerable<string> filesToRemove) {
         foreach (var filePath in filesToRemove) {
           if (filesDict.TryGetValue(filePath, out var generatedFiles)) {
             foreach (var generatedFile in generatedFiles)
@@ -791,52 +803,21 @@ namespace IncrementalCompiler {
 
     interface IGenerationResult { }
 
-    class ModifiedFile : IGenerationResult {
-      public readonly SyntaxTree From;
-      public readonly CompilationUnitSyntax To;
+    record ModifiedFile(SyntaxTree From, CompilationUnitSyntax To) : IGenerationResult;
 
-      public ModifiedFile(SyntaxTree from, CompilationUnitSyntax to) {
-        From = from;
-        To = to;
-      }
+    public record GeneratedFile(string SourcePath, Location Location) : IGenerationResult;
+
+    // string sourcePath, string relativePath, Location location, SyntaxTree tree, bool transformedFile
+    public record GeneratedCsFile(
+      string SourcePath, string RelativePath, Location Location, SyntaxTree Tree, bool TransformedFile
+    ) : GeneratedFile(SourcePath, Location) {
+      public string FullPath => Tree.FilePath;
+      public string Contents => Tree.GetText().ToString();
     }
 
-    public abstract class GeneratedFile : IGenerationResult {
-      public readonly Location Location;
-      public readonly string SourcePath;
-
-      protected GeneratedFile(string sourcePath, Location location) {
-        SourcePath = sourcePath;
-        Location = location;
-      }
-    }
-
-
-    public class GeneratedCsFile : GeneratedFile {
-      public readonly string FullPath, Contents, RelativePath;
-      public readonly bool TransformedFile;
-      public readonly SyntaxTree Tree;
-
-      public GeneratedCsFile(string sourcePath, string relativePath, Location location, SyntaxTree tree,
-        bool transformedFile)
-        : base(sourcePath, location) {
-        RelativePath = relativePath;
-        Tree = tree;
-        TransformedFile = transformedFile;
-        FullPath = tree.FilePath;
-        Contents = tree.GetText().ToString();
-      }
-    }
-
-    public class CaseClass : IEnumerable<TypeDeclarationSyntax> {
-      readonly TypeDeclarationSyntax caseClass;
-      readonly TypeDeclarationSyntax? companion;
-
-      public CaseClass(TypeDeclarationSyntax caseClass, TypeDeclarationSyntax? companion) {
-        this.caseClass = caseClass;
-        this.companion = companion;
-      }
-
+    public record CaseClass(
+      TypeDeclarationSyntax caseClass, TypeDeclarationSyntax? companion
+    ) : IEnumerable<TypeDeclarationSyntax> {
       public IEnumerator<TypeDeclarationSyntax> GetEnumerator() {
         yield return caseClass;
         if (companion != null) yield return companion;
@@ -847,7 +828,9 @@ namespace IncrementalCompiler {
       }
     }
 
-    struct FieldOrProp {
+    readonly struct FieldOrProp {
+      static readonly HashSet<string> keywords = new();
+
       public readonly string type;
       public readonly ITypeSymbol typeInfo;
       public readonly string identifier;
@@ -858,12 +841,24 @@ namespace IncrementalCompiler {
       static readonly string stringName = "string";
       static readonly string iEnumName = typeof(IEnumerable<>).FullName!;
 
+      static FieldOrProp() {
+        var values = (SyntaxKind[]) Enum.GetValues(typeof(SyntaxKind));
+        foreach (var sk in values) {
+          var str = sk.ToString();
+          const string KEYWORD = "Keyword";
+          if (str.EndsWith(KEYWORD, StringComparison.Ordinal)) {
+            var beginning = str.Substring(0, str.Length - KEYWORD.Length);
+            keywords.Add(beginning.ToLowerInvariant());
+          }
+        }
+      }
+
       public FieldOrProp(
         ITypeSymbol typeInfo, string identifier, bool initialized, SemanticModel model
       ) {
         type = typeInfo.ToDisplayString();
         this.typeInfo = typeInfo;
-        this.identifier = identifier;
+        this.identifier = keywords.Contains(identifier) ? $"@{identifier}" : identifier;
         identifierFirstLetterUpper = identifier.FirstLetterToUpper();
         this.initialized = initialized;
 

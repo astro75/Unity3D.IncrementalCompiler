@@ -144,7 +144,7 @@ namespace CompilationExtensionCodeGenerator {
         static string generateTargetsXml(GenerationSettings settings, IEnumerable<CodeGeneration.GeneratedCsFile> files) {
             var str = string.Join("\n", files.Select(f =>
             {
-                var relativeToWorkingDir = settings.getRelativePath(f.FullPath);
+                var relativeToWorkingDir = settings.GetRelativePath(f.FullPath);
                 var type = f.TransformedFile ? "None" : "Compile";
                 return $"  <{type} Include=\"{relativeToWorkingDir}\" Link=\"{f.RelativePath}\" />";
             }).ToArray());

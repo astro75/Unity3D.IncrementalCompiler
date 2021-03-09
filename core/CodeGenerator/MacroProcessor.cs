@@ -140,7 +140,9 @@ namespace IncrementalCompiler {
       var simpleMethodMacroType = helper.getTypeSymbol<SimpleMethodMacro>();
       var statementMethodMacroType = helper.getTypeSymbol<StatementMethodMacro>();
       var varMethodMacroType = helper.getTypeSymbol<VarMethodMacro>();
+#pragma warning disable 618
       var inlineType = helper.getTypeSymbol<Inline>();
+#pragma warning restore 618
       var lazyPropertyType = helper.getTypeSymbol<LazyProperty>();
 
       logTime?.Invoke("a1");
@@ -175,14 +177,14 @@ namespace IncrementalCompiler {
                   if (literalOp.ConstantValue.HasValue)
                     return literalOp.ConstantValue.Value?.ToString() ?? "null";
                   else throw new Exception("Literal constant has no value");
-                case IConversionOperation conversionOp:
+                case IConversionOperation conversionOp when conversionOp.Type != null:
                   // enums
                   return $"(({conversionOp.Type.ToDisplayString()}) {defaultValueToString(conversionOp.Operand)})";
-                case IDefaultValueOperation defaultValueOp:
+                case IDefaultValueOperation defaultValueOp when defaultValueOp.Type != null:
                   return $"default({defaultValueOp.Type.ToDisplayString()})";
                 default:
                   throw new Exception(
-                    $"Expected '{arg.Parameter.Name}' to be of type " +
+                    $"Expected '{arg.Parameter?.Name}' to be of type " +
                     $"{nameof(ILiteralOperation)}, but got {arg.Value.GetType()}");
               }
             }
@@ -198,7 +200,7 @@ namespace IncrementalCompiler {
             expr = syntax.ToString();
           }
 
-          sb.Replace("${" + arg.Parameter.Name + "}", expr);
+          if (arg.Parameter != null) sb.Replace("${" + arg.Parameter.Name + "}", expr);
           sb.Replace("${expr" + i + "}", expr);
         }
 
@@ -243,7 +245,7 @@ namespace IncrementalCompiler {
                       replaceArguments(ctx, sb, iop);
 
                       var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
-                      ctx.ChangedStatements.Add(statementOperation.Syntax, parsedBlock.Statements.ToArray());
+                      ctx.ChangedStatements.Add(statementOperation.Syntax, parsedBlock.Statements.ToArray<SyntaxNode>());
                     }
                     else {
                       throw new Exception($"Expected {nameof(IExpressionStatementOperation)}, got {parent?.GetType()}");
@@ -277,7 +279,7 @@ namespace IncrementalCompiler {
                       sb.Replace("${varType}", varDecl.Symbol.Type.ToDisplayString());
 
                       var parsedBlock = (BlockSyntax) SyntaxFactory.ParseStatement(sb.ToString());
-                      ctx.ChangedStatements.Add(vdgop.Syntax, parsedBlock.Statements.ToArray());
+                      ctx.ChangedStatements.Add(vdgop.Syntax, parsedBlock.Statements.ToArray<SyntaxNode>());
                     }
                     else {
                       throw new Exception(
@@ -288,7 +290,9 @@ namespace IncrementalCompiler {
             }, diagnostic);
 
         if (SymbolEqualityComparer.Default.Equals(attribute.AttributeClass, inlineType))
+#pragma warning disable 618
           CodeGeneration.tryAttribute<Inline>(
+#pragma warning restore 618
             attribute, _ => helper.builderInvocations.Add(method, (ctx, op) => {
               if (op is IInvocationOperation iop) {
                 var parent = op.Parent;
@@ -387,7 +391,7 @@ namespace IncrementalCompiler {
                 if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
                 break;
               }
-              case IObjectCreationOperation op: {
+              case IObjectCreationOperation op when op.Constructor != null: {
                 var method = op.Constructor.OriginalDefinition;
                 if (resolvedMacros.TryGetValue(method, out var act)) act(ctx, op);
                 break;
@@ -513,7 +517,7 @@ namespace IncrementalCompiler {
       List<CodeGeneration.GeneratedCsFile> generatedFiles
     ) {
       foreach (var (tree, syntax) in treeEdits) {
-        var originalFilePath = settings.getRelativePath(tree.FilePath);
+        var originalFilePath = settings.GetRelativePath(tree.FilePath);
         var relativePath = originalFilePath.EnsureDoesNotEndWith(".cs") + ".transformed.cs";
         var editedFilePath = Path.Combine(settings.macrosFolder, relativePath);
 
@@ -532,18 +536,15 @@ namespace IncrementalCompiler {
     }
 
     public class MacroCtx {
-      public readonly Dictionary<SyntaxNode, SyntaxNode> AddedStatements =
-        new Dictionary<SyntaxNode, SyntaxNode>();
+      public readonly Dictionary<SyntaxNode, SyntaxNode> AddedStatements = new();
 
-      public readonly Dictionary<SyntaxNode, SyntaxNode> ChangedNodes =
-        new Dictionary<SyntaxNode, SyntaxNode>();
+      public readonly Dictionary<SyntaxNode, SyntaxNode> ChangedNodes = new();
 
-      public readonly Dictionary<SyntaxNode, SyntaxNode?[]> ChangedStatements =
-        new Dictionary<SyntaxNode, SyntaxNode?[]>();
+      public readonly Dictionary<SyntaxNode, SyntaxNode?[]> ChangedStatements = new();
 
       public readonly SemanticModel Model;
       readonly MacroReplacer Replacer;
-      readonly StringBuilder stringBuilder = new StringBuilder();
+      readonly StringBuilder stringBuilder = new();
 
       public MacroCtx(SemanticModel model) {
         Model = model;
@@ -585,12 +586,11 @@ namespace IncrementalCompiler {
   public class RootOperationsFinder : CSharpSyntaxWalker {
     public readonly SemanticModel model;
     public readonly SyntaxTree tree;
-    public readonly List<(IOperation op, TypeDeclarationSyntax? tds)> results =
-      new List<(IOperation, TypeDeclarationSyntax?)>();
+    public readonly List<(IOperation op, TypeDeclarationSyntax? tds)> results = new();
 
     // public TimeSpan tsNull, tsOther;
 
-    readonly Stack<TypeDeclarationSyntax> typeStack = new Stack<TypeDeclarationSyntax>();
+    readonly Stack<TypeDeclarationSyntax> typeStack = new();
 
     public RootOperationsFinder(SemanticModel model, SyntaxTree tree) {
       this.model = model;
@@ -632,7 +632,7 @@ namespace IncrementalCompiler {
   public class Walker : OperationWalker {
     int ident;
 
-    public override void Visit(IOperation operation) {
+    public override void Visit(IOperation? operation) {
       for (var i = 0; i < ident; i++) Console.Write("  ");
       Console.WriteLine(operation?.Kind.ToString());
       ident++;
@@ -649,7 +649,7 @@ namespace IncrementalCompiler {
     }
 
     class FindAllSymbolsVisitor : SymbolVisitor {
-      public List<INamedTypeSymbol> AllTypeSymbols { get; } = new List<INamedTypeSymbol>();
+      public List<INamedTypeSymbol> AllTypeSymbols { get; } = new();
 
       public override void VisitNamespace(INamespaceSymbol symbol) {
         Parallel.ForEach(symbol.GetMembers(), s => s.Accept(this));

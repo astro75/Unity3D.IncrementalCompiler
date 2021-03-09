@@ -114,6 +114,7 @@ namespace GenerationAttributes {
   public class LazyProperty : Attribute { }
 
   [AttributeUsage(AttributeTargets.Method)]
+    [Obsolete("Not implemented yet!")]
   public class Inline : Attribute { }
 
 

@@ -14,9 +14,8 @@ namespace IncrementalCompiler {
   public class MacroProcessorImplicits {
     readonly MacroHelper helper;
     readonly INamedTypeSymbol implicitType, implicitPassThroughType;
-    readonly HashSet<IMethodSymbol> passThroughMethods = new HashSet<IMethodSymbol>();
-    readonly Dictionary<IMethodSymbol, ImmutableHashSet<IParameterSymbol>> implicitMethods =
-      new Dictionary<IMethodSymbol, ImmutableHashSet<IParameterSymbol>>();
+    readonly HashSet<IMethodSymbol> passThroughMethods = new();
+    readonly Dictionary<IMethodSymbol, ImmutableHashSet<IParameterSymbol>> implicitMethods = new();
 
     public MacroProcessorImplicits(MacroHelper helper) {
       this.helper = helper;
@@ -77,8 +76,8 @@ namespace IncrementalCompiler {
       ImmutableHashSet<IParameterSymbol> implicitParameters, ImmutableArray<IArgumentOperation> arguments
     ) {
       return arguments
-        .Where(a => a.IsImplicit && implicitParameters.Contains(a.Parameter.OriginalDefinition))
-        .Select(a => new ImplicitParameter(a.Parameter))
+        .Where(a => a.IsImplicit && a.Parameter != null && implicitParameters.Contains(a.Parameter.OriginalDefinition))
+        .Select(a => new ImplicitParameter(a.Parameter!))
         .ToArray();
     }
 
@@ -164,7 +163,9 @@ namespace IncrementalCompiler {
             var directImplicits = new HashSet<ITypeSymbol>();
 
             foreach (var op in descendants.OfType<IInvocationOperation>()) tryInvocation(op.TargetMethod, op.Arguments);
-            foreach (var op in descendants.OfType<IObjectCreationOperation>()) tryInvocation(op.Constructor, op.Arguments);
+            foreach (var op in descendants.OfType<IObjectCreationOperation>()) {
+              if (op.Constructor != null) tryInvocation(op.Constructor, op.Arguments);
+            }
 
             void tryInvocation(IMethodSymbol targetMethod, ImmutableArray<IArgumentOperation> arguments) {
               var method = targetMethod.OriginalDefinition;
@@ -309,7 +310,7 @@ namespace IncrementalCompiler {
                   t.maybeMethod is IMethodSymbol ms && passthroughMissingImplicits.TryGetValue(ms, out var val2)
                     ? val2
                     : Array.Empty<ImplicitParameter>();
-                var allFound = t.found.Concat(passThrough.Select(_ => _.toRef)).ToArray();
+                var allFound = t.found.Concat(passThrough.Select(_ => _.ToRef)).ToArray();
                 var resolvedImplicits = t.toFill.Concat(passThroughToFill).Select(parameter => {
                   var matchingImplicits =
                     allFound.Where(s => SymbolEqualityComparer.Default.Equals(s.type, parameter.type)).ToArray();
@@ -384,7 +385,7 @@ namespace IncrementalCompiler {
           };
       }
 
-      public ImplicitSymbolRef toRef => new ImplicitSymbolRef(name, type, name);
+      public ImplicitSymbolRef ToRef => new(name, type, name);
     }
 
     readonly struct ImplicitSymbolRef {
