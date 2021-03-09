@@ -114,13 +114,11 @@ namespace GenerationAttributes {
   public class LazyProperty : Attribute { }
 
   [AttributeUsage(AttributeTargets.Method)]
-    [Obsolete("Not implemented yet!")]
+  [Obsolete("Not implemented yet!")]
   public class Inline : Attribute { }
 
 
-  /// <summary>
-  ///   Used internally by compiler
-  /// </summary>
+  /// <summary> Used internally by compiler. </summary>
   [AttributeUsage(AttributeTargets.Assembly)]
   public class TypesWithMacroAttributes : Attribute {
     public readonly Type[] types;
