@@ -48,6 +48,15 @@ namespace GenerationAttributes {
   [Conditional(Consts.UNUSED_NAME)]
   public class SingletonAttribute : Attribute { }
 
+  [AttributeUsage(AttributeTargets.Class)]
+  public class AttributeMacro : Attribute {
+    public readonly string Pattern;
+
+    public AttributeMacro(string pattern) {
+      Pattern = pattern;
+    }
+  }
+
   static class Consts {
     /// <summary>
     /// Dummy name that we should never encounter in compiler defines list.

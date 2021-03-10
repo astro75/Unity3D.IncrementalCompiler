@@ -5,6 +5,7 @@ using System.Collections.Generic;
 using System.Collections.Immutable;
 using System.IO;
 using System.Linq;
+using System.Runtime.Serialization;
 using System.Text;
 using GenerationAttributes;
 using Microsoft.CodeAnalysis;
@@ -306,12 +307,54 @@ namespace IncrementalCompiler {
                   else {
                     foreach (var attributeAttribute in attr.AttributeClass.GetAttributes()) {
                       if (SymbolEqualityComparer.Default.Equals(attributeAttribute.AttributeClass, attributeMacroType)) {
-                        tryAttribute<AttributeMacro>(attr, macroAttributeInstance => {
+                        tryAttribute<AttributeMacro>(attributeAttribute, macroAttributeInstance => {
                           var sb = new StringBuilder();
                           sb.Append(macroAttributeInstance.Pattern);
-                          sb.Replace("${name}", fieldSymbol.Name);
-                          sb.Replace("${_name}", PublicAccessorName(fieldSymbol.Name));
-                          newClassMembers = newClassMembers.Add(sb.ToString());
+                          sb.Replace("${className}", symbol.Name);
+                          sb.Replace("${memberName}", fieldSymbol.Name);
+                          sb.Replace("${_memberName}", PublicAccessorName(fieldSymbol.Name));
+                          sb.Replace("${memberType}", fieldSymbol.Type.ToDisplayString());
+                          if (fieldSymbol.Type is INamedTypeSymbol nts) {
+                            var typeArguments = nts.TypeArguments;
+                            for (var i = 0; i < typeArguments.Length; i++) {
+                              sb.Replace($"${{memberType#{i}}}", typeArguments[i].ToDisplayString());
+                            }
+                          }
+                          foreach (var member in attr.AttributeClass.GetMembers()) {
+                            if (member is IFieldSymbol fs) {
+                              foreach (var syntaxRef in fs.DeclaringSyntaxReferences) {
+                                var syntax = (VariableDeclaratorSyntax) syntaxRef.GetSyntax();
+                                if (syntax.Initializer != null) {
+                                  throw new Exception($"Field '{member.Name}': Field initializers unsupported with AttributeMacro");
+                                }
+                              }
+                            }
+                            // Objects have default constructors generated automatically, ignore them
+                            // TODO: ban custom constructors
+                            else if (member.Name != ".ctor") {
+                              throw new Exception($"Unsupported member '{member.Name}', only fields are allowed");
+                            }
+                          }
+
+                          foreach (var argument in attr.NamedArguments) {
+                            sb.Replace($"${{{argument.Key}}}", argument.Value.Value?.ToString() ?? "null");
+                          }
+
+                          var resultStr = sb.ToString();
+                          {
+                            // TODO: add this check on all macros
+                            var index1 = resultStr.IndexOf("${", StringComparison.Ordinal);
+                            if (index1 != -1) {
+                              var index2 = resultStr.IndexOf('}', startIndex: index1 + 1);
+                              if (index2 != -1) {
+                                throw new Exception(
+                                  $"Could not replace expression '{resultStr.Substring(index1, index2 - index1 + 1)}' in a macro."
+                                );
+                              }
+                            }
+                          }
+
+                          newClassMembers = newClassMembers.Add(resultStr);
                         }, diagnostic);
                       }
                     }
@@ -506,8 +549,7 @@ namespace IncrementalCompiler {
     static A CreateAttributeByReflection<A>(AttributeData attributeData) where A : Attribute {
       var type = typeof(A);
       var arguments = attributeData.ConstructorArguments;
-      var ctor = type.GetConstructors().First(ci => ci.GetParameters().Length == arguments.Length);
-      var res = (A) ctor.Invoke(arguments.Select(a => a.Value).ToArray());
+      var res = (A) Activator.CreateInstance(type, arguments.Select(a => a.Value).ToArray());
       SetNamedArguments(type, attributeData, res);
       return res;
     }
